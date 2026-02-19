@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0b0c10">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <title>Overload</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div id="app">
+        <header class="app-header">
+            <div>
+                <p class="eyebrow">Progressive Overload</p>
+                <h1>Overload</h1>
+            </div>
+            <div id="header-status" class="status-pill">Offline-ready</div>
+        </header>
+
+        <main id="views">
+            <!-- Workout View -->
+            <section id="view-workout" class="view active">
+                <div class="card">
+                    <div class="field">
+                        <label for="workout-template">Template</label>
+                        <select id="workout-template"></select>
+                    </div>
+                    <button id="start-workout" class="primary">Start workout</button>
+                </div>
+
+                <section id="workout-session" class="card hidden">
+                    <div class="session-header">
+                        <div>
+                            <p class="eyebrow">Logging</p>
+                            <h2 id="session-template-label">Workout</h2>
+                        </div>
+                        <div class="session-actions">
+                            <button id="cancel-workout" class="ghost">Cancel</button>
+                        </div>
+                    </div>
+                    <div id="workout-exercises"></div>
+                    <div class="field">
+                        <label for="workout-notes">Notes</label>
+                        <textarea id="workout-notes" rows="2" placeholder="How did it feel?"></textarea>
+                    </div>
+                    <button id="finish-workout" class="primary">Finish workout</button>
+                </section>
+            </section>
+
+            <!-- Exercises View -->
+            <section id="view-exercises" class="view">
+                <div class="card">
+                    <h2>Add exercise</h2>
+                    <div class="field">
+                        <label for="exercise-name">Name</label>
+                        <input id="exercise-name" type="text" placeholder="e.g., Bench Press">
+                    </div>
+                    <div class="field grid-2">
+                        <div>
+                            <label for="rep-floor">Rep floor</label>
+                            <input id="rep-floor" type="number" min="1" value="8" inputmode="numeric">
+                        </div>
+                        <div>
+                            <label for="rep-ceiling">Rep ceiling</label>
+                            <input id="rep-ceiling" type="number" min="1" value="12" inputmode="numeric">
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label for="weight-increment">Weight increment (lbs)</label>
+                        <input id="weight-increment" type="number" min="0.5" step="0.5" value="5" inputmode="decimal">
+                    </div>
+                    <button id="add-exercise" class="primary">Add exercise</button>
+                </div>
+
+                <div class="card">
+                    <div class="section-header">
+                        <h2>Exercises</h2>
+                        <button id="clear-exercises" class="ghost small">Clear all</button>
+                    </div>
+                    <div id="exercises-list"></div>
+                </div>
+            </section>
+
+            <!-- History View -->
+            <section id="view-history" class="view">
+                <div class="card">
+                    <div class="section-header">
+                        <h2>Sessions</h2>
+                        <button id="refresh-history" class="ghost small">Refresh</button>
+                    </div>
+                    <div id="sessions-list"></div>
+                </div>
+                <div class="card">
+                    <h2>By exercise</h2>
+                    <div id="history-exercises"></div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section id="view-settings" class="view">
+                <div class="card">
+                    <h2>Data</h2>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Export data</p>
+                            <p class="sub">Download JSON backup</p>
+                        </div>
+                        <button id="export-data" class="primary">Export</button>
+                    </div>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Import data</p>
+                            <p class="sub">Overwrite current data</p>
+                        </div>
+                        <input id="import-file" type="file" accept="application/json" class="hidden">
+                        <button id="import-data" class="ghost">Import</button>
+                    </div>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Clear all data</p>
+                            <p class="sub">Remove exercises, templates, sessions</p>
+                        </div>
+                        <button id="clear-data" class="danger">Clear</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <nav class="tab-bar">
+            <button data-view="view-workout" class="active">Workout</button>
+            <button data-view="view-exercises">Exercises</button>
+            <button data-view="view-history">History</button>
+            <button data-view="view-settings">Settings</button>
+        </nav>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <dialog id="history-modal">
+        <div class="modal-header">
+            <h3 id="modal-title"></h3>
+            <button id="close-modal" class="ghost">Close</button>
+        </div>
+        <canvas id="history-chart" height="200"></canvas>
+        <div id="modal-history-list" class="history-list"></div>
+    </dialog>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
