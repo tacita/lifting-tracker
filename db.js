@@ -1,3 +1,5 @@
+import { SUPABASE_URL as HARDCODED_SUPABASE_URL, SUPABASE_ANON_KEY as HARDCODED_SUPABASE_ANON_KEY } from "./supabase-config.js";
+
 const DB_NAME = "overload-db";
 const DB_VERSION = 1;
 
@@ -225,10 +227,21 @@ function requestToPromise(request) {
 }
 
 export function getSupabaseConfig() {
+    const hardcodedUrl = String(HARDCODED_SUPABASE_URL || "").trim();
+    const hardcodedAnonKey = String(HARDCODED_SUPABASE_ANON_KEY || "").trim();
+    if (hardcodedUrl && hardcodedAnonKey) {
+        return { url: hardcodedUrl, anonKey: hardcodedAnonKey };
+    }
     return {
         url: localStorage.getItem(SUPABASE_URL_KEY) || "",
         anonKey: localStorage.getItem(SUPABASE_ANON_KEY) || "",
     };
+}
+
+export function isSupabaseConfigHardcoded() {
+    const hardcodedUrl = String(HARDCODED_SUPABASE_URL || "").trim();
+    const hardcodedAnonKey = String(HARDCODED_SUPABASE_ANON_KEY || "").trim();
+    return Boolean(hardcodedUrl && hardcodedAnonKey);
 }
 
 export async function setSupabaseConfig({ url, anonKey }) {

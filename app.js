@@ -1408,6 +1408,12 @@ async function init() {
     const config = db.getSupabaseConfig();
     supabaseUrlInput.value = config.url || "";
     supabaseAnonKeyInput.value = config.anonKey || "";
+    if (db.isSupabaseConfigHardcoded()) {
+        supabaseUrlInput.disabled = true;
+        supabaseAnonKeyInput.disabled = true;
+        saveSupabaseConfigBtn.disabled = true;
+        saveSupabaseConfigBtn.textContent = "Supabase config is embedded";
+    }
     db.onAuthStateChange(async (auth) => {
         renderAuthState(auth);
         if (auth?.user && !auth.loading) {
