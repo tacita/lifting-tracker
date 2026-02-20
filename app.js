@@ -768,6 +768,7 @@ function attachSwipeToDelete(row, content, onDelete) {
     const interactiveSelector = "input, button, select, textarea, label";
     const setOffset = (x) => {
         content.style.transform = `translateX(${x}px)`;
+        row.classList.toggle("swiping", x < 0);
         row.classList.toggle("swipe-delete-ready", Math.abs(x) >= deleteThreshold);
     };
 

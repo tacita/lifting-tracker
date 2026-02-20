@@ -360,6 +360,13 @@ button.small {
     color: #fecaca;
     background: rgba(239, 68, 68, 0.18);
     font-weight: 700;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+}
+
+.set-row.swiping .set-delete-bg {
+    opacity: 1;
 }
 
 .set-row .mark-set {
