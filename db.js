@@ -335,9 +335,10 @@ export function onAuthStateChange(listener) {
 
 export async function signInWithGoogle() {
     if (!supabaseClient) throw new Error("Configure Supabase first");
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
     const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: window.location.href },
+        options: { redirectTo },
     });
     if (error) {
         throw new Error(parseSupabaseError(error, "Google sign-in failed"));
@@ -348,9 +349,10 @@ export async function signInWithMagicLink(email) {
     if (!supabaseClient) throw new Error("Configure Supabase first");
     const normalizedEmail = String(email || "").trim();
     if (!normalizedEmail) throw new Error("Email is required");
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
     const { error } = await supabaseClient.auth.signInWithOtp({
         email: normalizedEmail,
-        options: { emailRedirectTo: window.location.href },
+        options: { emailRedirectTo: redirectTo },
     });
     if (error) {
         throw new Error(parseSupabaseError(error, "Magic link sign-in failed"));

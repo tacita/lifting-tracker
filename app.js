@@ -4,6 +4,12 @@ const views = document.querySelectorAll(".view");
 const tabButtons = document.querySelectorAll(".tab-bar button");
 const toastEl = document.getElementById("toast");
 const headerStatus = document.getElementById("header-status");
+const appEl = document.getElementById("app");
+const authGateEl = document.getElementById("auth-gate");
+const authGateStatusEl = document.getElementById("auth-gate-status");
+const gateSignInGoogleBtn = document.getElementById("gate-sign-in-google");
+const gateAuthEmailInput = document.getElementById("gate-auth-email");
+const gateSendMagicLinkBtn = document.getElementById("gate-send-magic-link");
 
 // Workout view refs
 const templateSelect = document.getElementById("workout-template");
@@ -119,6 +125,22 @@ function escapeHtml(value) {
 }
 
 function renderAuthState(auth) {
+    const shouldGate = Boolean(auth?.configured && !auth?.loading && !auth?.user);
+    authGateEl.classList.toggle("hidden", !shouldGate);
+    appEl.classList.toggle("hidden", shouldGate);
+
+    if (authGateStatusEl) {
+        if (!auth?.configured) {
+            authGateStatusEl.textContent = "Configure Supabase in Settings to enable sign-in.";
+        } else if (auth?.loading) {
+            authGateStatusEl.textContent = "Loading account...";
+        } else if (!auth?.user) {
+            authGateStatusEl.textContent = "Use your account to load your data.";
+        } else {
+            authGateStatusEl.textContent = auth.user.email || "Signed in";
+        }
+    }
+
     if (!auth?.configured) {
         authStatusEl.textContent = "Set Supabase URL + anon key";
         signOutBtn.disabled = true;
@@ -168,13 +190,15 @@ async function signInWithGoogle() {
 }
 
 async function sendMagicLink() {
-    const email = authEmailInput.value.trim();
+    const email = (authEmailInput.value || gateAuthEmailInput.value || "").trim();
     if (!email) {
         showToast("Enter your email first", "error");
         return;
     }
     try {
         await db.signInWithMagicLink(email);
+        authEmailInput.value = email;
+        gateAuthEmailInput.value = email;
         showToast("Magic link sent", "success");
     } catch (err) {
         console.error(err);
@@ -1397,6 +1421,8 @@ function bindEvents() {
     saveSupabaseConfigBtn.addEventListener("click", saveSupabaseConfig);
     signInGoogleBtn.addEventListener("click", signInWithGoogle);
     sendMagicLinkBtn.addEventListener("click", sendMagicLink);
+    gateSignInGoogleBtn.addEventListener("click", signInWithGoogle);
+    gateSendMagicLinkBtn.addEventListener("click", sendMagicLink);
     signOutBtn.addEventListener("click", signOut);
     syncNowBtn.addEventListener("click", syncNow);
 }

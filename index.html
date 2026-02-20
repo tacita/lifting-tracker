@@ -12,6 +12,22 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <section id="auth-gate" class="auth-gate hidden">
+        <div class="auth-card">
+            <p class="eyebrow">Overload</p>
+            <h1>Sign in to continue</h1>
+            <p id="auth-gate-status" class="sub">Use your account to load your data.</p>
+            <div class="action-row">
+                <button id="gate-sign-in-google" class="primary">Sign in with Google</button>
+            </div>
+            <div class="field">
+                <label for="gate-auth-email">Email for magic link</label>
+                <input id="gate-auth-email" type="email" placeholder="you@example.com">
+            </div>
+            <button id="gate-send-magic-link" class="ghost">Send magic link</button>
+        </div>
+    </section>
+
     <div id="app">
         <header class="app-header">
             <div>
