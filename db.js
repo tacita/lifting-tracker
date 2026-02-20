@@ -2,6 +2,21 @@ const DB_NAME = "overload-db";
 const DB_VERSION = 1;
 
 let dbPromise;
+let supabaseClient = null;
+let authState = {
+    configured: false,
+    user: null,
+    loading: true,
+};
+let authListeners = [];
+let authSubscription = null;
+let syncTimer = null;
+let syncInFlight = false;
+
+const SUPABASE_URL_KEY = "overload-supabase-url";
+const SUPABASE_ANON_KEY = "overload-supabase-anon-key";
+const SEEDED_USERS_KEY = "overload-cloud-seeded-users";
+const SNAPSHOT_TABLE = "user_snapshots";
 
 const DEFAULT_EXERCISES = [
     { name: "Smith Machine Squat", repFloor: 6, repCeiling: 10, weightIncrement: 10 },
@@ -209,17 +224,277 @@ function requestToPromise(request) {
     });
 }
 
+export function getSupabaseConfig() {
+    return {
+        url: localStorage.getItem(SUPABASE_URL_KEY) || "",
+        anonKey: localStorage.getItem(SUPABASE_ANON_KEY) || "",
+    };
+}
+
+export async function setSupabaseConfig({ url, anonKey }) {
+    const normalizedUrl = String(url || "").trim();
+    const normalizedAnonKey = String(anonKey || "").trim();
+    if (!normalizedUrl || !normalizedAnonKey) {
+        throw new Error("Supabase URL and anon key are required");
+    }
+    localStorage.setItem(SUPABASE_URL_KEY, normalizedUrl);
+    localStorage.setItem(SUPABASE_ANON_KEY, normalizedAnonKey);
+    await initAuth();
+}
+
+export async function initAuth() {
+    authState.loading = true;
+    notifyAuthListeners();
+
+    const { url, anonKey } = getSupabaseConfig();
+    if (!url || !anonKey) {
+        authState = { configured: false, user: null, loading: false };
+        notifyAuthListeners();
+        return authState;
+    }
+
+    if (!supabaseClient) {
+        const module = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
+        supabaseClient = module.createClient(url, anonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true,
+            },
+        });
+    }
+
+    if (!authSubscription) {
+        const listener = async (event, session) => {
+            authState = {
+                configured: true,
+                user: session?.user || null,
+                loading: false,
+            };
+            notifyAuthListeners();
+            if (session?.user) {
+                try {
+                    await ensureInitialCloudSeedForUser();
+                    notifyAuthListeners();
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        };
+        const { data } = supabaseClient.auth.onAuthStateChange((event, session) => {
+            listener(event, session).catch((err) => console.error(err));
+        });
+        authSubscription = data.subscription;
+    }
+
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) {
+        throw new Error(parseSupabaseError(error, "Could not initialize auth"));
+    }
+
+    authState = {
+        configured: true,
+        user: data.session?.user || null,
+        loading: false,
+    };
+    notifyAuthListeners();
+
+    if (authState.user) {
+        await ensureInitialCloudSeedForUser();
+        notifyAuthListeners();
+    }
+
+    return { ...authState };
+}
+
+export function getAuthState() {
+    return { ...authState };
+}
+
+export function onAuthStateChange(listener) {
+    if (typeof listener !== "function") return () => {};
+    authListeners.push(listener);
+    listener({ ...authState });
+    return () => {
+        authListeners = authListeners.filter((item) => item !== listener);
+    };
+}
+
+export async function signInWithGoogle() {
+    if (!supabaseClient) throw new Error("Configure Supabase first");
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.href },
+    });
+    if (error) {
+        throw new Error(parseSupabaseError(error, "Google sign-in failed"));
+    }
+}
+
+export async function signInWithMagicLink(email) {
+    if (!supabaseClient) throw new Error("Configure Supabase first");
+    const normalizedEmail = String(email || "").trim();
+    if (!normalizedEmail) throw new Error("Email is required");
+    const { error } = await supabaseClient.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { emailRedirectTo: window.location.href },
+    });
+    if (error) {
+        throw new Error(parseSupabaseError(error, "Magic link sign-in failed"));
+    }
+}
+
+export async function signOutCloud() {
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) {
+        throw new Error(parseSupabaseError(error, "Sign out failed"));
+    }
+}
+
+export async function forceSyncToCloud() {
+    await pushLocalSnapshotToCloud();
+}
+
+function notifyAuthListeners() {
+    authListeners.forEach((listener) => listener({ ...authState }));
+}
+
+function parseSupabaseError(error, fallback) {
+    if (!error) return fallback;
+    return error.message || String(error) || fallback;
+}
+
+function getSeededUsers() {
+    try {
+        const value = JSON.parse(localStorage.getItem(SEEDED_USERS_KEY) || "[]");
+        return new Set(Array.isArray(value) ? value : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function markUserSeeded(userId) {
+    const users = getSeededUsers();
+    users.add(String(userId));
+    localStorage.setItem(SEEDED_USERS_KEY, JSON.stringify(Array.from(users)));
+}
+
+function isUserSeeded(userId) {
+    return getSeededUsers().has(String(userId));
+}
+
+function useCloudSync() {
+    return Boolean(supabaseClient && authState.user);
+}
+
+async function localExportData() {
+    const [exercises, templates, sessions, sets] = await Promise.all([
+        tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll())),
+        tx(["templates"], "readonly", (store) => requestToPromise(store.getAll())),
+        getSessions({ includeDraft: true }),
+        tx(["sets"], "readonly", (store) => requestToPromise(store.getAll())),
+    ]);
+    return { exportedAt: new Date().toISOString(), exercises, templates, sessions, sets };
+}
+
+async function localImportData(data) {
+    if (!data || !Array.isArray(data.exercises) || !Array.isArray(data.templates) || !Array.isArray(data.sessions) || !Array.isArray(data.sets)) {
+        throw new Error("Invalid import data");
+    }
+    await tx(["exercises", "templates", "sessions", "sets"], "readwrite", (exStore, tmplStore, sessionStore, setStore) => {
+        exStore.clear();
+        tmplStore.clear();
+        sessionStore.clear();
+        setStore.clear();
+
+        data.exercises.forEach((item) => exStore.add(item));
+        data.templates.forEach((item) => tmplStore.add(item));
+        data.sessions.forEach((item) => sessionStore.add(item));
+        data.sets.forEach((item) => setStore.add(item));
+    });
+}
+
+async function pushLocalSnapshotToCloud() {
+    if (!useCloudSync() || syncInFlight) return;
+    syncInFlight = true;
+    try {
+        const payload = await localExportData();
+        const userId = authState.user.id;
+        const { error } = await supabaseClient
+            .from(SNAPSHOT_TABLE)
+            .upsert(
+                {
+                    user_id: userId,
+                    payload,
+                    updated_at: new Date().toISOString(),
+                },
+                { onConflict: "user_id" }
+            );
+        if (error) {
+            throw new Error(parseSupabaseError(error, "Failed to sync to cloud"));
+        }
+    } finally {
+        syncInFlight = false;
+    }
+}
+
+function scheduleCloudSync() {
+    if (!useCloudSync()) return;
+    if (syncTimer) {
+        clearTimeout(syncTimer);
+    }
+    syncTimer = setTimeout(() => {
+        pushLocalSnapshotToCloud().catch((err) => console.error(err));
+    }, 500);
+}
+
+async function hydrateLocalFromCloudIfAvailable() {
+    if (!useCloudSync()) return { loaded: false };
+    const userId = authState.user.id;
+    const { data, error } = await supabaseClient
+        .from(SNAPSHOT_TABLE)
+        .select("payload")
+        .eq("user_id", userId)
+        .maybeSingle();
+    if (error) {
+        throw new Error(parseSupabaseError(error, "Failed to load cloud data"));
+    }
+    if (!data || !data.payload) {
+        return { loaded: false };
+    }
+    await localImportData(data.payload);
+    return { loaded: true };
+}
+
+async function ensureInitialCloudSeedForUser() {
+    if (!useCloudSync()) return;
+    const userId = String(authState.user.id);
+    const hydrated = await hydrateLocalFromCloudIfAvailable();
+    if (hydrated.loaded) {
+        markUserSeeded(userId);
+        return;
+    }
+    if (isUserSeeded(userId)) return;
+    await pushLocalSnapshotToCloud();
+    markUserSeeded(userId);
+}
+
 // Exercises
 export async function addExercise(exercise) {
-    return tx(["exercises"], "readwrite", (store) => store.add(exercise));
+    const result = await tx(["exercises"], "readwrite", (store) => store.add(exercise));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function updateExercise(exercise) {
-    return tx(["exercises"], "readwrite", (store) => store.put(exercise));
+    const result = await tx(["exercises"], "readwrite", (store) => store.put(exercise));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function deleteExercise(exerciseId) {
-    return tx(["exercises", "templates", "sets"], "readwrite", (exStore, tmplStore, setStore) => {
+    const result = await tx(["exercises", "templates", "sets"], "readwrite", (exStore, tmplStore, setStore) => {
         exStore.delete(exerciseId);
 
         // Remove exercise from templates
@@ -252,6 +527,8 @@ export async function deleteExercise(exerciseId) {
             }
         };
     });
+    scheduleCloudSync();
+    return result;
 }
 
 export async function getExercises() {
@@ -260,15 +537,21 @@ export async function getExercises() {
 
 // Templates
 export async function addTemplate(template) {
-    return tx(["templates"], "readwrite", (store) => store.add(normalizeTemplate(template)));
+    const result = await tx(["templates"], "readwrite", (store) => store.add(normalizeTemplate(template)));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function updateTemplate(template) {
-    return tx(["templates"], "readwrite", (store) => store.put(normalizeTemplate(template)));
+    const result = await tx(["templates"], "readwrite", (store) => store.put(normalizeTemplate(template)));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function deleteTemplate(templateId) {
-    return tx(["templates"], "readwrite", (store) => store.delete(templateId));
+    const result = await tx(["templates"], "readwrite", (store) => store.delete(templateId));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function getTemplates() {
@@ -277,15 +560,19 @@ export async function getTemplates() {
 
 // Sessions
 export async function addSession(session) {
-    return tx(["sessions"], "readwrite", (store) => store.add(session));
+    const result = await tx(["sessions"], "readwrite", (store) => store.add(session));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function updateSession(session) {
-    return tx(["sessions"], "readwrite", (store) => store.put(session));
+    const result = await tx(["sessions"], "readwrite", (store) => store.put(session));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function deleteSession(sessionId) {
-    return tx(["sessions", "sets"], "readwrite", (sessionStore, setStore) => {
+    const result = await tx(["sessions", "sets"], "readwrite", (sessionStore, setStore) => {
         sessionStore.delete(sessionId);
         const index = setStore.index("sessionId");
         index.openCursor(IDBKeyRange.only(sessionId)).onsuccess = (event) => {
@@ -296,6 +583,8 @@ export async function deleteSession(sessionId) {
             }
         };
     });
+    scheduleCloudSync();
+    return result;
 }
 
 export async function getSessions({ includeDraft = false } = {}) {
@@ -321,15 +610,21 @@ export async function getSessions({ includeDraft = false } = {}) {
 
 // Sets
 export async function addSet(set) {
-    return tx(["sets"], "readwrite", (store) => store.add(set));
+    const result = await tx(["sets"], "readwrite", (store) => store.add(set));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function updateSet(set) {
-    return tx(["sets"], "readwrite", (store) => store.put(set));
+    const result = await tx(["sets"], "readwrite", (store) => store.put(set));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function deleteSet(setId) {
-    return tx(["sets"], "readwrite", (store) => store.delete(setId));
+    const result = await tx(["sets"], "readwrite", (store) => store.delete(setId));
+    scheduleCloudSync();
+    return result;
 }
 
 export async function getSetsForSession(sessionId) {
@@ -398,6 +693,7 @@ export async function importData(data) {
         data.sessions.forEach((item) => sessionStore.add(item));
         data.sets.forEach((item) => setStore.add(item));
     });
+    scheduleCloudSync();
 }
 
 export async function clearAll() {
@@ -407,6 +703,7 @@ export async function clearAll() {
         sessionStore.clear();
         setStore.clear();
     });
+    scheduleCloudSync();
 }
 
 export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
@@ -460,6 +757,7 @@ export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
         exercisesToAdd.forEach((item) => exerciseStore.add(item));
         templatesToAdd.forEach((item) => templateStore.add(item));
     });
+    scheduleCloudSync();
 
     summary.addedExercises = exercisesToAdd.length;
     summary.addedTemplates = templatesToAdd.length;
@@ -487,6 +785,7 @@ export async function resetTemplatesToDefaultSplit() {
         store.clear();
         templatesToAdd.forEach((item) => store.add(item));
     });
+    scheduleCloudSync();
 
     return { addedTemplates: templatesToAdd.length };
 }

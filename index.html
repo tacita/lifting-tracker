@@ -158,6 +158,42 @@
             <!-- Settings View -->
             <section id="view-settings" class="view">
                 <div class="card">
+                    <h2>Account</h2>
+                    <div class="field">
+                        <label for="supabase-url">Supabase project URL</label>
+                        <input id="supabase-url" type="url" placeholder="https://your-project.supabase.co">
+                    </div>
+                    <div class="field">
+                        <label for="supabase-anon-key">Supabase anon key</label>
+                        <input id="supabase-anon-key" type="text" placeholder="eyJ...">
+                    </div>
+                    <button id="save-supabase-config" class="ghost">Save Supabase config</button>
+
+                    <div class="field">
+                        <label for="auth-email">Email for magic link</label>
+                        <input id="auth-email" type="email" placeholder="you@example.com">
+                    </div>
+                    <div class="action-row">
+                        <button id="sign-in-google" class="primary">Sign in with Google</button>
+                        <button id="send-magic-link" class="ghost">Send magic link</button>
+                    </div>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Current account</p>
+                            <p id="auth-status" class="sub">Not signed in</p>
+                        </div>
+                        <button id="sign-out" class="ghost">Sign out</button>
+                    </div>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Cloud sync</p>
+                            <p class="sub">Sync local data to signed-in account</p>
+                        </div>
+                        <button id="sync-now" class="ghost">Sync now</button>
+                    </div>
+                </div>
+
+                <div class="card">
                     <h2>Data</h2>
                     <div class="action-row">
                         <div>

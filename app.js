@@ -56,6 +56,15 @@ const exportBtn = document.getElementById("export-data");
 const importBtn = document.getElementById("import-data");
 const importInput = document.getElementById("import-file");
 const clearDataBtn = document.getElementById("clear-data");
+const supabaseUrlInput = document.getElementById("supabase-url");
+const supabaseAnonKeyInput = document.getElementById("supabase-anon-key");
+const saveSupabaseConfigBtn = document.getElementById("save-supabase-config");
+const authEmailInput = document.getElementById("auth-email");
+const signInGoogleBtn = document.getElementById("sign-in-google");
+const sendMagicLinkBtn = document.getElementById("send-magic-link");
+const signOutBtn = document.getElementById("sign-out");
+const authStatusEl = document.getElementById("auth-status");
+const syncNowBtn = document.getElementById("sync-now");
 
 const state = {
     exercises: [],
@@ -98,6 +107,99 @@ function formatTimer(seconds) {
 
 function uuid() {
     return Date.now() + Math.floor(Math.random() * 100000);
+}
+
+function escapeHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function renderAuthState(auth) {
+    if (!auth?.configured) {
+        authStatusEl.textContent = "Set Supabase URL + anon key";
+        signOutBtn.disabled = true;
+        syncNowBtn.disabled = true;
+        return;
+    }
+    if (auth.loading) {
+        authStatusEl.textContent = "Loading account...";
+        signOutBtn.disabled = true;
+        syncNowBtn.disabled = true;
+        return;
+    }
+    if (!auth.user) {
+        authStatusEl.textContent = "Not signed in";
+        signOutBtn.disabled = true;
+        syncNowBtn.disabled = true;
+        return;
+    }
+    authStatusEl.textContent = auth.user.email || auth.user.id;
+    signOutBtn.disabled = false;
+    syncNowBtn.disabled = false;
+}
+
+async function saveSupabaseConfig() {
+    const url = supabaseUrlInput.value.trim();
+    const anonKey = supabaseAnonKeyInput.value.trim();
+    if (!url || !anonKey) {
+        showToast("Enter Supabase URL and anon key", "error");
+        return;
+    }
+    try {
+        await db.setSupabaseConfig({ url, anonKey });
+        showToast("Supabase config saved", "success");
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Could not save config", "error");
+    }
+}
+
+async function signInWithGoogle() {
+    try {
+        await db.signInWithGoogle();
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Google sign-in failed", "error");
+    }
+}
+
+async function sendMagicLink() {
+    const email = authEmailInput.value.trim();
+    if (!email) {
+        showToast("Enter your email first", "error");
+        return;
+    }
+    try {
+        await db.signInWithMagicLink(email);
+        showToast("Magic link sent", "success");
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Could not send magic link", "error");
+    }
+}
+
+async function signOut() {
+    try {
+        await db.signOutCloud();
+        showToast("Signed out", "info");
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Sign out failed", "error");
+    }
+}
+
+async function syncNow() {
+    try {
+        await db.forceSyncToCloud();
+        showToast("Cloud sync complete", "success");
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Cloud sync failed", "error");
+    }
 }
 
 function playTimerDing() {
@@ -350,7 +452,7 @@ function renderExercises() {
         card.className = "list-card";
         card.innerHTML = `
             <div>
-                <p class="label">${ex.name}</p>
+                <p class="label">${escapeHtml(ex.name)}</p>
                 <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs</p>
             </div>
             <div class="list-actions">
@@ -527,7 +629,7 @@ function renderTemplateEditor() {
         row.innerHTML = `
             <span class="drag-handle">::</span>
             <div class="picker-title">
-                <div>${exercise.name}</div>
+                <div>${escapeHtml(exercise.name)}</div>
                 <div class="template-config-grid">
                     <label>
                         <span class="sub small">Sets</span>
@@ -605,13 +707,14 @@ function renderTemplatesList() {
             const exerciseNames = getTemplateItems(template)
                 .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
                 .filter(Boolean);
+            const safeExerciseNames = exerciseNames.map((name) => escapeHtml(name)).join(", ");
 
             const card = document.createElement("div");
             card.className = "list-card";
             card.innerHTML = `
                 <div>
-                    <p class="label">${template.name}</p>
-                    <p class="sub">${exerciseNames.join(", ") || "No exercises"}</p>
+                    <p class="label">${escapeHtml(template.name)}</p>
+                    <p class="sub">${safeExerciseNames || "No exercises"}</p>
                 </div>
                 <div class="list-actions">
                     <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>
@@ -729,8 +832,8 @@ function renderWorkoutExercises() {
         card.innerHTML = `
             <div class="exercise-header">
                 <div>
-                    <p class="label">${ex.name}</p>
-                    <p class="sub">${planText}</p>
+                    <p class="label">${escapeHtml(ex.name)}</p>
+                    <p class="sub">${escapeHtml(planText)}</p>
                 </div>
                 <div class="target-chip">${target}</div>
             </div>
@@ -1029,11 +1132,12 @@ function renderSessionsList() {
         const exerciseNames = [...new Set(sessionSets.map((s) => s.exerciseId))]
             .map((id) => state.exercises.find((ex) => ex.id === id)?.name)
             .filter(Boolean)
+            .map((name) => escapeHtml(name))
             .join(", ");
         card.innerHTML = `
             <div>
                 <p class="label">${formatDate(session.date)}</p>
-                <p class="sub">${session.templateId ? state.templates.find((t) => String(t.id) === String(session.templateId))?.name || "Workout" : "Workout"}</p>
+                <p class="sub">${escapeHtml(session.templateId ? state.templates.find((t) => String(t.id) === String(session.templateId))?.name || "Workout" : "Workout")}</p>
                 <p class="sub small">${exerciseNames || "No sets recorded"}</p>
             </div>
             <div class="list-actions">
@@ -1064,7 +1168,7 @@ function renderExerciseHistoryCards() {
         card.className = "list-card";
         card.innerHTML = `
             <div>
-                <p class="label">${ex.name}</p>
+                <p class="label">${escapeHtml(ex.name)}</p>
                 <p class="sub">Next: ${target}</p>
             </div>
             <div class="list-actions">
@@ -1105,7 +1209,7 @@ function openSessionModal(session) {
             const block = document.createElement("div");
             block.className = "history-block";
             block.innerHTML = `
-                <p class="label">${ex ? ex.name : "Exercise"}</p>
+                <p class="label">${escapeHtml(ex ? ex.name : "Exercise")}</p>
                 <p class="sub">${exSets.map((s, i) => `Set ${i + 1}: ${formatWeight(s.weight)} × ${s.reps}`).join(" • ")}</p>
             `;
             modalHistoryList.appendChild(block);
@@ -1290,12 +1394,32 @@ function bindEvents() {
     importBtn.addEventListener("click", triggerImport);
     importInput.addEventListener("change", handleImport);
     clearDataBtn.addEventListener("click", clearData);
+    saveSupabaseConfigBtn.addEventListener("click", saveSupabaseConfig);
+    signInGoogleBtn.addEventListener("click", signInWithGoogle);
+    sendMagicLinkBtn.addEventListener("click", sendMagicLink);
+    signOutBtn.addEventListener("click", signOut);
+    syncNowBtn.addEventListener("click", syncNow);
 }
 
 async function init() {
     bindEvents();
     registerServiceWorker();
     renderRestTimer();
+    const config = db.getSupabaseConfig();
+    supabaseUrlInput.value = config.url || "";
+    supabaseAnonKeyInput.value = config.anonKey || "";
+    db.onAuthStateChange(async (auth) => {
+        renderAuthState(auth);
+        if (auth?.user && !auth.loading) {
+            await refreshUI();
+        }
+    });
+    try {
+        await db.initAuth();
+    } catch (err) {
+        console.error(err);
+        showToast(err?.message || "Auth init failed", "error");
+    }
     try {
         await db.installDefaultLibrary({ onlyIfEmpty: true });
     } catch (err) {
