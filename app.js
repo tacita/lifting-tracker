@@ -14,15 +14,31 @@ const workoutNotesEl = document.getElementById("workout-notes");
 const finishWorkoutBtn = document.getElementById("finish-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
 const sessionTemplateLabel = document.getElementById("session-template-label");
+const restLessBtn = document.getElementById("rest-less");
+const restMoreBtn = document.getElementById("rest-more");
+const restStopBtn = document.getElementById("rest-stop");
+const restDisplayEl = document.getElementById("rest-display");
 
 // Exercises view refs
 const addExerciseBtn = document.getElementById("add-exercise");
+const loadDefaultLibraryBtn = document.getElementById("load-default-library");
 const clearExercisesBtn = document.getElementById("clear-exercises");
 const exercisesListEl = document.getElementById("exercises-list");
 const exerciseNameInput = document.getElementById("exercise-name");
 const repFloorInput = document.getElementById("rep-floor");
 const repCeilingInput = document.getElementById("rep-ceiling");
 const weightIncrementInput = document.getElementById("weight-increment");
+const templateNameInput = document.getElementById("template-name");
+const createTemplateBtn = document.getElementById("create-template");
+const resetTemplatesBtn = document.getElementById("reset-templates");
+const templatesListEl = document.getElementById("templates-list");
+const templateEditorEmptyEl = document.getElementById("template-editor-empty");
+const templateEditorPanelEl = document.getElementById("template-editor-panel");
+const templateEditorNameInput = document.getElementById("template-editor-name");
+const saveTemplateNameBtn = document.getElementById("save-template-name");
+const templateAddExerciseSelect = document.getElementById("template-add-exercise");
+const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
+const templateExercisePickerEl = document.getElementById("template-exercise-picker");
 
 // History view refs
 const sessionsListEl = document.getElementById("sessions-list");
@@ -48,6 +64,12 @@ const state = {
     sets: [],
     activeSession: null,
     activeExercises: [],
+    selectedTemplateId: null,
+    restTimer: {
+        remainingSeconds: 0,
+        running: false,
+        intervalId: null,
+    },
 };
 
 // Utilities
@@ -67,8 +89,123 @@ function formatWeight(value) {
     return Number(value).toFixed(1).replace(/\\.0$/, "");
 }
 
+function formatTimer(seconds) {
+    const clamped = Math.max(0, Number.parseInt(seconds, 10) || 0);
+    const mins = Math.floor(clamped / 60);
+    const secs = clamped % 60;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function uuid() {
     return Date.now() + Math.floor(Math.random() * 100000);
+}
+
+function playTimerDing() {
+    try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = "sine";
+        oscillator.frequency.value = 880;
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.35);
+        oscillator.onended = () => ctx.close();
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function renderRestTimer() {
+    restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
+    const controlsDisabled = !state.restTimer.running;
+    restLessBtn.disabled = controlsDisabled;
+    restMoreBtn.disabled = controlsDisabled;
+    restStopBtn.disabled = controlsDisabled;
+}
+
+function stopRestTimer() {
+    if (state.restTimer.intervalId) {
+        clearInterval(state.restTimer.intervalId);
+    }
+    state.restTimer.intervalId = null;
+    state.restTimer.running = false;
+    renderRestTimer();
+}
+
+function startRestTimer(seconds) {
+    stopRestTimer();
+    state.restTimer.remainingSeconds = Math.max(0, Number.parseInt(seconds, 10) || 0);
+    if (state.restTimer.remainingSeconds <= 0) {
+        renderRestTimer();
+        return;
+    }
+    state.restTimer.running = true;
+    renderRestTimer();
+    state.restTimer.intervalId = setInterval(() => {
+        state.restTimer.remainingSeconds -= 1;
+        if (state.restTimer.remainingSeconds <= 0) {
+            state.restTimer.remainingSeconds = 0;
+            stopRestTimer();
+            playTimerDing();
+            showToast("Rest complete", "success");
+            return;
+        }
+        renderRestTimer();
+    }, 1000);
+}
+
+function adjustRestTimer(deltaSeconds) {
+    if (!state.restTimer.running) return;
+    state.restTimer.remainingSeconds = Math.max(0, state.restTimer.remainingSeconds + deltaSeconds);
+    if (state.restTimer.remainingSeconds === 0) {
+        stopRestTimer();
+        playTimerDing();
+        showToast("Rest complete", "success");
+        return;
+    }
+    renderRestTimer();
+}
+
+function getTemplateItems(template) {
+    if (!template) return [];
+    if (Array.isArray(template.items)) {
+        return template.items.map((item) => ({
+            exerciseId: item.exerciseId,
+            sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
+            reps: String(item.reps || "8-12").trim(),
+            restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+        }));
+    }
+    return (template.exerciseIds || []).map((exerciseId) => ({
+        exerciseId,
+        sets: 3,
+        reps: "8-12",
+        restSeconds: 90,
+    }));
+}
+
+function applyTemplateItems(template, items) {
+    const normalizedItems = (items || [])
+        .map((item) => ({
+            exerciseId: item.exerciseId,
+            sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
+            reps: String(item.reps || "8-12").trim(),
+            restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+        }))
+        .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps);
+
+    return {
+        ...template,
+        items: normalizedItems,
+        exerciseIds: normalizedItems.map((item) => item.exerciseId),
+    };
 }
 
 // Navigation
@@ -89,6 +226,8 @@ async function refreshUI() {
     await refreshData();
     renderTemplateSelect();
     renderExercises();
+    renderTemplatesList();
+    renderTemplateEditor();
     renderHistory();
     maybeResumeDraft();
 }
@@ -105,6 +244,13 @@ function renderTemplateSelect() {
         opt.textContent = t.name;
         templateSelect.appendChild(opt);
     });
+}
+
+function getTemplateRestSecondsForExercise(exerciseId) {
+    if (!state.activeSession?.templateId) return 90;
+    const activeTemplate = state.templates.find((template) => String(template.id) === String(state.activeSession.templateId));
+    const item = getTemplateItems(activeTemplate).find((entry) => String(entry.exerciseId) === String(exerciseId));
+    return item?.restSeconds ?? 90;
 }
 
 // Exercises
@@ -133,6 +279,64 @@ async function clearExercises() {
     }
     await refreshUI();
     showToast("Exercises cleared", "success");
+}
+
+async function loadDefaultLibrary() {
+    try {
+        const result = await db.installDefaultLibrary();
+        await refreshUI();
+        if (result.addedExercises === 0 && result.addedTemplates === 0) {
+            showToast("Default library already installed", "info");
+            return;
+        }
+        showToast(`Added ${result.addedExercises} exercises, ${result.addedTemplates} templates`, "success");
+    } catch (err) {
+        console.error(err);
+        showToast(`Could not load defaults: ${err?.message || "unknown error"}`, "error");
+    }
+}
+
+async function createTemplate() {
+    const name = templateNameInput.value.trim();
+    if (!name) {
+        showToast("Enter a template name", "error");
+        return;
+    }
+
+    const duplicate = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+        showToast("Template name already exists", "error");
+        return;
+    }
+
+    await db.addTemplate({
+        id: uuid(),
+        name,
+        items: [],
+        exerciseIds: [],
+    });
+    templateNameInput.value = "";
+    showToast("Template created", "success");
+    await refreshUI();
+    const created = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (created) {
+        state.selectedTemplateId = created.id;
+        renderTemplatesList();
+        renderTemplateEditor();
+    }
+}
+
+async function resetTemplatesToDefaultSplit() {
+    if (!confirm("Replace all current templates with the default 7-day split examples?")) return;
+    try {
+        const result = await db.resetTemplatesToDefaultSplit();
+        state.selectedTemplateId = null;
+        await refreshUI();
+        showToast(`Loaded ${result.addedTemplates} split templates`, "success");
+    } catch (err) {
+        console.error(err);
+        showToast(`Could not reset templates: ${err?.message || "unknown error"}`, "error");
+    }
 }
 
 function renderExercises() {
@@ -178,16 +382,279 @@ function renderExercises() {
     });
 }
 
+function getSelectedTemplate() {
+    return state.templates.find((template) => String(template.id) === String(state.selectedTemplateId)) || null;
+}
+
+async function saveTemplate(updatedTemplate, successMessage = "Template updated", { silent = false } = {}) {
+    const normalizedTemplate = applyTemplateItems(updatedTemplate, getTemplateItems(updatedTemplate));
+    await db.updateTemplate(normalizedTemplate);
+    state.templates = state.templates.map((template) => (String(template.id) === String(normalizedTemplate.id) ? normalizedTemplate : template));
+    renderTemplateSelect();
+    renderTemplatesList();
+    renderTemplateEditor();
+    if (!silent) {
+        showToast(successMessage, "success");
+    }
+}
+
+async function saveTemplateName() {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const name = templateEditorNameInput.value.trim();
+    if (!name) {
+        showToast("Enter a template name", "error");
+        return;
+    }
+    const duplicate = state.templates.find((item) => String(item.id) !== String(template.id) && item.name.toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+        showToast("Template name already exists", "error");
+        return;
+    }
+    await saveTemplate({ ...template, name }, "Template renamed");
+}
+
+function renderTemplateExerciseOptions(template) {
+    templateAddExerciseSelect.innerHTML = "";
+    const inTemplate = new Set(getTemplateItems(template).map((item) => String(item.exerciseId)));
+    const available = state.exercises.filter((exercise) => !inTemplate.has(String(exercise.id)));
+
+    if (available.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No more exercises to add";
+        templateAddExerciseSelect.appendChild(option);
+        templateAddExerciseSelect.disabled = true;
+        addTemplateExerciseBtn.disabled = true;
+        return;
+    }
+
+    available.forEach((exercise) => {
+        const option = document.createElement("option");
+        option.value = exercise.id;
+        option.textContent = exercise.name;
+        templateAddExerciseSelect.appendChild(option);
+    });
+    templateAddExerciseSelect.disabled = false;
+    addTemplateExerciseBtn.disabled = false;
+}
+
+async function addExerciseToTemplate() {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const selectedId = templateAddExerciseSelect.value;
+    if (!selectedId) return;
+    const exercise = state.exercises.find((item) => String(item.id) === String(selectedId));
+    if (!exercise) {
+        showToast("Exercise not found", "error");
+        return;
+    }
+    const currentItems = getTemplateItems(template);
+    if (currentItems.some((item) => String(item.exerciseId) === String(exercise.id))) {
+        showToast("Exercise already in template", "info");
+        return;
+    }
+    const repsDefault = `${exercise.repFloor}-${exercise.repCeiling}`;
+    await saveTemplate(
+        applyTemplateItems(template, [
+            ...currentItems,
+            {
+                exerciseId: exercise.id,
+                sets: 3,
+                reps: repsDefault,
+                restSeconds: 90,
+            },
+        ]),
+        "Exercise added to template"
+    );
+}
+
+async function removeExerciseFromTemplate(exerciseId) {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const nextItems = getTemplateItems(template).filter((item) => String(item.exerciseId) !== String(exerciseId));
+    await saveTemplate(applyTemplateItems(template, nextItems), "Exercise removed from template");
+}
+
+async function reorderTemplateExercise(fromIndex, toIndex) {
+    if (fromIndex === toIndex) return;
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const nextItems = [...getTemplateItems(template)];
+    const [moved] = nextItems.splice(fromIndex, 1);
+    nextItems.splice(toIndex, 0, moved);
+    await saveTemplate(applyTemplateItems(template, nextItems), "Template order updated");
+}
+
+async function updateTemplateItemConfig(index, patch) {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const currentItems = getTemplateItems(template);
+    const current = currentItems[index];
+    if (!current) return;
+    currentItems[index] = { ...current, ...patch };
+    await saveTemplate(applyTemplateItems(template, currentItems), "Template updated", { silent: true });
+}
+
+function renderTemplateEditor() {
+    const template = getSelectedTemplate();
+    if (!template) {
+        templateEditorPanelEl.classList.add("hidden");
+        templateEditorEmptyEl.classList.remove("hidden");
+        templateExercisePickerEl.innerHTML = "";
+        return;
+    }
+
+    templateEditorEmptyEl.classList.add("hidden");
+    templateEditorPanelEl.classList.remove("hidden");
+    templateEditorNameInput.value = template.name;
+    renderTemplateExerciseOptions(template);
+
+    const templateItems = getTemplateItems(template);
+    templateExercisePickerEl.innerHTML = "";
+    if (templateItems.length === 0) {
+        templateExercisePickerEl.innerHTML = `<div class="empty">No exercises yet. Add one above.</div>`;
+        return;
+    }
+
+    templateItems.forEach((templateItem, index) => {
+        const exercise = state.exercises.find((item) => String(item.id) === String(templateItem.exerciseId));
+        if (!exercise) return;
+        const row = document.createElement("div");
+        row.className = "picker-item draggable";
+        row.draggable = true;
+        row.dataset.index = String(index);
+        row.innerHTML = `
+            <span class="drag-handle">::</span>
+            <div class="picker-title">
+                <div>${exercise.name}</div>
+                <div class="template-config-grid">
+                    <label>
+                        <span class="sub small">Sets</span>
+                        <input type="number" min="1" value="${templateItem.sets}" data-field="sets">
+                    </label>
+                    <label>
+                        <span class="sub small">Reps</span>
+                        <input type="text" value="${templateItem.reps}" data-field="reps">
+                    </label>
+                    <label>
+                        <span class="sub small">Rest (sec)</span>
+                        <input type="number" min="0" step="5" value="${templateItem.restSeconds}" data-field="restSeconds">
+                    </label>
+                </div>
+            </div>
+            <button class="danger ghost small" data-action="remove">Remove</button>
+        `;
+
+        row.addEventListener("dragstart", (event) => {
+            event.dataTransfer?.setData("text/plain", row.dataset.index || "0");
+            row.classList.add("dragging");
+        });
+        row.addEventListener("dragend", () => {
+            row.classList.remove("dragging");
+            row.classList.remove("drag-over");
+        });
+        row.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            row.classList.add("drag-over");
+        });
+        row.addEventListener("dragleave", () => {
+            row.classList.remove("drag-over");
+        });
+        row.addEventListener("drop", async (event) => {
+            event.preventDefault();
+            row.classList.remove("drag-over");
+            const fromIndex = Number(event.dataTransfer?.getData("text/plain"));
+            const toIndex = Number(row.dataset.index);
+            if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex)) return;
+            await reorderTemplateExercise(fromIndex, toIndex);
+        });
+
+        row.querySelector('[data-action="remove"]').addEventListener("click", async () => {
+            await removeExerciseFromTemplate(templateItem.exerciseId);
+        });
+
+        row.querySelectorAll("input[data-field]").forEach((input) => {
+            input.addEventListener("change", async () => {
+                const field = input.dataset.field;
+                if (!field) return;
+                const value = field === "reps" ? input.value.trim() : Number.parseInt(input.value, 10);
+                if (field === "reps" && !value) {
+                    showToast("Reps cannot be empty", "error");
+                    return;
+                }
+                await updateTemplateItemConfig(index, { [field]: value });
+            });
+        });
+
+        templateExercisePickerEl.appendChild(row);
+    });
+}
+
+function renderTemplatesList() {
+    templatesListEl.innerHTML = "";
+    if (state.templates.length === 0) {
+        templatesListEl.innerHTML = `<div class="empty">No templates yet</div>`;
+        return;
+    }
+
+    state.templates
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach((template) => {
+            const exerciseNames = getTemplateItems(template)
+                .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
+                .filter(Boolean);
+
+            const card = document.createElement("div");
+            card.className = "list-card";
+            card.innerHTML = `
+                <div>
+                    <p class="label">${template.name}</p>
+                    <p class="sub">${exerciseNames.join(", ") || "No exercises"}</p>
+                </div>
+                <div class="list-actions">
+                    <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>
+                    <button class="danger ghost small" data-action="delete-template">Delete</button>
+                </div>
+            `;
+
+            card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
+                state.selectedTemplateId = template.id;
+                renderTemplatesList();
+                renderTemplateEditor();
+            });
+
+            card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
+                if (!confirm(`Delete template "${template.name}"?`)) return;
+                await db.deleteTemplate(template.id);
+                if (String(state.selectedTemplateId) === String(template.id)) {
+                    state.selectedTemplateId = null;
+                }
+                await refreshUI();
+                showToast("Template deleted", "success");
+            });
+
+            templatesListEl.appendChild(card);
+        });
+}
+
 // Workout logic
 function getExercisesForTemplate(templateId) {
     if (!templateId) return state.exercises;
     const tmpl = state.templates.find((t) => String(t.id) === String(templateId));
     if (!tmpl) return state.exercises;
-    return state.exercises.filter((ex) => tmpl.exerciseIds.includes(ex.id));
+    return getTemplateItems(tmpl)
+        .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId)))
+        .filter(Boolean);
 }
 
 async function startWorkout() {
-    const templateId = templateSelect.value ? Number(templateSelect.value) : null;
+    stopRestTimer();
+    state.restTimer.remainingSeconds = 0;
+    renderRestTimer();
+
+    const templateId = templateSelect.value || null;
     const exercises = getExercisesForTemplate(templateId);
     if (exercises.length === 0) {
         showToast("Add exercises first", "error");
@@ -220,7 +687,7 @@ async function startWorkout() {
 
     state.activeExercises = exercises;
     workoutNotesEl.value = state.activeSession.notes || "";
-    sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => t.id === templateId)?.name || "Workout" : "Workout";
+    sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => String(t.id) === String(templateId))?.name || "Workout" : "Workout";
     workoutSection.classList.remove("hidden");
     renderWorkoutExercises();
     setView("view-workout");
@@ -232,7 +699,7 @@ function maybeResumeDraft() {
     if (draft) {
         state.activeSession = draft;
         state.activeExercises = getExercisesForTemplate(draft.templateId);
-        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => t.id === draft.templateId)?.name || "Workout" : "Workout";
+        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Workout";
         workoutNotesEl.value = draft.notes || "";
         workoutSection.classList.remove("hidden");
         renderWorkoutExercises();
@@ -243,6 +710,10 @@ function renderWorkoutExercises() {
     workoutExercisesEl.innerHTML = "";
     const sessionId = state.activeSession?.id;
     const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
+    const activeTemplate = state.activeSession?.templateId
+        ? state.templates.find((template) => String(template.id) === String(state.activeSession.templateId))
+        : null;
+    const itemByExerciseId = new Map(getTemplateItems(activeTemplate).map((item) => [String(item.exerciseId), item]));
 
     state.activeExercises.forEach((ex) => {
         const exSets = sessionSets.filter((s) => s.exerciseId === ex.id).sort((a, b) => a.setNumber - b.setNumber);
@@ -250,11 +721,15 @@ function renderWorkoutExercises() {
         card.className = "exercise-card";
 
         const target = computeNextTarget(ex);
+        const templateItem = itemByExerciseId.get(String(ex.id));
+        const planText = templateItem
+            ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
+            : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
         card.innerHTML = `
             <div class="exercise-header">
                 <div>
                     <p class="label">${ex.name}</p>
-                    <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs</p>
+                    <p class="sub">${planText}</p>
                 </div>
                 <div class="target-chip">${target}</div>
             </div>
@@ -283,13 +758,44 @@ function addSetRow(container, exercise, existingSet) {
         <input type="number" placeholder="Weight" inputmode="decimal" step="0.5" value="${existingSet ? existingSet.weight : ""}">
         <span class="x">×</span>
         <input type="number" placeholder="Reps" inputmode="numeric" min="1" value="${existingSet ? existingSet.reps : ""}">
+        <button class="ghost small mark-set">${existingSet?.isComplete ? "Done" : "Mark done"}</button>
         <button class="ghost small remove-set">Remove</button>
     `;
+    row.classList.toggle("set-complete", Boolean(existingSet?.isComplete));
 
     const [weightInput, repsInput] = row.querySelectorAll("input");
     const save = () => saveSetRow(container, exercise, row, weightInput, repsInput);
     weightInput.addEventListener("input", save);
     repsInput.addEventListener("input", save);
+
+    row.querySelector(".mark-set").addEventListener("click", async () => {
+        let setRecord = null;
+        if (row.dataset.setId) {
+            setRecord = state.sets.find((item) => String(item.id) === row.dataset.setId) || null;
+        }
+        if (!setRecord) {
+            const saved = await saveSetRow(container, exercise, row, weightInput, repsInput);
+            if (!saved) {
+                showToast("Enter weight and reps before marking done", "error");
+                return;
+            }
+            setRecord = saved;
+        }
+
+        const nextComplete = !setRecord.isComplete;
+        const updated = {
+            ...setRecord,
+            isComplete: nextComplete,
+            completedAt: nextComplete ? new Date().toISOString() : null,
+        };
+        await db.updateSet(updated);
+        state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
+        row.classList.toggle("set-complete", nextComplete);
+        row.querySelector(".mark-set").textContent = nextComplete ? "Done" : "Mark done";
+        if (nextComplete) {
+            startRestTimer(getTemplateRestSecondsForExercise(exercise.id));
+        }
+    });
 
     row.querySelector(".remove-set").addEventListener("click", async () => {
         if (row.dataset.setId) {
@@ -306,11 +812,13 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
     if (!state.activeSession) return;
     const weight = parseFloat(weightInput.value);
     const reps = parseInt(repsInput.value, 10);
-    if (!weight || !reps) return;
+    if (!weight || !reps) return null;
 
     const setNumber = Array.from(container.querySelectorAll(".set-row")).indexOf(row) + 1;
+    const existing = row.dataset.setId ? state.sets.find((item) => String(item.id) === row.dataset.setId) : null;
     const payload = {
-        id: row.dataset.setId ? Number(row.dataset.setId) : uuid(),
+        ...(existing || {}),
+        id: existing ? existing.id : uuid(),
         sessionId: state.activeSession.id,
         exerciseId: exercise.id,
         setNumber,
@@ -326,6 +834,7 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
         row.dataset.setId = payload.id;
         state.sets.push(payload);
     }
+    return payload;
 }
 
 async function finishWorkout() {
@@ -345,6 +854,9 @@ async function finishWorkout() {
     state.sessions = state.sessions.map((s) => (s.id === updated.id ? updated : s));
     state.activeSession = null;
     state.activeExercises = [];
+    stopRestTimer();
+    state.restTimer.remainingSeconds = 0;
+    renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
     showToast("Workout saved", "success");
@@ -359,6 +871,9 @@ async function cancelWorkout() {
     state.sets = state.sets.filter((s) => s.sessionId !== state.activeSession.id);
     state.activeSession = null;
     state.activeExercises = [];
+    stopRestTimer();
+    state.restTimer.remainingSeconds = 0;
+    renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
     showToast("Workout canceled", "info");
@@ -390,7 +905,7 @@ function renderSessionsList() {
         card.innerHTML = `
             <div>
                 <p class="label">${formatDate(session.date)}</p>
-                <p class="sub">${session.templateId ? state.templates.find((t) => t.id === session.templateId)?.name || "Workout" : "Workout"}</p>
+                <p class="sub">${session.templateId ? state.templates.find((t) => String(t.id) === String(session.templateId))?.name || "Workout" : "Workout"}</p>
                 <p class="sub small">${exerciseNames || "No sets recorded"}</p>
             </div>
             <div class="list-actions">
@@ -601,6 +1116,9 @@ async function clearData() {
     await db.clearAll();
     state.activeSession = null;
     state.activeExercises = [];
+    stopRestTimer();
+    state.restTimer.remainingSeconds = 0;
+    renderRestTimer();
     workoutSection.classList.add("hidden");
     await refreshUI();
     showToast("Data cleared", "success");
@@ -630,7 +1148,15 @@ function bindEvents() {
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);
     addExerciseBtn.addEventListener("click", addExercise);
+    loadDefaultLibraryBtn.addEventListener("click", loadDefaultLibrary);
     clearExercisesBtn.addEventListener("click", clearExercises);
+    createTemplateBtn.addEventListener("click", createTemplate);
+    resetTemplatesBtn.addEventListener("click", resetTemplatesToDefaultSplit);
+    saveTemplateNameBtn.addEventListener("click", saveTemplateName);
+    addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
+    restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
+    restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
+    restStopBtn.addEventListener("click", stopRestTimer);
     refreshHistoryBtn.addEventListener("click", renderHistory);
     exportBtn.addEventListener("click", exportData);
     importBtn.addEventListener("click", triggerImport);
@@ -641,6 +1167,12 @@ function bindEvents() {
 async function init() {
     bindEvents();
     registerServiceWorker();
+    renderRestTimer();
+    try {
+        await db.installDefaultLibrary({ onlyIfEmpty: true });
+    } catch (err) {
+        console.error(err);
+    }
     await refreshUI();
     // Default to workout view
     setView("view-workout");

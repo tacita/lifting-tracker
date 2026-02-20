@@ -42,6 +42,15 @@
                             <button id="cancel-workout" class="ghost">Cancel</button>
                         </div>
                     </div>
+                    <div id="rest-timer-panel" class="rest-timer-panel">
+                        <p class="sub small">Rest timer</p>
+                        <div class="rest-timer-controls">
+                            <button id="rest-less" class="ghost small">-10s</button>
+                            <p id="rest-display" class="rest-display">00:00</p>
+                            <button id="rest-more" class="ghost small">+10s</button>
+                            <button id="rest-stop" class="ghost small">Stop</button>
+                        </div>
+                    </div>
                     <div id="workout-exercises"></div>
                     <div class="field">
                         <label for="workout-notes">Notes</label>
@@ -54,7 +63,10 @@
             <!-- Exercises View -->
             <section id="view-exercises" class="view">
                 <div class="card">
-                    <h2>Add exercise</h2>
+                    <div class="section-header">
+                        <h2>Add exercise</h2>
+                        <button id="load-default-library" class="ghost small">Load PF defaults</button>
+                    </div>
                     <div class="field">
                         <label for="exercise-name">Name</label>
                         <input id="exercise-name" type="text" placeholder="e.g., Bench Press">
@@ -82,6 +94,49 @@
                         <button id="clear-exercises" class="ghost small">Clear all</button>
                     </div>
                     <div id="exercises-list"></div>
+                </div>
+            </section>
+
+            <!-- Templates View -->
+            <section id="view-templates" class="view">
+                <div class="card">
+                    <h2>Create template</h2>
+                    <div class="field">
+                        <label for="template-name">Template name</label>
+                        <input id="template-name" type="text" placeholder="e.g., Monday Push">
+                    </div>
+                    <button id="create-template" class="primary">Create template</button>
+                </div>
+
+                <div class="card">
+                    <div class="section-header">
+                        <h2>Templates</h2>
+                        <button id="reset-templates" class="ghost small">Reset 7-day split</button>
+                    </div>
+                    <div id="templates-list"></div>
+                </div>
+
+                <div class="card">
+                    <h2>Template editor</h2>
+                    <div id="template-editor-empty" class="empty">Pick a template to edit</div>
+                    <div id="template-editor-panel" class="hidden">
+                        <div class="field">
+                            <label for="template-editor-name">Template name</label>
+                            <div class="inline-actions">
+                                <input id="template-editor-name" type="text" placeholder="Template name">
+                                <button id="save-template-name" class="ghost">Save</button>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="template-add-exercise">Add exercise</label>
+                            <div class="inline-actions">
+                                <select id="template-add-exercise"></select>
+                                <button id="add-template-exercise" class="ghost">Add</button>
+                            </div>
+                        </div>
+                        <p class="sub">Drag exercises to reorder them.</p>
+                        <div id="template-exercise-picker" class="picker-list"></div>
+                    </div>
                 </div>
             </section>
 
@@ -133,6 +188,7 @@
         <nav class="tab-bar">
             <button data-view="view-workout" class="active">Workout</button>
             <button data-view="view-exercises">Exercises</button>
+            <button data-view="view-templates">Templates</button>
             <button data-view="view-history">History</button>
             <button data-view="view-settings">Settings</button>
         </nav>
