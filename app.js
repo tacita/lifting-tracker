@@ -717,6 +717,7 @@ function renderWorkoutExercises() {
 
     state.activeExercises.forEach((ex) => {
         const exSets = sessionSets.filter((s) => s.exerciseId === ex.id).sort((a, b) => a.setNumber - b.setNumber);
+        const previousSetDisplays = getPreviousSetDisplays(ex.id);
         const card = document.createElement("div");
         card.className = "exercise-card";
 
@@ -737,31 +738,165 @@ function renderWorkoutExercises() {
             <button class="ghost add-set">+ Add set</button>
         `;
 
+        card.querySelector(".target-chip").addEventListener("click", () => openExerciseModal(ex));
+
         const setsContainer = card.querySelector(".sets-container");
-        exSets.forEach((set) => addSetRow(setsContainer, ex, set));
-        if (exSets.length === 0) {
-            addSetRow(setsContainer, ex, null);
+        setsContainer.dataset.previousSetDisplays = JSON.stringify(previousSetDisplays);
+        const plannedSetCount = Math.max(1, Number.parseInt(templateItem?.sets, 10) || 1);
+        const rowCount = Math.max(plannedSetCount, exSets.length || 0);
+        for (let i = 0; i < rowCount; i += 1) {
+            addSetRow(setsContainer, ex, exSets[i] || null, i + 1, previousSetDisplays[i] || "");
         }
 
-        card.querySelector(".add-set").addEventListener("click", () => addSetRow(setsContainer, ex, null));
+        card.querySelector(".add-set").addEventListener("click", () => {
+            const nextSetNumber = setsContainer.querySelectorAll(".set-row").length + 1;
+            const previousDisplay = previousSetDisplays[nextSetNumber - 1] || "";
+            addSetRow(setsContainer, ex, null, nextSetNumber, previousDisplay);
+        });
         workoutExercisesEl.appendChild(card);
     });
 }
 
-function addSetRow(container, exercise, existingSet) {
+function attachSwipeToDelete(row, content, onDelete) {
+    let dragging = false;
+    let pointerId = null;
+    let startX = 0;
+    let currentX = 0;
+    const maxSwipe = 120;
+    const deleteThreshold = 88;
+
+    const interactiveSelector = "input, button, select, textarea, label";
+    const setOffset = (x) => {
+        content.style.transform = `translateX(${x}px)`;
+        row.classList.toggle("swipe-delete-ready", Math.abs(x) >= deleteThreshold);
+    };
+
+    const reset = () => {
+        currentX = 0;
+        setOffset(0);
+    };
+
+    row.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        if (event.target instanceof Element && event.target.closest(interactiveSelector)) return;
+        dragging = true;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        currentX = 0;
+        row.setPointerCapture(pointerId);
+    });
+
+    row.addEventListener("pointermove", (event) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+        const delta = event.clientX - startX;
+        if (delta >= 0) {
+            currentX = 0;
+            setOffset(0);
+            return;
+        }
+        currentX = Math.max(-maxSwipe, delta);
+        setOffset(currentX);
+    });
+
+    const endSwipe = async (event) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+        dragging = false;
+        if (row.hasPointerCapture(pointerId)) {
+            row.releasePointerCapture(pointerId);
+        }
+        const shouldDelete = Math.abs(currentX) >= deleteThreshold;
+        if (shouldDelete) {
+            await onDelete();
+            return;
+        }
+        reset();
+    };
+
+    row.addEventListener("pointerup", endSwipe);
+    row.addEventListener("pointercancel", endSwipe);
+    row.addEventListener("lostpointercapture", () => {
+        if (dragging) {
+            dragging = false;
+            reset();
+        }
+    });
+}
+
+async function deleteSetRow(row) {
+    const container = row.parentElement;
+    if (row.dataset.setId) {
+        const existing = state.sets.find((item) => String(item.id) === row.dataset.setId);
+        if (existing) {
+            await db.deleteSet(existing.id);
+            state.sets = state.sets.filter((item) => String(item.id) !== row.dataset.setId);
+        }
+    }
+    row.remove();
+    if (container) {
+        renumberSetRows(container);
+    }
+}
+
+function getPreviousSetDisplays(exerciseId) {
+    const completedSessions = state.sessions
+        .filter((session) => session.status !== "draft")
+        .slice()
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    for (const session of completedSessions) {
+        const sets = state.sets
+            .filter((set) => String(set.sessionId) === String(session.id) && String(set.exerciseId) === String(exerciseId))
+            .slice()
+            .sort((a, b) => a.setNumber - b.setNumber);
+        if (!sets.length) continue;
+        return sets.map((set) => `${formatWeight(set.weight)}x${set.reps}`);
+    }
+    return [];
+}
+
+function renumberSetRows(container) {
+    let previousSetDisplays = [];
+    try {
+        previousSetDisplays = JSON.parse(container.dataset.previousSetDisplays || "[]");
+        if (!Array.isArray(previousSetDisplays)) {
+            previousSetDisplays = [];
+        }
+    } catch {
+        previousSetDisplays = [];
+    }
+
+    container.querySelectorAll(".set-row").forEach((row, index) => {
+        const setNumber = index + 1;
+        const setIndexEl = row.querySelector(".set-index");
+        if (setIndexEl) {
+            setIndexEl.textContent = String(setNumber);
+        }
+        const previousEl = row.querySelector(".previous-set");
+        if (previousEl) {
+            previousEl.textContent = previousSetDisplays[index] || "-";
+        }
+    });
+}
+
+function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisplay = "") {
     const row = document.createElement("div");
     row.className = "set-row";
     if (existingSet) {
         row.dataset.setId = existingSet.id;
     }
     row.innerHTML = `
-        <input type="number" placeholder="Weight" inputmode="decimal" step="0.5" value="${existingSet ? existingSet.weight : ""}">
-        <span class="x">×</span>
-        <input type="number" placeholder="Reps" inputmode="numeric" min="1" value="${existingSet ? existingSet.reps : ""}">
-        <button class="ghost small mark-set">${existingSet?.isComplete ? "Done" : "Mark done"}</button>
-        <button class="ghost small remove-set">Remove</button>
+        <div class="set-delete-bg">Delete</div>
+        <div class="set-row-content">
+            <span class="set-index">${setNumber}</span>
+            <span class="previous-set">${previousDisplay || "-"}</span>
+            <input type="number" placeholder="lbs" aria-label="Weight" inputmode="decimal" step="0.5" value="${existingSet ? existingSet.weight : ""}">
+            <span class="x">×</span>
+            <input type="number" placeholder="Reps" aria-label="Reps" inputmode="numeric" min="1" value="${existingSet ? existingSet.reps : ""}">
+            <button class="ghost small mark-set ${existingSet?.isComplete ? "done" : ""}" aria-label="Mark set complete">✓</button>
+        </div>
     `;
     row.classList.toggle("set-complete", Boolean(existingSet?.isComplete));
+    attachSwipeToDelete(row, row.querySelector(".set-row-content"), async () => deleteSetRow(row));
 
     const [weightInput, repsInput] = row.querySelectorAll("input");
     const save = () => saveSetRow(container, exercise, row, weightInput, repsInput);
@@ -791,18 +926,10 @@ function addSetRow(container, exercise, existingSet) {
         await db.updateSet(updated);
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
         row.classList.toggle("set-complete", nextComplete);
-        row.querySelector(".mark-set").textContent = nextComplete ? "Done" : "Mark done";
+        row.querySelector(".mark-set").classList.toggle("done", nextComplete);
         if (nextComplete) {
             startRestTimer(getTemplateRestSecondsForExercise(exercise.id));
         }
-    });
-
-    row.querySelector(".remove-set").addEventListener("click", async () => {
-        if (row.dataset.setId) {
-            await db.deleteSet(Number(row.dataset.setId));
-            state.sets = state.sets.filter((s) => String(s.id) !== row.dataset.setId);
-        }
-        row.remove();
     });
 
     container.appendChild(row);
@@ -960,7 +1087,7 @@ function computeNextTarget(exercise) {
         }
         return `${formatWeight(topSet.weight)} × ${topSet.reps + 1}–${exercise.repCeiling}`;
     }
-    return "Start tracking";
+    return "No history yet";
 }
 
 function openSessionModal(session) {
