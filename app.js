@@ -91,6 +91,7 @@ const state = {
         remainingSeconds: 0,
         running: false,
         intervalId: null,
+        lastDurationSeconds: 90,
     },
 };
 
@@ -391,10 +392,11 @@ async function pauseOrResumeWorkout() {
 
 function renderRestTimer() {
     restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
-    const controlsDisabled = !state.restTimer.running;
-    restLessBtn.disabled = controlsDisabled;
-    restMoreBtn.disabled = controlsDisabled;
-    restStopBtn.disabled = controlsDisabled;
+    const running = state.restTimer.running;
+    restLessBtn.disabled = !running;
+    restMoreBtn.disabled = !running;
+    restStopBtn.disabled = false;
+    restStopBtn.textContent = running ? "Stop" : "Start";
 }
 
 function stopRestTimer() {
@@ -406,6 +408,12 @@ function stopRestTimer() {
     renderRestTimer();
 }
 
+function stopAndResetRestTimer() {
+    stopRestTimer();
+    state.restTimer.remainingSeconds = 0;
+    renderRestTimer();
+}
+
 function startRestTimer(seconds) {
     stopRestTimer();
     state.restTimer.remainingSeconds = Math.max(0, Number.parseInt(seconds, 10) || 0);
@@ -413,6 +421,7 @@ function startRestTimer(seconds) {
         renderRestTimer();
         return;
     }
+    state.restTimer.lastDurationSeconds = state.restTimer.remainingSeconds;
     state.restTimer.running = true;
     renderRestTimer();
     state.restTimer.intervalId = setInterval(() => {
@@ -436,6 +445,15 @@ function adjustRestTimer(deltaSeconds) {
         return;
     }
     renderRestTimer();
+}
+
+function toggleRestTimer() {
+    if (state.restTimer.running) {
+        stopAndResetRestTimer();
+        return;
+    }
+    const seconds = Math.max(5, Number.parseInt(state.restTimer.lastDurationSeconds, 10) || 90);
+    startRestTimer(seconds);
 }
 
 function getTemplateItems(template) {
@@ -1523,6 +1541,7 @@ async function finishWorkout() {
     stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
+    state.restTimer.lastDurationSeconds = 90;
     renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
@@ -1541,6 +1560,7 @@ async function cancelWorkout() {
     stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
+    state.restTimer.lastDurationSeconds = 90;
     renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
@@ -1801,6 +1821,7 @@ async function clearData() {
     stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
+    state.restTimer.lastDurationSeconds = 90;
     renderRestTimer();
     workoutSection.classList.add("hidden");
     await refreshUI();
@@ -1842,7 +1863,7 @@ function bindEvents() {
     clearSupersetBtn.addEventListener("click", clearSupersetFromSelection);
     restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
     restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
-    restStopBtn.addEventListener("click", stopRestTimer);
+    restStopBtn.addEventListener("click", toggleRestTimer);
     refreshHistoryBtn.addEventListener("click", renderHistory);
     exportBtn.addEventListener("click", exportData);
     importBtn.addEventListener("click", triggerImport);
