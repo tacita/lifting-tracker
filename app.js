@@ -1188,13 +1188,13 @@ function renderWorkoutExercises() {
             : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
         card.innerHTML = `
             <div class="exercise-header">
-                <div>
-                    <p class="label">${escapeHtml(ex.name)}</p>
+                <p class="label">${escapeHtml(ex.name)}</p>
+                <div class="exercise-meta-row">
                     <p class="sub">${escapeHtml(planText)}</p>
-                </div>
-                <div class="exercise-header-actions">
-                    ${supersetMeta ? `<div class="superset-badge">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
-                    <button class="ghost small history-chip" type="button">History</button>
+                    <div class="exercise-header-actions">
+                        ${supersetMeta ? `<div class="superset-badge">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
+                        <button class="ghost small history-chip" type="button">History</button>
+                    </div>
                 </div>
             </div>
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
