@@ -1,4 +1,4 @@
-const CACHE_NAME = "overload-cache-v15";
+const CACHE_NAME = "overload-cache-v16";
 const ASSETS = [
     "./",
     "./index.html",
@@ -36,6 +36,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // Never attempt to cache non-GET requests (e.g. Supabase POST/PUT).
+    if (request.method !== "GET") {
+        event.respondWith(fetch(request));
+        return;
+    }
 
     // Always fetch runtime credentials fresh; avoid stale cached config.js on phones.
     if (url.pathname.endsWith("/config.js")) {
