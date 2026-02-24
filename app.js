@@ -14,6 +14,7 @@ const gateSendMagicLinkBtn = document.getElementById("gate-send-magic-link");
 // Workout view refs
 const templateSelect = document.getElementById("workout-template");
 const startWorkoutBtn = document.getElementById("start-workout");
+const workoutElapsedEl = document.getElementById("workout-elapsed");
 const workoutSection = document.getElementById("workout-session");
 const workoutExercisesEl = document.getElementById("workout-exercises");
 const workoutNotesEl = document.getElementById("workout-notes");
@@ -81,6 +82,9 @@ const state = {
     selectedTemplateId: null,
     selectedTemplateExerciseIds: new Set(),
     supersetDraftMode: false,
+    workoutTimer: {
+        intervalId: null,
+    },
     restTimer: {
         remainingSeconds: 0,
         running: false,
@@ -110,6 +114,30 @@ function formatTimer(seconds) {
     const mins = Math.floor(clamped / 60);
     const secs = clamped % 60;
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatDuration(seconds) {
+    const total = Math.max(0, Number.parseInt(seconds, 10) || 0);
+    const hours = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours > 0) {
+        return `${hours}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+    return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
+function formatDateTime(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    });
 }
 
 function uuid() {
@@ -245,6 +273,63 @@ function playTimerDing() {
     }
 }
 
+function triggerHaptic() {
+    try {
+        if (navigator.vibrate) {
+            navigator.vibrate([120, 80, 140]);
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+function notifyRestComplete() {
+    playTimerDing();
+    triggerHaptic();
+    showToast("Rest complete", "success");
+}
+
+function getSessionStartIso(session) {
+    return session?.startedAt || session?.date || null;
+}
+
+function getSessionDurationSeconds(session) {
+    const startIso = getSessionStartIso(session);
+    if (!startIso) return 0;
+    const startMs = new Date(startIso).getTime();
+    if (Number.isNaN(startMs)) return 0;
+    const endIso = session?.finishedAt || new Date().toISOString();
+    const endMs = new Date(endIso).getTime();
+    if (Number.isNaN(endMs) || endMs < startMs) return 0;
+    return Math.floor((endMs - startMs) / 1000);
+}
+
+function renderWorkoutElapsed() {
+    const hasSession = Boolean(state.activeSession);
+    startWorkoutBtn.classList.toggle("hidden", hasSession);
+    workoutElapsedEl.classList.toggle("hidden", !hasSession);
+    if (!hasSession) {
+        workoutElapsedEl.textContent = "00:00";
+        return;
+    }
+    workoutElapsedEl.textContent = `Elapsed ${formatDuration(getSessionDurationSeconds(state.activeSession))}`;
+}
+
+function stopWorkoutElapsedTimer() {
+    if (state.workoutTimer.intervalId) {
+        clearInterval(state.workoutTimer.intervalId);
+    }
+    state.workoutTimer.intervalId = null;
+    renderWorkoutElapsed();
+}
+
+function startWorkoutElapsedTimer() {
+    stopWorkoutElapsedTimer();
+    if (!state.activeSession) return;
+    renderWorkoutElapsed();
+    state.workoutTimer.intervalId = setInterval(renderWorkoutElapsed, 1000);
+}
+
 function renderRestTimer() {
     restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
     const controlsDisabled = !state.restTimer.running;
@@ -276,8 +361,7 @@ function startRestTimer(seconds) {
         if (state.restTimer.remainingSeconds <= 0) {
             state.restTimer.remainingSeconds = 0;
             stopRestTimer();
-            playTimerDing();
-            showToast("Rest complete", "success");
+            notifyRestComplete();
             return;
         }
         renderRestTimer();
@@ -289,8 +373,7 @@ function adjustRestTimer(deltaSeconds) {
     state.restTimer.remainingSeconds = Math.max(0, state.restTimer.remainingSeconds + deltaSeconds);
     if (state.restTimer.remainingSeconds === 0) {
         stopRestTimer();
-        playTimerDing();
-        showToast("Rest complete", "success");
+        notifyRestComplete();
         return;
     }
     renderRestTimer();
@@ -939,9 +1022,12 @@ async function startWorkout() {
 
     // If a draft exists, reuse it; otherwise create new
     if (!state.activeSession) {
+        const nowIso = new Date().toISOString();
         const session = {
             id: uuid(),
-            date: new Date().toISOString(),
+            date: nowIso,
+            startedAt: nowIso,
+            finishedAt: null,
             templateId,
             notes: "",
             status: "draft",
@@ -961,10 +1047,20 @@ async function startWorkout() {
         }
     }
 
+    if (!state.activeSession.startedAt) {
+        state.activeSession = {
+            ...state.activeSession,
+            startedAt: state.activeSession.date || new Date().toISOString(),
+        };
+        await db.updateSession(state.activeSession);
+        state.sessions = state.sessions.map((item) => (String(item.id) === String(state.activeSession.id) ? state.activeSession : item));
+    }
+
     state.activeExercises = exercises;
     workoutNotesEl.value = state.activeSession.notes || "";
     sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => String(t.id) === String(templateId))?.name || "Workout" : "Workout";
     workoutSection.classList.remove("hidden");
+    startWorkoutElapsedTimer();
     renderWorkoutExercises();
     setView("view-workout");
 }
@@ -978,7 +1074,10 @@ function maybeResumeDraft() {
         sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Workout";
         workoutNotesEl.value = draft.notes || "";
         workoutSection.classList.remove("hidden");
+        startWorkoutElapsedTimer();
         renderWorkoutExercises();
+    } else {
+        stopWorkoutElapsedTimer();
     }
 }
 
@@ -1276,11 +1375,18 @@ async function finishWorkout() {
         return;
     }
 
-    const updated = { ...state.activeSession, notes: workoutNotesEl.value, status: "complete" };
+    const updated = {
+        ...state.activeSession,
+        startedAt: state.activeSession.startedAt || state.activeSession.date || new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+        notes: workoutNotesEl.value,
+        status: "complete",
+    };
     await db.updateSession(updated);
     state.sessions = state.sessions.map((s) => (s.id === updated.id ? updated : s));
     state.activeSession = null;
     state.activeExercises = [];
+    stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
     renderRestTimer();
@@ -1298,6 +1404,7 @@ async function cancelWorkout() {
     state.sets = state.sets.filter((s) => s.sessionId !== state.activeSession.id);
     state.activeSession = null;
     state.activeExercises = [];
+    stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
     renderRestTimer();
@@ -1330,10 +1437,12 @@ function renderSessionsList() {
             .filter(Boolean)
             .map((name) => escapeHtml(name))
             .join(", ");
+        const duration = formatDuration(getSessionDurationSeconds(session));
         card.innerHTML = `
             <div>
                 <p class="label">${formatDate(session.date)}</p>
                 <p class="sub">${escapeHtml(session.templateId ? state.templates.find((t) => String(t.id) === String(session.templateId))?.name || "Workout" : "Workout")}</p>
+                <p class="sub small">Duration: ${duration}</p>
                 <p class="sub small">${exerciseNames || "No sets recorded"}</p>
             </div>
             <div class="list-actions">
@@ -1395,8 +1504,19 @@ function openSessionModal(session) {
     const sets = state.sets.filter((s) => s.sessionId === session.id);
     modalTitle.textContent = `Session — ${formatDate(session.date)}`;
     modalHistoryList.innerHTML = "";
+    const summary = document.createElement("div");
+    summary.className = "history-block";
+    summary.innerHTML = `
+        <p class="sub small">Start: ${escapeHtml(formatDateTime(getSessionStartIso(session)))}</p>
+        <p class="sub small">Finish: ${escapeHtml(formatDateTime(session.finishedAt))}</p>
+        <p class="sub small">Duration: ${escapeHtml(formatDuration(getSessionDurationSeconds(session)))}</p>
+    `;
+    modalHistoryList.appendChild(summary);
     if (sets.length === 0) {
-        modalHistoryList.innerHTML = `<div class="empty">No sets logged</div>`;
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No sets logged";
+        modalHistoryList.appendChild(empty);
     } else {
         const grouped = groupSetsByExercise(sets);
         Object.keys(grouped).forEach((exerciseId) => {
@@ -1544,6 +1664,7 @@ async function clearData() {
     await db.clearAll();
     state.activeSession = null;
     state.activeExercises = [];
+    stopWorkoutElapsedTimer();
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
     renderRestTimer();
@@ -1603,6 +1724,7 @@ function bindEvents() {
 async function init() {
     bindEvents();
     registerServiceWorker();
+    renderWorkoutElapsed();
     renderRestTimer();
     db.onAuthStateChange(async (auth) => {
         renderAuthState(auth);
