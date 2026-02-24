@@ -1163,7 +1163,6 @@ function renderWorkoutExercises() {
         const card = document.createElement("div");
         card.className = "exercise-card";
 
-        const target = computeNextTarget(ex);
         const templateItem = itemByExerciseId.get(String(ex.id));
         const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
         const planText = templateItem
@@ -1177,14 +1176,14 @@ function renderWorkoutExercises() {
                 </div>
                 <div class="exercise-header-actions">
                     ${supersetMeta ? `<div class="superset-badge">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
-                    <div class="target-chip">${target}</div>
+                    <button class="ghost small history-chip" type="button">History</button>
                 </div>
             </div>
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
             <button class="ghost add-set">+ Add set</button>
         `;
 
-        card.querySelector(".target-chip").addEventListener("click", () => openExerciseModal(ex));
+        card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
 
         const setsContainer = card.querySelector(".sets-container");
         setsContainer.dataset.previousSetDisplays = JSON.stringify(previousSetDisplays);

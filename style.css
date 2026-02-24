@@ -270,13 +270,14 @@ button.small {
     gap: 8px;
 }
 
-.target-chip {
-    background: rgba(110, 231, 183, 0.12);
-    color: var(--accent);
-    padding: 6px 10px;
-    border-radius: 12px;
-    font-weight: 700;
+.history-chip {
+    padding: 4px 8px;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 1.1;
     white-space: nowrap;
+    color: var(--muted);
 }
 
 .workout-launcher {
