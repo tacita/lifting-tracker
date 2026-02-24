@@ -491,7 +491,12 @@ export async function signInWithGoogle() {
     const redirectTo = `${window.location.origin}${window.location.pathname}`;
     const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo },
+        options: {
+            redirectTo,
+            queryParams: {
+                prompt: "select_account",
+            },
+        },
     });
     if (error) {
         throw new Error(parseSupabaseError(error, "Google sign-in failed"));
