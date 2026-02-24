@@ -44,6 +44,8 @@ const templateEditorNameInput = document.getElementById("template-editor-name");
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
+const makeSupersetBtn = document.getElementById("make-superset");
+const clearSupersetBtn = document.getElementById("clear-superset");
 const templateExercisePickerEl = document.getElementById("template-exercise-picker");
 
 // History view refs
@@ -77,6 +79,7 @@ const state = {
     activeSession: null,
     activeExercises: [],
     selectedTemplateId: null,
+    selectedTemplateExerciseIds: new Set(),
     restTimer: {
         remainingSeconds: 0,
         running: false,
@@ -300,6 +303,8 @@ function getTemplateItems(template) {
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: String(item.reps || "8-12").trim(),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            supersetId: item.supersetId ? String(item.supersetId) : null,
+            supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }));
     }
     return (template.exerciseIds || []).map((exerciseId) => ({
@@ -307,6 +312,8 @@ function getTemplateItems(template) {
         sets: 3,
         reps: "8-12",
         restSeconds: 90,
+        supersetId: null,
+        supersetOrder: 0,
     }));
 }
 
@@ -317,14 +324,65 @@ function applyTemplateItems(template, items) {
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: String(item.reps || "8-12").trim(),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            supersetId: item.supersetId ? String(item.supersetId) : null,
+            supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }))
         .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps);
+
+    const orderByGroup = new Map();
+    normalizedItems.forEach((item) => {
+        if (!item.supersetId) {
+            item.supersetOrder = 0;
+            return;
+        }
+        const nextOrder = (orderByGroup.get(item.supersetId) || 0) + 1;
+        orderByGroup.set(item.supersetId, nextOrder);
+        item.supersetOrder = nextOrder;
+    });
 
     return {
         ...template,
         items: normalizedItems,
         exerciseIds: normalizedItems.map((item) => item.exerciseId),
     };
+}
+
+function clearTemplateSelection() {
+    state.selectedTemplateExerciseIds = new Set();
+}
+
+function getSupersetMetaByExercise(templateItems) {
+    const groupOrder = [];
+    const groups = new Map();
+    templateItems.forEach((item, index) => {
+        if (!item.supersetId) return;
+        if (!groups.has(item.supersetId)) {
+            groups.set(item.supersetId, []);
+            groupOrder.push(item.supersetId);
+        }
+        groups.get(item.supersetId).push({ ...item, index });
+    });
+
+    const metaByExerciseId = new Map();
+    groupOrder.forEach((supersetId, idx) => {
+        const members = groups.get(supersetId) || [];
+        if (members.length < 2) return;
+        members.sort((a, b) => a.index - b.index);
+        const label = idx < 26 ? String.fromCharCode(65 + idx) : String(idx + 1);
+        const memberExerciseIds = members.map((member) => member.exerciseId);
+        const restSeconds = Math.max(...members.map((member) => Number.parseInt(member.restSeconds, 10) || 0), 0);
+        members.forEach((member) => {
+            metaByExerciseId.set(String(member.exerciseId), {
+                supersetId,
+                label,
+                memberExerciseIds,
+                restSeconds,
+                order: member.supersetOrder || memberExerciseIds.indexOf(member.exerciseId) + 1,
+            });
+        });
+    });
+
+    return metaByExerciseId;
 }
 
 // Navigation
@@ -582,6 +640,8 @@ async function addExerciseToTemplate() {
                 sets: 3,
                 reps: repsDefault,
                 restSeconds: 90,
+                supersetId: null,
+                supersetOrder: 0,
             },
         ]),
         "Exercise added to template"
@@ -591,6 +651,7 @@ async function addExerciseToTemplate() {
 async function removeExerciseFromTemplate(exerciseId) {
     const template = getSelectedTemplate();
     if (!template) return;
+    state.selectedTemplateExerciseIds.delete(String(exerciseId));
     const nextItems = getTemplateItems(template).filter((item) => String(item.exerciseId) !== String(exerciseId));
     await saveTemplate(applyTemplateItems(template, nextItems), "Exercise removed from template");
 }
@@ -615,12 +676,63 @@ async function updateTemplateItemConfig(index, patch) {
     await saveTemplate(applyTemplateItems(template, currentItems), "Template updated", { silent: true });
 }
 
+async function createSupersetFromSelection() {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const currentItems = getTemplateItems(template);
+    const selected = currentItems.filter((item) => state.selectedTemplateExerciseIds.has(String(item.exerciseId)));
+    if (selected.length < 2) {
+        showToast("Select at least 2 exercises", "error");
+        return;
+    }
+
+    const supersetId = `ss-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const targetSets = selected[0].sets;
+    let supersetOrder = 1;
+    const nextItems = currentItems.map((item) => {
+        if (!state.selectedTemplateExerciseIds.has(String(item.exerciseId))) return item;
+        return {
+            ...item,
+            sets: targetSets,
+            supersetId,
+            supersetOrder: supersetOrder++,
+        };
+    });
+
+    clearTemplateSelection();
+    await saveTemplate(applyTemplateItems(template, nextItems), "Superset created");
+}
+
+async function clearSupersetFromSelection() {
+    const template = getSelectedTemplate();
+    if (!template) return;
+    const currentItems = getTemplateItems(template);
+    const hasSelection = currentItems.some((item) => state.selectedTemplateExerciseIds.has(String(item.exerciseId)));
+    if (!hasSelection) {
+        showToast("Select one or more exercises", "error");
+        return;
+    }
+
+    const nextItems = currentItems.map((item) => {
+        if (!state.selectedTemplateExerciseIds.has(String(item.exerciseId))) return item;
+        return {
+            ...item,
+            supersetId: null,
+            supersetOrder: 0,
+        };
+    });
+
+    clearTemplateSelection();
+    await saveTemplate(applyTemplateItems(template, nextItems), "Superset cleared");
+}
+
 function renderTemplateEditor() {
     const template = getSelectedTemplate();
     if (!template) {
         templateEditorPanelEl.classList.add("hidden");
         templateEditorEmptyEl.classList.remove("hidden");
         templateExercisePickerEl.innerHTML = "";
+        clearTemplateSelection();
         return;
     }
 
@@ -630,23 +742,35 @@ function renderTemplateEditor() {
     renderTemplateExerciseOptions(template);
 
     const templateItems = getTemplateItems(template);
+    const supersetMetaByExercise = getSupersetMetaByExercise(templateItems);
+    const templateExerciseIds = new Set(templateItems.map((item) => String(item.exerciseId)));
+    state.selectedTemplateExerciseIds.forEach((exerciseId) => {
+        if (!templateExerciseIds.has(exerciseId)) {
+            state.selectedTemplateExerciseIds.delete(exerciseId);
+        }
+    });
     templateExercisePickerEl.innerHTML = "";
     if (templateItems.length === 0) {
         templateExercisePickerEl.innerHTML = `<div class="empty">No exercises yet. Add one above.</div>`;
+        clearTemplateSelection();
         return;
     }
 
     templateItems.forEach((templateItem, index) => {
         const exercise = state.exercises.find((item) => String(item.id) === String(templateItem.exerciseId));
         if (!exercise) return;
+        const supersetMeta = supersetMetaByExercise.get(String(templateItem.exerciseId));
         const row = document.createElement("div");
         row.className = "picker-item draggable";
         row.draggable = true;
         row.dataset.index = String(index);
+        row.classList.toggle("selected", state.selectedTemplateExerciseIds.has(String(templateItem.exerciseId)));
         row.innerHTML = `
             <span class="drag-handle">::</span>
+            <input type="checkbox" data-action="select-item" ${state.selectedTemplateExerciseIds.has(String(templateItem.exerciseId)) ? "checked" : ""} aria-label="Select for superset">
             <div class="picker-title">
                 <div>${escapeHtml(exercise.name)}</div>
+                ${supersetMeta ? `<div class="template-superset-label">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
                 <div class="template-config-grid">
                     <label>
                         <span class="sub small">Sets</span>
@@ -691,6 +815,14 @@ function renderTemplateEditor() {
 
         row.querySelector('[data-action="remove"]').addEventListener("click", async () => {
             await removeExerciseFromTemplate(templateItem.exerciseId);
+        });
+        row.querySelector('[data-action="select-item"]').addEventListener("change", (event) => {
+            if (event.target.checked) {
+                state.selectedTemplateExerciseIds.add(String(templateItem.exerciseId));
+            } else {
+                state.selectedTemplateExerciseIds.delete(String(templateItem.exerciseId));
+            }
+            row.classList.toggle("selected", event.target.checked);
         });
 
         row.querySelectorAll("input[data-field]").forEach((input) => {
@@ -741,6 +873,7 @@ function renderTemplatesList() {
 
             card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
                 state.selectedTemplateId = template.id;
+                clearTemplateSelection();
                 renderTemplatesList();
                 renderTemplateEditor();
             });
@@ -751,6 +884,7 @@ function renderTemplatesList() {
                 if (String(state.selectedTemplateId) === String(template.id)) {
                     state.selectedTemplateId = null;
                 }
+                clearTemplateSelection();
                 await refreshUI();
                 showToast("Template deleted", "success");
             });
@@ -833,7 +967,9 @@ function renderWorkoutExercises() {
     const activeTemplate = state.activeSession?.templateId
         ? state.templates.find((template) => String(template.id) === String(state.activeSession.templateId))
         : null;
-    const itemByExerciseId = new Map(getTemplateItems(activeTemplate).map((item) => [String(item.exerciseId), item]));
+    const templateItems = getTemplateItems(activeTemplate);
+    const itemByExerciseId = new Map(templateItems.map((item) => [String(item.exerciseId), item]));
+    const supersetMetaByExerciseId = getSupersetMetaByExercise(templateItems);
 
     state.activeExercises.forEach((ex) => {
         const exSets = sessionSets.filter((s) => s.exerciseId === ex.id).sort((a, b) => a.setNumber - b.setNumber);
@@ -843,6 +979,7 @@ function renderWorkoutExercises() {
 
         const target = computeNextTarget(ex);
         const templateItem = itemByExerciseId.get(String(ex.id));
+        const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
         const planText = templateItem
             ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
             : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
@@ -852,7 +989,10 @@ function renderWorkoutExercises() {
                     <p class="label">${escapeHtml(ex.name)}</p>
                     <p class="sub">${escapeHtml(planText)}</p>
                 </div>
-                <div class="target-chip">${target}</div>
+                <div class="exercise-header-actions">
+                    ${supersetMeta ? `<div class="superset-badge">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
+                    <div class="target-chip">${target}</div>
+                </div>
             </div>
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
             <button class="ghost add-set">+ Add set</button>
@@ -865,13 +1005,13 @@ function renderWorkoutExercises() {
         const plannedSetCount = Math.max(1, Number.parseInt(templateItem?.sets, 10) || 1);
         const rowCount = Math.max(plannedSetCount, exSets.length || 0);
         for (let i = 0; i < rowCount; i += 1) {
-            addSetRow(setsContainer, ex, exSets[i] || null, i + 1, previousSetDisplays[i] || "");
+            addSetRow(setsContainer, ex, exSets[i] || null, i + 1, previousSetDisplays[i] || "", supersetMeta);
         }
 
         card.querySelector(".add-set").addEventListener("click", () => {
             const nextSetNumber = setsContainer.querySelectorAll(".set-row").length + 1;
             const previousDisplay = previousSetDisplays[nextSetNumber - 1] || "";
-            addSetRow(setsContainer, ex, null, nextSetNumber, previousDisplay);
+            addSetRow(setsContainer, ex, null, nextSetNumber, previousDisplay, supersetMeta);
         });
         workoutExercisesEl.appendChild(card);
     });
@@ -999,7 +1139,17 @@ function renumberSetRows(container) {
     });
 }
 
-function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisplay = "") {
+function isSupersetRoundComplete(supersetMeta, setNumber) {
+    if (!state.activeSession || !supersetMeta?.memberExerciseIds?.length) return false;
+    return supersetMeta.memberExerciseIds.every((exerciseId) => state.sets.some((set) => (
+        String(set.sessionId) === String(state.activeSession.id)
+        && String(set.exerciseId) === String(exerciseId)
+        && Number(set.setNumber) === Number(setNumber)
+        && Boolean(set.isComplete)
+    )));
+}
+
+function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisplay = "", supersetMeta = null) {
     const row = document.createElement("div");
     row.className = "set-row";
     if (existingSet) {
@@ -1049,7 +1199,14 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.classList.toggle("set-complete", nextComplete);
         row.querySelector(".mark-set").classList.toggle("done", nextComplete);
         if (nextComplete) {
-            startRestTimer(getTemplateRestSecondsForExercise(exercise.id));
+            if (supersetMeta?.memberExerciseIds?.length > 1) {
+                if (isSupersetRoundComplete(supersetMeta, updated.setNumber)) {
+                    startRestTimer(supersetMeta.restSeconds);
+                    showToast(`Superset ${supersetMeta.label} round ${updated.setNumber} complete`, "success");
+                }
+            } else {
+                startRestTimer(getTemplateRestSecondsForExercise(exercise.id));
+            }
         }
     });
 
@@ -1403,6 +1560,8 @@ function bindEvents() {
     resetTemplatesBtn.addEventListener("click", resetTemplatesToDefaultSplit);
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
+    makeSupersetBtn.addEventListener("click", createSupersetFromSelection);
+    clearSupersetBtn.addEventListener("click", clearSupersetFromSelection);
     restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
     restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
     restStopBtn.addEventListener("click", stopRestTimer);

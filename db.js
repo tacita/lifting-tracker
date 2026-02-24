@@ -116,6 +116,105 @@ const DEFAULT_TEMPLATES = [
     },
 ];
 
+const FOUR_DAY_PROGRAM_EXERCISES = [
+    { name: "Smith Machine Incline Press", repFloor: 8, repCeiling: 10, weightIncrement: 5 },
+    { name: "Seated Dumbbell Shoulder Press", repFloor: 8, repCeiling: 10, weightIncrement: 5 },
+    { name: "Cable Chest Fly", repFloor: 12, repCeiling: 15, weightIncrement: 5 },
+    { name: "Cable Triceps Pushdown", repFloor: 12, repCeiling: 15, weightIncrement: 5 },
+    { name: "Dumbbell Lateral Raise", repFloor: 12, repCeiling: 15, weightIncrement: 2.5 },
+    { name: "Cable Lateral Raise (Single Arm)", repFloor: 12, repCeiling: 15, weightIncrement: 2.5 },
+    { name: "Bench Plank", repFloor: 30, repCeiling: 45, weightIncrement: 0 },
+    { name: "Smith Machine Squat", repFloor: 6, repCeiling: 8, weightIncrement: 10 },
+    { name: "Leg Press (Narrow, Controlled)", repFloor: 10, repCeiling: 10, weightIncrement: 10 },
+    { name: "Bulgarian Split Squat", repFloor: 8, repCeiling: 8, weightIncrement: 5 },
+    { name: "Leg Extension", repFloor: 15, repCeiling: 20, weightIncrement: 5 },
+    { name: "Dead Bug", repFloor: 6, repCeiling: 8, weightIncrement: 0 },
+    { name: "Assisted Pull-Up", repFloor: 6, repCeiling: 8, weightIncrement: 5 },
+    { name: "Single-Arm Cable Row (Split Stance)", repFloor: 10, repCeiling: 10, weightIncrement: 5 },
+    { name: "Lat Pulldown (Neutral or Underhand)", repFloor: 8, repCeiling: 10, weightIncrement: 5 },
+    { name: "Hammer Curl (Dumbbell)", repFloor: 10, repCeiling: 12, weightIncrement: 5 },
+    { name: "Face Pull (Cable)", repFloor: 12, repCeiling: 15, weightIncrement: 5 },
+    { name: "Reverse Pec Deck", repFloor: 12, repCeiling: 15, weightIncrement: 5 },
+    { name: "Unassisted Pull-Up", repFloor: 1, repCeiling: 3, weightIncrement: 0 },
+    { name: "Dumbbell Bench Press", repFloor: 8, repCeiling: 10, weightIncrement: 5 },
+    { name: "Chest-Supported Dumbbell Row", repFloor: 10, repCeiling: 10, weightIncrement: 5 },
+    { name: "Assisted Dips", repFloor: 5, repCeiling: 8, weightIncrement: 5 },
+    { name: "Farmer Carry", repFloor: 30, repCeiling: 40, weightIncrement: 10 },
+    { name: "Hip Thrust (Smith or Barbell)", repFloor: 6, repCeiling: 8, weightIncrement: 10 },
+    { name: "Romanian Deadlift (DB or Smith)", repFloor: 8, repCeiling: 10, weightIncrement: 5 },
+    { name: "Cable Pull-Through", repFloor: 12, repCeiling: 15, weightIncrement: 5 },
+    { name: "Seated Hamstring Curl", repFloor: 10, repCeiling: 12, weightIncrement: 5 },
+    { name: "Single-Leg Glute Bridge", repFloor: 10, repCeiling: 10, weightIncrement: 0 },
+    { name: "Incline Walking", repFloor: 25, repCeiling: 35, weightIncrement: 0 },
+    { name: "Stairmaster", repFloor: 20, repCeiling: 25, weightIncrement: 0 },
+    { name: "Mobility Stretches", repFloor: 8, repCeiling: 12, weightIncrement: 0 },
+];
+
+const FOUR_DAY_PROGRAM_TEMPLATES = [
+    {
+        name: "Day 1 - Upper Push + Delts",
+        exercises: [
+            { name: "Smith Machine Incline Press", sets: 4, reps: "8-10", restSeconds: 90 },
+            { name: "Seated Dumbbell Shoulder Press", sets: 3, reps: "8-10", restSeconds: 90 },
+            { name: "Cable Chest Fly", sets: 3, reps: "12-15", restSeconds: 60 },
+            { name: "Cable Triceps Pushdown", sets: 3, reps: "12-15", restSeconds: 60 },
+            { name: "Dumbbell Lateral Raise", sets: 3, reps: "12-15", restSeconds: 45 },
+            { name: "Cable Lateral Raise (Single Arm)", sets: 2, reps: "12-15 / side", restSeconds: 45 },
+            { name: "Bench Plank", sets: 3, reps: "30-45s", restSeconds: 45 },
+        ],
+    },
+    {
+        name: "Day 2A - Quad Shape + Definition",
+        exercises: [
+            { name: "Smith Machine Squat", sets: 4, reps: "6 (3s down + 1s pause)", restSeconds: 90 },
+            { name: "Leg Press (Narrow, Controlled)", sets: 3, reps: "10 (3s down)", restSeconds: 75 },
+            { name: "Bulgarian Split Squat", sets: 2, reps: "8 / side", restSeconds: 75 },
+            { name: "Leg Extension", sets: 3, reps: "15-20 (4s down)", restSeconds: 60 },
+            { name: "Dead Bug", sets: 3, reps: "6-8 / side", restSeconds: 45 },
+        ],
+    },
+    {
+        name: "Day 2B - Glute + Posterior Chain",
+        exercises: [
+            { name: "Hip Thrust (Smith or Barbell)", sets: 4, reps: "6-8 (1-2s pause)", restSeconds: 90 },
+            { name: "Romanian Deadlift (DB or Smith)", sets: 3, reps: "8-10 (3s down)", restSeconds: 75 },
+            { name: "Cable Pull-Through", sets: 3, reps: "12-15", restSeconds: 60 },
+            { name: "Seated Hamstring Curl", sets: 3, reps: "10-12", restSeconds: 60 },
+            { name: "Single-Leg Glute Bridge", sets: 2, reps: "10 / side", restSeconds: 45 },
+        ],
+    },
+    {
+        name: "Day 3 - Upper Pull",
+        exercises: [
+            { name: "Assisted Pull-Up", sets: 4, reps: "6-8", restSeconds: 90 },
+            { name: "Single-Arm Cable Row (Split Stance)", sets: 3, reps: "10 / side", restSeconds: 75 },
+            { name: "Lat Pulldown (Neutral or Underhand)", sets: 3, reps: "8-10", restSeconds: 75 },
+            { name: "Hammer Curl (Dumbbell)", sets: 3, reps: "10-12", restSeconds: 60, supersetKey: "pull-a" },
+            { name: "Face Pull (Cable)", sets: 3, reps: "12-15", restSeconds: 60, supersetKey: "pull-a" },
+            { name: "Reverse Pec Deck", sets: 2, reps: "12-15", restSeconds: 60 },
+            { name: "Unassisted Pull-Up", sets: 3, reps: "1-3 (optional)", restSeconds: 120 },
+        ],
+    },
+    {
+        name: "Day 4 - Full Body + Carries",
+        exercises: [
+            { name: "Smith Machine Squat", sets: 4, reps: "6-8", restSeconds: 90 },
+            { name: "Dumbbell Bench Press", sets: 3, reps: "8-10", restSeconds: 75 },
+            { name: "Chest-Supported Dumbbell Row", sets: 3, reps: "10", restSeconds: 75 },
+            { name: "Assisted Dips", sets: 3, reps: "5-8", restSeconds: 75 },
+            { name: "Farmer Carry", sets: 4, reps: "30-40s carry", restSeconds: 90 },
+        ],
+    },
+    {
+        name: "Optional - Conditioning + Mobility",
+        exercises: [
+            { name: "Incline Walking", sets: 1, reps: "25-35 min (Zone 2)", restSeconds: 0 },
+            { name: "Stairmaster", sets: 1, reps: "20-25 min steady", restSeconds: 0 },
+            { name: "Mobility Stretches", sets: 1, reps: "Hip flexor, hamstring, quad, thoracic", restSeconds: 0 },
+        ],
+    },
+];
+
 function normalizeName(value) {
     return String(value || "")
         .trim()
@@ -133,14 +232,29 @@ function createId(existingIds) {
 }
 
 function sanitizeTemplateItems(items) {
-    return (items || [])
+    const sanitized = (items || [])
         .map((item) => ({
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: String(item.reps || "8-12").trim(),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            supersetId: item.supersetId ? String(item.supersetId) : null,
+            supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }))
         .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps);
+
+    const orderByGroup = new Map();
+    sanitized.forEach((item) => {
+        if (!item.supersetId) {
+            item.supersetOrder = 0;
+            return;
+        }
+        const nextOrder = (orderByGroup.get(item.supersetId) || 0) + 1;
+        orderByGroup.set(item.supersetId, nextOrder);
+        item.supersetOrder = nextOrder;
+    });
+
+    return sanitized;
 }
 
 function normalizeTemplate(template) {
@@ -151,6 +265,8 @@ function normalizeTemplate(template) {
             sets: 3,
             reps: "8-12",
             restSeconds: 90,
+            supersetId: null,
+            supersetOrder: 0,
         }));
     return {
         ...template,
@@ -170,6 +286,8 @@ function buildTemplateItemsFromDefinitions(definitions, exerciseIdByName) {
                     sets: entry.sets,
                     reps: entry.reps,
                     restSeconds: entry.restSeconds,
+                    supersetId: entry.supersetKey ? `ss-${normalizeName(entry.supersetKey)}` : null,
+                    supersetOrder: 0,
                 };
             })
             .filter(Boolean)
@@ -801,4 +919,48 @@ export async function resetTemplatesToDefaultSplit() {
     scheduleCloudSync();
 
     return { addedTemplates: templatesToAdd.length };
+}
+
+export async function resetTemplatesToFourDayProgram() {
+    const existingExercises = await getExercises();
+    const existingExerciseNames = new Set(existingExercises.map((item) => normalizeName(item.name)));
+    const allExerciseIds = new Set(existingExercises.map((item) => String(item.id)));
+    const allExercises = existingExercises.slice();
+    const exercisesToAdd = [];
+
+    FOUR_DAY_PROGRAM_EXERCISES.forEach((item) => {
+        const normalized = normalizeName(item.name);
+        if (existingExerciseNames.has(normalized)) return;
+        const exercise = { id: createId(allExerciseIds), ...item };
+        exercisesToAdd.push(exercise);
+        allExercises.push(exercise);
+        existingExerciseNames.add(normalized);
+    });
+
+    const exerciseIdByName = new Map(allExercises.map((item) => [normalizeName(item.name), item.id]));
+    const templateIds = new Set();
+    const templatesToAdd = [];
+
+    FOUR_DAY_PROGRAM_TEMPLATES.forEach((item) => {
+        const items = buildTemplateItemsFromDefinitions(item.exercises, exerciseIdByName);
+        if (item.exercises.length > 0 && items.length === 0) return;
+        templatesToAdd.push({
+            id: createId(templateIds),
+            name: item.name,
+            items,
+            exerciseIds: items.map((entry) => entry.exerciseId),
+        });
+    });
+
+    await tx(["exercises", "templates"], "readwrite", (exerciseStore, templateStore) => {
+        templateStore.clear();
+        exercisesToAdd.forEach((item) => exerciseStore.add(item));
+        templatesToAdd.forEach((item) => templateStore.add(item));
+    });
+    scheduleCloudSync();
+
+    return {
+        addedTemplates: templatesToAdd.length,
+        addedExercises: exercisesToAdd.length,
+    };
 }
