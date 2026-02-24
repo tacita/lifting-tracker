@@ -1,4 +1,4 @@
-const CACHE_NAME = "overload-cache-v11";
+const CACHE_NAME = "overload-cache-v12";
 const ASSETS = [
     "./",
     "./index.html",
@@ -36,6 +36,15 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // Always fetch runtime credentials fresh; avoid stale cached config.js on phones.
+    if (url.pathname.endsWith("/config.js")) {
+        event.respondWith(
+            fetch(request, { cache: "no-store" })
+                .catch(() => caches.match(request))
+        );
+        return;
+    }
 
     // Network-first for Chart.js CDN
     if (url.hostname.includes("cdn.jsdelivr.net")) {
