@@ -16,13 +16,15 @@ In Supabase Auth URL configuration:
 - Add your production URL (and localhost while testing) as a redirect URL.
 
 ## 5) Connect app
-Recommended: hardcode credentials once in `/Users/tacita/Projects/lifting-tracker/supabase-config.js` and deploy.
-- Set `SUPABASE_URL`
-- Set `SUPABASE_ANON_KEY`
+For GitHub Pages, use repo secrets with the workflow:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
 
-Then users only need to sign in (no per-device config entry).
+The deploy workflow generates `config.js` from these secrets and injects:
+- `window.__OVERLOAD_SUPABASE_URL`
+- `window.__OVERLOAD_SUPABASE_ANON_KEY`
 
-Fallback option: In app Settings > Account, paste URL/key and save.
+Then users only need to sign in (no per-device setup and no credentials in git).
 
 ## Notes on migration
 - Existing local IndexedDB data is used as the initial snapshot for each account if that account has no cloud data yet.
