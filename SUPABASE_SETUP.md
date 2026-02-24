@@ -29,3 +29,6 @@ Then users only need to sign in (no per-device setup and no credentials in git).
 ## Notes on migration
 - Existing local IndexedDB data is used as the initial snapshot for each account if that account has no cloud data yet.
 - After sign-in, local edits auto-sync to that signed-in account.
+
+## Program/template imports
+- Use `/Users/tacita/Projects/lifting-tracker/WORKOUT_PROGRAM_IMPORT.md` for reliable DevTools import scripts and troubleshooting.

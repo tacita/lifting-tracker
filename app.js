@@ -100,6 +100,7 @@ const state = {
     selectedTemplateExerciseIds: new Set(),
     supersetDraftMode: false,
     expandedFolders: new Set(),
+    hasInitializedFolderExpansion: false,
     workoutTimer: {
         intervalId: null,
     },
@@ -1176,6 +1177,16 @@ function renderTemplatesList() {
         return;
     }
 
+    if (!state.hasInitializedFolderExpansion) {
+        groupedList
+            .filter((group) => group.templates.length > 0)
+            .forEach((group) => {
+                const key = group.label === "Unfiled" ? "" : group.label;
+                state.expandedFolders.add(key);
+            });
+        state.hasInitializedFolderExpansion = true;
+    }
+
     groupedList.forEach((group) => {
         const folderName = group.label;
         const displayName = folderName === "Unfiled" ? "Unorganized" : folderName;
@@ -1237,11 +1248,6 @@ function renderTemplatesList() {
             .slice()
             .sort((a, b) => a.name.localeCompare(b.name))
             .forEach((template) => {
-                const exerciseNames = getTemplateItems(template)
-                    .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
-                    .filter(Boolean);
-                const safeExerciseNames = exerciseNames.map((name) => escapeHtml(name)).join(", ");
-
                 const card = document.createElement("div");
                 card.className = "list-card template-list-card";
                 card.draggable = true;
@@ -1250,7 +1256,6 @@ function renderTemplatesList() {
                     <span class="drag-handle">::</span>
                     <div class="template-card-content">
                         <p class="label">${escapeHtml(template.name)}</p>
-                        <p class="sub">${safeExerciseNames || "No exercises"}</p>
                     </div>
                     <div class="list-actions">
                         <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>

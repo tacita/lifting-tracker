@@ -1,4 +1,4 @@
-const CACHE_NAME = "overload-cache-v39";
+const CACHE_NAME = "overload-cache-v43";
 const ASSETS = [
     "./",
     "./index.html",
@@ -36,6 +36,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
     const { request } = event;
     const url = new URL(request.url);
+
+    // Ignore browser-extension and other non-http(s) schemes.
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return;
+    }
 
     // Never attempt to cache non-GET requests (e.g. Supabase POST/PUT).
     if (request.method !== "GET") {
