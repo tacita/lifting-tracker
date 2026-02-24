@@ -692,6 +692,8 @@ button.small {
 .set-row-content input {
     width: 100%;
     min-width: 0;
+    padding: 10px 12px;
+    font-size: 16px;
 }
 
 .set-delete-bg {
@@ -776,11 +778,13 @@ button.small {
 .rest-timer-panel {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
-    padding: 8px 12px;
+    padding: 10px 16px;
     margin-bottom: 12px;
     position: sticky;
     top: 8px;
@@ -788,15 +792,10 @@ button.small {
     box-shadow: var(--shadow);
 }
 
-.rest-label {
-    margin: 0;
-    white-space: nowrap;
-}
-
-.workout-elapsed-small {
-    margin: 0;
-    margin-left: auto;
-    color: var(--muted);
+.rest-timer-panel .rest-start-stop {
+    min-width: 88px;
+    padding: 12px 20px;
+    font-weight: 600;
 }
 
 .rest-display {
@@ -807,7 +806,7 @@ button.small {
     font-size: 20px;
     line-height: 1;
     color: var(--accent);
-    min-width: 48px;
+    min-width: 56px;
 }
 
 .action-row {
@@ -986,7 +985,7 @@ dialog::backdrop {
     }
 
     .set-row-content {
-        grid-template-columns: 24px minmax(48px, 1fr) 52px auto 48px auto;
+        grid-template-columns: 24px minmax(48px, 1fr) 58px auto 54px auto;
         gap: 4px;
         padding: 5px;
     }

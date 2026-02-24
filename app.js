@@ -15,7 +15,6 @@ const workoutLauncherEl = document.getElementById("workout-launcher");
 const startEmptyWorkoutBtn = document.getElementById("start-empty-workout");
 const workoutTemplatesBrowserEl = document.getElementById("workout-templates-browser");
 const workoutElapsedEl = document.getElementById("workout-elapsed");
-const workoutElapsedSmallEl = document.getElementById("workout-elapsed-small");
 const workoutSection = document.getElementById("workout-session");
 const sessionExercisePickerEl = document.getElementById("session-exercise-picker");
 const sessionAddExerciseSelect = document.getElementById("session-add-exercise");
@@ -367,23 +366,14 @@ function renderWorkoutElapsed() {
     const hasSession = Boolean(state.activeSession);
     workoutLauncherEl.classList.toggle("hidden", hasSession);
     workoutElapsedEl.classList.toggle("hidden", !hasSession);
-    if (workoutElapsedSmallEl) {
-        workoutElapsedSmallEl.classList.toggle("hidden", !hasSession);
-    }
     if (!hasSession) {
         workoutElapsedEl.textContent = "Elapsed 0:00";
-        if (workoutElapsedSmallEl) {
-            workoutElapsedSmallEl.textContent = "0:00";
-        }
         renderWorkoutControls();
         return;
     }
     const prefix = state.activeSession?.isPaused ? "Paused" : "Elapsed";
     const duration = formatDuration(getSessionDurationSeconds(state.activeSession));
     workoutElapsedEl.textContent = `${prefix} ${duration}`;
-    if (workoutElapsedSmallEl) {
-        workoutElapsedSmallEl.textContent = duration;
-    }
     renderWorkoutControls();
 }
 
@@ -1829,7 +1819,7 @@ function getPreviousSetDisplays(exerciseId) {
         if (!sets.length) continue;
         return sets.map((set) => {
             if (set.isSkipped) return "Skipped";
-            return `${formatWeight(set.weight)}x${set.reps}`;
+            return `${formatWeight(set.weight)}lbs x ${set.reps}`;
         });
     }
     return [];
