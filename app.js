@@ -1211,10 +1211,10 @@ function attachSwipeToDelete(row, content, onDelete) {
     let currentX = 0;
     let swipeArmed = false;
     let open = false;
+    let deleteArmed = false;
     const maxSwipe = 112;
     const openThreshold = 52;
     const intentThreshold = 14;
-    let ignoreDeleteTapUntil = 0;
 
     const interactiveSelector = "input, button, select, textarea, label";
     const setOffset = (x) => {
@@ -1225,6 +1225,7 @@ function attachSwipeToDelete(row, content, onDelete) {
 
     const closeSwipe = () => {
         open = false;
+        deleteArmed = false;
         currentX = 0;
         setOffset(0);
         row.classList.remove("swipe-open");
@@ -1232,10 +1233,10 @@ function attachSwipeToDelete(row, content, onDelete) {
 
     const openSwipe = () => {
         open = true;
+        deleteArmed = false;
         currentX = -maxSwipe;
         setOffset(currentX);
         row.classList.add("swipe-open");
-        ignoreDeleteTapUntil = Date.now() + 320;
     };
 
     const settleSwipe = () => {
@@ -1290,6 +1291,9 @@ function attachSwipeToDelete(row, content, onDelete) {
             row.releasePointerCapture(pointerId);
         }
         settleSwipe();
+        if (open) {
+            deleteArmed = true;
+        }
     };
 
     row.addEventListener("pointerup", endSwipe);
@@ -1300,6 +1304,9 @@ function attachSwipeToDelete(row, content, onDelete) {
             row.releasePointerCapture(pointerId);
         }
         settleSwipe();
+        if (open) {
+            deleteArmed = true;
+        }
     });
     row.addEventListener("lostpointercapture", () => {
         if (dragging) {
@@ -1313,7 +1320,7 @@ function attachSwipeToDelete(row, content, onDelete) {
         deleteAction.addEventListener("click", async (event) => {
             event.preventDefault();
             event.stopPropagation();
-            if (Date.now() < ignoreDeleteTapUntil) {
+            if (!deleteArmed) {
                 return;
             }
             await onDelete();
