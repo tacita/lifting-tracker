@@ -20,6 +20,7 @@ const workoutSection = document.getElementById("workout-session");
 const workoutExercisesEl = document.getElementById("workout-exercises");
 const workoutNotesEl = document.getElementById("workout-notes");
 const finishWorkoutBtn = document.getElementById("finish-workout");
+const pauseWorkoutBtn = document.getElementById("pause-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
 const sessionTemplateLabel = document.getElementById("session-template-label");
 const restLessBtn = document.getElementById("rest-less");
@@ -307,10 +308,21 @@ function getSessionDurationSeconds(session) {
     if (!startIso) return 0;
     const startMs = new Date(startIso).getTime();
     if (Number.isNaN(startMs)) return 0;
-    const endIso = session?.finishedAt || new Date().toISOString();
+    const endIso = session?.finishedAt || (session?.isPaused && session?.pausedAt ? session.pausedAt : new Date().toISOString());
     const endMs = new Date(endIso).getTime();
     if (Number.isNaN(endMs) || endMs < startMs) return 0;
-    return Math.floor((endMs - startMs) / 1000);
+    const pausedSeconds = Math.max(0, Number.parseInt(session?.pausedAccumulatedSeconds, 10) || 0);
+    return Math.max(0, Math.floor((endMs - startMs) / 1000) - pausedSeconds);
+}
+
+function renderWorkoutControls() {
+    const hasSession = Boolean(state.activeSession);
+    pauseWorkoutBtn.classList.toggle("hidden", !hasSession);
+    if (!hasSession) return;
+    const paused = Boolean(state.activeSession?.isPaused);
+    pauseWorkoutBtn.textContent = paused ? "▶" : "⏸";
+    pauseWorkoutBtn.title = paused ? "Resume workout" : "Pause workout";
+    pauseWorkoutBtn.setAttribute("aria-label", paused ? "Resume workout" : "Pause workout");
 }
 
 function renderWorkoutElapsed() {
@@ -319,9 +331,12 @@ function renderWorkoutElapsed() {
     workoutElapsedEl.classList.toggle("hidden", !hasSession);
     if (!hasSession) {
         workoutElapsedEl.textContent = "Elapsed 0:00";
+        renderWorkoutControls();
         return;
     }
-    workoutElapsedEl.textContent = `Elapsed ${formatDuration(getSessionDurationSeconds(state.activeSession))}`;
+    const prefix = state.activeSession?.isPaused ? "Paused" : "Elapsed";
+    workoutElapsedEl.textContent = `${prefix} ${formatDuration(getSessionDurationSeconds(state.activeSession))}`;
+    renderWorkoutControls();
 }
 
 function stopWorkoutElapsedTimer() {
@@ -336,7 +351,42 @@ function startWorkoutElapsedTimer() {
     stopWorkoutElapsedTimer();
     if (!state.activeSession) return;
     renderWorkoutElapsed();
+    if (state.activeSession.isPaused) return;
     state.workoutTimer.intervalId = setInterval(renderWorkoutElapsed, 1000);
+}
+
+async function pauseOrResumeWorkout() {
+    if (!state.activeSession) return;
+    const now = new Date();
+    const currentlyPaused = Boolean(state.activeSession.isPaused);
+    let nextSession = { ...state.activeSession };
+
+    if (!currentlyPaused) {
+        nextSession = {
+            ...nextSession,
+            isPaused: true,
+            pausedAt: now.toISOString(),
+            notes: workoutNotesEl.value,
+        };
+        showToast("Workout paused", "info");
+    } else {
+        const pausedAtMs = new Date(nextSession.pausedAt || now.toISOString()).getTime();
+        const pausedDelta = Number.isFinite(pausedAtMs) ? Math.max(0, Math.floor((now.getTime() - pausedAtMs) / 1000)) : 0;
+        nextSession = {
+            ...nextSession,
+            isPaused: false,
+            pausedAt: null,
+            pausedAccumulatedSeconds: (Number.parseInt(nextSession.pausedAccumulatedSeconds, 10) || 0) + pausedDelta,
+            notes: workoutNotesEl.value,
+        };
+        showToast("Workout resumed", "success");
+    }
+
+    await db.updateSession(nextSession);
+    state.activeSession = nextSession;
+    state.sessions = state.sessions.map((session) => (String(session.id) === String(nextSession.id) ? nextSession : session));
+    startWorkoutElapsedTimer();
+    renderWorkoutElapsed();
 }
 
 function renderRestTimer() {
@@ -1037,6 +1087,9 @@ async function startWorkout() {
             date: nowIso,
             startedAt: nowIso,
             finishedAt: null,
+            isPaused: false,
+            pausedAt: null,
+            pausedAccumulatedSeconds: 0,
             templateId,
             notes: "",
             status: "draft",
@@ -1060,6 +1113,9 @@ async function startWorkout() {
         state.activeSession = {
             ...state.activeSession,
             startedAt: state.activeSession.date || new Date().toISOString(),
+            isPaused: false,
+            pausedAt: null,
+            pausedAccumulatedSeconds: Number.parseInt(state.activeSession.pausedAccumulatedSeconds, 10) || 0,
         };
         await db.updateSession(state.activeSession);
         state.sessions = state.sessions.map((item) => (String(item.id) === String(state.activeSession.id) ? state.activeSession : item));
@@ -1388,6 +1444,16 @@ async function finishWorkout() {
         ...state.activeSession,
         startedAt: state.activeSession.startedAt || state.activeSession.date || new Date().toISOString(),
         finishedAt: new Date().toISOString(),
+        isPaused: false,
+        pausedAt: null,
+        pausedAccumulatedSeconds: (() => {
+            const pausedSoFar = Number.parseInt(state.activeSession.pausedAccumulatedSeconds, 10) || 0;
+            if (!state.activeSession.isPaused || !state.activeSession.pausedAt) return pausedSoFar;
+            const pausedAtMs = new Date(state.activeSession.pausedAt).getTime();
+            const finishedMs = new Date().getTime();
+            const extra = Number.isFinite(pausedAtMs) ? Math.max(0, Math.floor((finishedMs - pausedAtMs) / 1000)) : 0;
+            return pausedSoFar + extra;
+        })(),
         notes: workoutNotesEl.value,
         status: "complete",
     };
@@ -1703,6 +1769,7 @@ function bindEvents() {
         })
     );
     startWorkoutBtn.addEventListener("click", startWorkout);
+    pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);
     addExerciseBtn.addEventListener("click", addExercise);
