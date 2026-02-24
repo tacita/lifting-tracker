@@ -12,10 +12,13 @@ const gateSendMagicLinkBtn = document.getElementById("gate-send-magic-link");
 
 // Workout view refs
 const workoutLauncherEl = document.getElementById("workout-launcher");
-const templateSelect = document.getElementById("workout-template");
-const startWorkoutBtn = document.getElementById("start-workout");
+const startEmptyWorkoutBtn = document.getElementById("start-empty-workout");
+const workoutTemplatesBrowserEl = document.getElementById("workout-templates-browser");
 const workoutElapsedEl = document.getElementById("workout-elapsed");
 const workoutSection = document.getElementById("workout-session");
+const sessionExercisePickerEl = document.getElementById("session-exercise-picker");
+const sessionAddExerciseSelect = document.getElementById("session-add-exercise");
+const sessionAddExerciseBtn = document.getElementById("session-add-exercise-btn");
 const workoutExercisesEl = document.getElementById("workout-exercises");
 const workoutNotesEl = document.getElementById("workout-notes");
 const finishWorkoutBtn = document.getElementById("finish-workout");
@@ -37,12 +40,14 @@ const repFloorInput = document.getElementById("rep-floor");
 const repCeilingInput = document.getElementById("rep-ceiling");
 const weightIncrementInput = document.getElementById("weight-increment");
 const templateNameInput = document.getElementById("template-name");
+const templateFolderInput = document.getElementById("template-folder");
 const createTemplateBtn = document.getElementById("create-template");
 const resetTemplatesBtn = document.getElementById("reset-templates");
 const templatesListEl = document.getElementById("templates-list");
 const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
 const templateEditorNameInput = document.getElementById("template-editor-name");
+const templateEditorFolderInput = document.getElementById("template-editor-folder");
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
@@ -584,7 +589,7 @@ async function refreshData() {
 
 async function refreshUI() {
     await refreshData();
-    renderTemplateSelect();
+    renderWorkoutLauncher();
     renderExercises();
     renderTemplatesList();
     renderTemplateEditor();
@@ -592,17 +597,69 @@ async function refreshUI() {
     maybeResumeDraft();
 }
 
-function renderTemplateSelect() {
-    templateSelect.innerHTML = "";
-    const defaultOpt = document.createElement("option");
-    defaultOpt.value = "";
-    defaultOpt.textContent = "All exercises";
-    templateSelect.appendChild(defaultOpt);
-    state.templates.forEach((t) => {
-        const opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = t.name;
-        templateSelect.appendChild(opt);
+function getTemplateFolderName(template) {
+    return String(template?.folder || "").trim();
+}
+
+function getTemplatesGroupedByFolder() {
+    const groups = new Map();
+    state.templates.forEach((template) => {
+        const folder = getTemplateFolderName(template);
+        const key = folder || "__unfiled__";
+        if (!groups.has(key)) {
+            groups.set(key, { label: folder || "Unfiled", templates: [] });
+        }
+        groups.get(key).templates.push(template);
+    });
+
+    const grouped = Array.from(groups.values());
+    grouped.forEach((group) => group.templates.sort((a, b) => a.name.localeCompare(b.name)));
+    grouped.sort((a, b) => {
+        if (a.label === "Unfiled") return -1;
+        if (b.label === "Unfiled") return 1;
+        return a.label.localeCompare(b.label);
+    });
+    return grouped;
+}
+
+function getExercisesForSession(session) {
+    if (!session) return [];
+    if (Array.isArray(session.exerciseIds) && session.exerciseIds.length > 0) {
+        return session.exerciseIds
+            .map((exerciseId) => state.exercises.find((exercise) => String(exercise.id) === String(exerciseId)))
+            .filter(Boolean);
+    }
+    return getExercisesForTemplate(session.templateId);
+}
+
+function renderWorkoutLauncher() {
+    workoutTemplatesBrowserEl.innerHTML = "";
+    if (state.templates.length === 0) {
+        workoutTemplatesBrowserEl.innerHTML = `<div class="empty">No templates yet. Create one in Templates.</div>`;
+        return;
+    }
+
+    getTemplatesGroupedByFolder().forEach((group) => {
+        const section = document.createElement("div");
+        section.className = "launcher-folder";
+        section.innerHTML = `<p class="label">${escapeHtml(group.label)} (${group.templates.length})</p><div class="launcher-template-grid"></div>`;
+        const grid = section.querySelector(".launcher-template-grid");
+        group.templates.forEach((template) => {
+            const exerciseNames = getTemplateItems(template)
+                .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
+                .filter(Boolean);
+            const subtitle = exerciseNames.slice(0, 3).join(", ") || "No exercises yet";
+            const card = document.createElement("button");
+            card.type = "button";
+            card.className = "launcher-template-card";
+            card.innerHTML = `
+                <p class="label">${escapeHtml(template.name)}</p>
+                <p class="sub">${escapeHtml(subtitle)}</p>
+            `;
+            card.addEventListener("click", async () => startWorkout(template.id));
+            grid.appendChild(card);
+        });
+        workoutTemplatesBrowserEl.appendChild(section);
     });
 }
 
@@ -658,6 +715,7 @@ async function loadDefaultLibrary() {
 
 async function createTemplate() {
     const name = templateNameInput.value.trim();
+    const folder = templateFolderInput.value.trim();
     if (!name) {
         showToast("Enter a template name", "error");
         return;
@@ -672,10 +730,12 @@ async function createTemplate() {
     await db.addTemplate({
         id: uuid(),
         name,
+        folder,
         items: [],
         exerciseIds: [],
     });
     templateNameInput.value = "";
+    templateFolderInput.value = "";
     showToast("Template created", "success");
     await refreshUI();
     const created = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
@@ -750,7 +810,7 @@ async function saveTemplate(updatedTemplate, successMessage = "Template updated"
     const normalizedTemplate = applyTemplateItems(updatedTemplate, getTemplateItems(updatedTemplate));
     await db.updateTemplate(normalizedTemplate);
     state.templates = state.templates.map((template) => (String(template.id) === String(normalizedTemplate.id) ? normalizedTemplate : template));
-    renderTemplateSelect();
+    renderWorkoutLauncher();
     renderTemplatesList();
     renderTemplateEditor();
     if (!silent) {
@@ -762,6 +822,7 @@ async function saveTemplateName() {
     const template = getSelectedTemplate();
     if (!template) return;
     const name = templateEditorNameInput.value.trim();
+    const folder = templateEditorFolderInput.value.trim();
     if (!name) {
         showToast("Enter a template name", "error");
         return;
@@ -771,7 +832,7 @@ async function saveTemplateName() {
         showToast("Template name already exists", "error");
         return;
     }
-    await saveTemplate({ ...template, name }, "Template renamed");
+    await saveTemplate({ ...template, name, folder }, "Template updated");
 }
 
 function renderTemplateExerciseOptions(template) {
@@ -930,6 +991,7 @@ function renderTemplateEditor() {
     templateEditorEmptyEl.classList.add("hidden");
     templateEditorPanelEl.classList.remove("hidden");
     templateEditorNameInput.value = template.name;
+    templateEditorFolderInput.value = getTemplateFolderName(template);
     renderTemplateExerciseOptions(template);
 
     const templateItems = getTemplateItems(template);
@@ -1058,6 +1120,7 @@ function renderTemplatesList() {
             card.innerHTML = `
                 <div>
                     <p class="label">${escapeHtml(template.name)}</p>
+                    <p class="sub small">${escapeHtml(getTemplateFolderName(template) || "Unfiled")}</p>
                     <p class="sub">${safeExerciseNames || "No exercises"}</p>
                 </div>
                 <div class="list-actions">
@@ -1092,22 +1155,20 @@ function renderTemplatesList() {
 
 // Workout logic
 function getExercisesForTemplate(templateId) {
-    if (!templateId) return state.exercises;
+    if (!templateId) return [];
     const tmpl = state.templates.find((t) => String(t.id) === String(templateId));
-    if (!tmpl) return state.exercises;
+    if (!tmpl) return [];
     return getTemplateItems(tmpl)
         .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId)))
         .filter(Boolean);
 }
 
-async function startWorkout() {
+async function startWorkout(templateId = null) {
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
     renderRestTimer();
-
-    const templateId = templateSelect.value || null;
     const exercises = getExercisesForTemplate(templateId);
-    if (exercises.length === 0) {
+    if (templateId && exercises.length === 0) {
         showToast("Add exercises first", "error");
         return;
     }
@@ -1124,6 +1185,7 @@ async function startWorkout() {
             pausedAt: null,
             pausedAccumulatedSeconds: 0,
             templateId,
+            exerciseIds: exercises.map((exercise) => exercise.id),
             notes: "",
             status: "draft",
         };
@@ -1138,7 +1200,7 @@ async function startWorkout() {
             state.sets = state.sets.filter((s) => s.sessionId !== prevId);
             state.sessions = state.sessions.filter((s) => s.id !== prevId);
             state.activeSession = null;
-            return startWorkout(); // retry with fresh session
+            return startWorkout(templateId); // retry with fresh session
         }
     }
 
@@ -1149,14 +1211,18 @@ async function startWorkout() {
             isPaused: false,
             pausedAt: null,
             pausedAccumulatedSeconds: Number.parseInt(state.activeSession.pausedAccumulatedSeconds, 10) || 0,
+            exerciseIds: Array.isArray(state.activeSession.exerciseIds) ? state.activeSession.exerciseIds : exercises.map((exercise) => exercise.id),
         };
         await db.updateSession(state.activeSession);
         state.sessions = state.sessions.map((item) => (String(item.id) === String(state.activeSession.id) ? state.activeSession : item));
     }
 
     state.activeExercises = exercises;
+    if (state.activeSession.exerciseIds?.length) {
+        state.activeExercises = getExercisesForSession(state.activeSession);
+    }
     workoutNotesEl.value = state.activeSession.notes || "";
-    sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => String(t.id) === String(templateId))?.name || "Workout" : "Workout";
+    sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => String(t.id) === String(templateId))?.name || "Workout" : "Empty Workout";
     workoutSection.classList.remove("hidden");
     startWorkoutElapsedTimer();
     renderWorkoutExercises();
@@ -1168,19 +1234,74 @@ function maybeResumeDraft() {
     const draft = state.sessions.find((s) => s.status === "draft");
     if (draft) {
         state.activeSession = draft;
-        state.activeExercises = getExercisesForTemplate(draft.templateId);
-        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Workout";
+        state.activeExercises = getExercisesForSession(draft);
+        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
         workoutNotesEl.value = draft.notes || "";
         workoutSection.classList.remove("hidden");
         startWorkoutElapsedTimer();
+        renderSessionExercisePicker();
         renderWorkoutExercises();
     } else {
         stopWorkoutElapsedTimer();
     }
 }
 
+function renderSessionExercisePicker() {
+    if (!state.activeSession) {
+        sessionExercisePickerEl.classList.add("hidden");
+        return;
+    }
+    sessionExercisePickerEl.classList.remove("hidden");
+    const inSession = new Set(state.activeExercises.map((exercise) => String(exercise.id)));
+    const available = state.exercises.filter((exercise) => !inSession.has(String(exercise.id)));
+    sessionAddExerciseSelect.innerHTML = "";
+    if (available.length === 0) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = "No more exercises";
+        sessionAddExerciseSelect.appendChild(option);
+        sessionAddExerciseSelect.disabled = true;
+        sessionAddExerciseBtn.disabled = true;
+        return;
+    }
+    available.forEach((exercise) => {
+        const option = document.createElement("option");
+        option.value = exercise.id;
+        option.textContent = exercise.name;
+        sessionAddExerciseSelect.appendChild(option);
+    });
+    sessionAddExerciseSelect.disabled = false;
+    sessionAddExerciseBtn.disabled = false;
+}
+
+async function addExerciseToActiveSession() {
+    if (!state.activeSession) return;
+    const exerciseId = sessionAddExerciseSelect.value;
+    if (!exerciseId) return;
+    const exercise = state.exercises.find((item) => String(item.id) === String(exerciseId));
+    if (!exercise) return;
+    if (state.activeExercises.some((item) => String(item.id) === String(exercise.id))) return;
+
+    state.activeExercises.push(exercise);
+    const updatedSession = {
+        ...state.activeSession,
+        exerciseIds: state.activeExercises.map((item) => item.id),
+        notes: workoutNotesEl.value,
+    };
+    await db.updateSession(updatedSession);
+    state.activeSession = updatedSession;
+    state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
+    renderSessionExercisePicker();
+    renderWorkoutExercises();
+}
+
 function renderWorkoutExercises() {
     workoutExercisesEl.innerHTML = "";
+    renderSessionExercisePicker();
+    if (!state.activeExercises.length) {
+        workoutExercisesEl.innerHTML = `<div class="empty">No exercises yet. Add one above.</div>`;
+        return;
+    }
     const sessionId = state.activeSession?.id;
     const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
     const activeTemplate = state.activeSession?.templateId
@@ -1560,6 +1681,7 @@ async function finishWorkout() {
     renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
+    sessionExercisePickerEl.classList.add("hidden");
     showToast("Workout saved", "success");
     await refreshUI();
 }
@@ -1579,6 +1701,7 @@ async function cancelWorkout() {
     renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
+    sessionExercisePickerEl.classList.add("hidden");
     showToast("Workout canceled", "info");
     await refreshUI();
 }
@@ -1839,6 +1962,7 @@ async function clearData() {
     state.restTimer.lastDurationSeconds = 90;
     renderRestTimer();
     workoutSection.classList.add("hidden");
+    sessionExercisePickerEl.classList.add("hidden");
     await refreshUI();
     showToast("Data cleared", "success");
 }
@@ -1859,7 +1983,8 @@ function bindEvents() {
             }
         })
     );
-    startWorkoutBtn.addEventListener("click", startWorkout);
+    startEmptyWorkoutBtn.addEventListener("click", () => startWorkout(null));
+    sessionAddExerciseBtn.addEventListener("click", addExerciseToActiveSession);
     pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);

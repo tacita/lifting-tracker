@@ -323,10 +323,46 @@ button.small {
     z-index: 16;
 }
 
-.workout-launcher #start-workout {
+.workout-launcher #start-empty-workout {
     display: block;
-    margin: 0 auto;
-    min-width: 180px;
+    margin: 0 auto 12px;
+    min-width: 220px;
+}
+
+#workout-templates-browser {
+    display: grid;
+    gap: 12px;
+}
+
+.launcher-folder {
+    display: grid;
+    gap: 8px;
+}
+
+.launcher-template-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.launcher-template-card {
+    text-align: left;
+    border: 1px solid var(--border);
+    background: var(--surface-soft);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+.launcher-template-card .label {
+    margin: 0 0 4px;
+}
+
+.launcher-template-card .sub {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .session-elapsed-inline {
@@ -693,6 +729,10 @@ dialog::backdrop {
 }
 
 @media (max-width: 520px) {
+    .launcher-template-grid {
+        grid-template-columns: 1fr;
+    }
+
     .template-config-grid {
         grid-template-columns: 1fr;
     }

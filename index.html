@@ -39,11 +39,9 @@
             <!-- Workout View -->
             <section id="view-workout" class="view active">
                 <div id="workout-launcher" class="card workout-launcher">
-                    <div class="field">
-                        <label for="workout-template">Template</label>
-                        <select id="workout-template"></select>
-                    </div>
-                    <button id="start-workout" class="primary">Start workout</button>
+                    <h2>Start workout</h2>
+                    <button id="start-empty-workout" class="primary">Start Empty Workout</button>
+                    <div id="workout-templates-browser"></div>
                 </div>
 
                 <section id="workout-session" class="card hidden">
@@ -58,6 +56,13 @@
                                 <button id="pause-workout" class="ghost icon-btn" aria-label="Pause workout" title="Pause workout">⏸</button>
                                 <button id="cancel-workout" class="ghost icon-btn" aria-label="Cancel workout" title="Cancel workout">✕</button>
                             </div>
+                        </div>
+                    </div>
+                    <div id="session-exercise-picker" class="field hidden">
+                        <label for="session-add-exercise">Add exercise</label>
+                        <div class="inline-actions">
+                            <select id="session-add-exercise"></select>
+                            <button id="session-add-exercise-btn" class="ghost">Add</button>
                         </div>
                     </div>
                     <div id="rest-timer-panel" class="rest-timer-panel">
@@ -123,6 +128,10 @@
                         <label for="template-name">Template name</label>
                         <input id="template-name" type="text" placeholder="e.g., Monday Push">
                     </div>
+                    <div class="field">
+                        <label for="template-folder">Folder (optional)</label>
+                        <input id="template-folder" type="text" placeholder="e.g., February">
+                    </div>
                     <button id="create-template" class="primary">Create template</button>
                 </div>
 
@@ -144,6 +153,10 @@
                                 <input id="template-editor-name" type="text" placeholder="Template name">
                                 <button id="save-template-name" class="ghost">Save</button>
                             </div>
+                        </div>
+                        <div class="field">
+                            <label for="template-editor-folder">Folder</label>
+                            <input id="template-editor-folder" type="text" placeholder="Folder name (optional)">
                         </div>
                         <div class="field">
                             <label for="template-add-exercise">Add exercise</label>

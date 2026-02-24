@@ -270,6 +270,7 @@ function normalizeTemplate(template) {
         }));
     return {
         ...template,
+        folder: String(template.folder || "").trim(),
         items,
         exerciseIds: items.map((item) => item.exerciseId),
     };
