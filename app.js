@@ -42,7 +42,8 @@ const weightIncrementInput = document.getElementById("weight-increment");
 const templateNameInput = document.getElementById("template-name");
 const templateFolderInput = document.getElementById("template-folder");
 const createTemplateBtn = document.getElementById("create-template");
-const resetTemplatesBtn = document.getElementById("reset-templates");
+const templateFolderCreateInput = document.getElementById("template-folder-create");
+const createTemplateFolderBtn = document.getElementById("create-template-folder");
 const templatesListEl = document.getElementById("templates-list");
 const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
@@ -84,6 +85,7 @@ const THEME_MODE_KEY = "overload-theme-mode";
 const state = {
     exercises: [],
     templates: [],
+    folders: [],
     sessions: [],
     sets: [],
     activeSession: null,
@@ -584,6 +586,7 @@ function setView(viewId) {
 async function refreshData() {
     state.exercises = (await db.getExercises()).sort((a, b) => a.name.localeCompare(b.name));
     state.templates = await db.getTemplates();
+    state.folders = await db.getFolders();
     state.sessions = await db.getSessions({ includeDraft: true });
     state.sets = await db.getAllSets();
 }
@@ -604,13 +607,18 @@ function getTemplateFolderName(template) {
 }
 
 function getFolderNames() {
-    return Array.from(
-        new Set(
-            state.templates
-                .map((template) => getTemplateFolderName(template))
-                .filter(Boolean)
-        )
-    ).sort((a, b) => a.localeCompare(b));
+    const namesByLower = new Map();
+    const collect = (name) => {
+        const trimmed = String(name || "").trim();
+        if (!trimmed) return;
+        const lower = trimmed.toLowerCase();
+        if (!namesByLower.has(lower)) {
+            namesByLower.set(lower, trimmed);
+        }
+    };
+    state.folders.forEach((folder) => collect(folder?.name));
+    state.templates.forEach((template) => collect(getTemplateFolderName(template)));
+    return Array.from(namesByLower.values()).sort((a, b) => a.localeCompare(b));
 }
 
 function renderFolderSuggestions() {
@@ -623,8 +631,17 @@ function renderFolderSuggestions() {
     });
 }
 
-function getTemplatesGroupedByFolder() {
+function getTemplatesGroupedByFolder({ includeEmpty = false } = {}) {
     const groups = new Map();
+    if (includeEmpty) {
+        groups.set("__unfiled__", { label: "Unfiled", templates: [] });
+        getFolderNames().forEach((folderName) => {
+            const key = folderName || "__unfiled__";
+            if (!groups.has(key)) {
+                groups.set(key, { label: folderName || "Unfiled", templates: [] });
+            }
+        });
+    }
     state.templates.forEach((template) => {
         const folder = getTemplateFolderName(template);
         const key = folder || "__unfiled__";
@@ -662,6 +679,7 @@ function renderWorkoutLauncher() {
     }
 
     getTemplatesGroupedByFolder().forEach((group) => {
+        if (group.templates.length === 0) return;
         const section = document.createElement("div");
         section.className = "launcher-folder";
         section.innerHTML = `<p class="label">${escapeHtml(group.label)} (${group.templates.length})</p><div class="launcher-template-grid"></div>`;
@@ -724,11 +742,11 @@ async function loadDefaultLibrary() {
     try {
         const result = await db.installDefaultLibrary();
         await refreshUI();
-        if (result.addedExercises === 0 && result.addedTemplates === 0) {
+        if (result.addedExercises === 0) {
             showToast("Default library already installed", "info");
             return;
         }
-        showToast(`Added ${result.addedExercises} exercises, ${result.addedTemplates} templates`, "success");
+        showToast(`Added ${result.addedExercises} exercises`, "success");
     } catch (err) {
         console.error(err);
         showToast(`Could not load defaults: ${err?.message || "unknown error"}`, "error");
@@ -758,6 +776,9 @@ async function createTemplate() {
     });
     templateNameInput.value = "";
     templateFolderInput.value = "";
+    if (folder && templateFolderCreateInput) {
+        templateFolderCreateInput.value = folder;
+    }
     showToast("Template created", "success");
     await refreshUI();
     const created = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
@@ -768,17 +789,25 @@ async function createTemplate() {
     }
 }
 
-async function resetTemplatesToDefaultSplit() {
-    if (!confirm("Replace all current templates with the default 7-day split examples?")) return;
-    try {
-        const result = await db.resetTemplatesToDefaultSplit();
-        state.selectedTemplateId = null;
-        await refreshUI();
-        showToast(`Loaded ${result.addedTemplates} split templates`, "success");
-    } catch (err) {
-        console.error(err);
-        showToast(`Could not reset templates: ${err?.message || "unknown error"}`, "error");
+async function createTemplateFolder() {
+    const name = templateFolderCreateInput?.value.trim() || "";
+    if (!name) {
+        showToast("Enter a folder name", "error");
+        return;
     }
+    if (name.toLowerCase() === "unfiled") {
+        showToast('Use a different folder name than "Unfiled"', "error");
+        return;
+    }
+    const exists = getFolderNames().some((folderName) => folderName.toLowerCase() === name.toLowerCase());
+    if (exists) {
+        showToast("Folder already exists", "info");
+        return;
+    }
+    await db.addFolder({ id: uuid(), name });
+    templateFolderCreateInput.value = "";
+    await refreshUI();
+    showToast("Folder created", "success");
 }
 
 function renderExercises() {
@@ -1123,32 +1152,22 @@ function renderTemplateEditor() {
 
 function renderTemplatesList() {
     templatesListEl.innerHTML = "";
-    if (state.templates.length === 0) {
+    const groupedList = getTemplatesGroupedByFolder({ includeEmpty: true });
+    const hasTemplates = groupedList.some((group) => group.templates.length > 0);
+    if (!hasTemplates && getFolderNames().length === 0) {
         templatesListEl.innerHTML = `<div class="empty">No templates yet</div>`;
         return;
     }
 
-    const grouped = new Map();
-    state.templates.forEach((template) => {
-        const folder = getTemplateFolderName(template) || "Unfiled";
-        if (!grouped.has(folder)) grouped.set(folder, []);
-        grouped.get(folder).push(template);
-    });
-
-    const folderNames = Array.from(grouped.keys()).sort((a, b) => {
-        if (a === "Unfiled") return -1;
-        if (b === "Unfiled") return 1;
-        return a.localeCompare(b);
-    });
-
-    folderNames.forEach((folderName) => {
+    groupedList.forEach((group) => {
+        const folderName = group.label;
         const folderSection = document.createElement("section");
         folderSection.className = "templates-folder";
         folderSection.dataset.folder = folderName === "Unfiled" ? "" : folderName;
         folderSection.innerHTML = `
             <div class="templates-folder-header">
                 <p class="label">${escapeHtml(folderName)}</p>
-                <p class="sub small">${grouped.get(folderName).length} template${grouped.get(folderName).length === 1 ? "" : "s"}</p>
+                <p class="sub small">${group.templates.length} template${group.templates.length === 1 ? "" : "s"}</p>
             </div>
             <div class="templates-folder-list"></div>
         `;
@@ -1168,7 +1187,7 @@ function renderTemplatesList() {
         });
 
         const listEl = folderSection.querySelector(".templates-folder-list");
-        grouped.get(folderName)
+        group.templates
             .slice()
             .sort((a, b) => a.name.localeCompare(b.name))
             .forEach((template) => {
@@ -1230,6 +1249,9 @@ async function moveTemplateToFolder(templateId, folderName) {
     if (!template) return;
     const nextFolder = String(folderName || "").trim();
     if (getTemplateFolderName(template) === nextFolder) return;
+    if (nextFolder) {
+        await db.addFolder({ id: uuid(), name: nextFolder });
+    }
     await db.updateTemplate({ ...template, folder: nextFolder });
     await refreshUI();
     showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unfiled", "success");
@@ -2074,7 +2096,7 @@ function bindEvents() {
     loadDefaultLibraryBtn.addEventListener("click", loadDefaultLibrary);
     clearExercisesBtn.addEventListener("click", clearExercises);
     createTemplateBtn.addEventListener("click", createTemplate);
-    resetTemplatesBtn.addEventListener("click", resetTemplatesToDefaultSplit);
+    createTemplateFolderBtn.addEventListener("click", createTemplateFolder);
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
     makeSupersetBtn.addEventListener("click", createSupersetFromSelection);

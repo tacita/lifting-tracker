@@ -138,7 +138,13 @@
                 <div class="card">
                     <div class="section-header">
                         <h2>Templates</h2>
-                        <button id="reset-templates" class="ghost small">Reset 7-day split</button>
+                    </div>
+                    <div class="field">
+                        <label for="template-folder-create">Create folder</label>
+                        <div class="inline-actions">
+                            <input id="template-folder-create" type="text" list="template-folder-options" placeholder="e.g., February">
+                            <button id="create-template-folder" class="ghost">Create</button>
+                        </div>
                     </div>
                     <div id="templates-list"></div>
                 </div>

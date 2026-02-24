@@ -1,5 +1,5 @@
 const DB_NAME = "overload-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise;
 let supabaseClient = null;
@@ -43,77 +43,6 @@ const DEFAULT_EXERCISES = [
     { name: "Wrist Curl (Dumbbell)", repFloor: 12, repCeiling: 20, weightIncrement: 2.5 },
     { name: "Cable Crunch", repFloor: 12, repCeiling: 20, weightIncrement: 5 },
     { name: "Hanging Knee Raise", repFloor: 10, repCeiling: 15, weightIncrement: 0 },
-];
-
-const DEFAULT_TEMPLATES = [
-    {
-        name: "Chest and Back",
-        exercises: [
-            { name: "Machine Chest Press", sets: 4, reps: "6-10", restSeconds: 120 },
-            { name: "Incline Dumbbell Press", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Pec Deck", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "Lat Pulldown", sets: 4, reps: "8-12", restSeconds: 90 },
-            { name: "Seated Cable Row", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Chest-Supported Row Machine", sets: 3, reps: "10-12", restSeconds: 75 },
-        ],
-    },
-    {
-        name: "Shoulders and Arms",
-        exercises: [
-            { name: "Shoulder Press Machine", sets: 4, reps: "6-10", restSeconds: 120 },
-            { name: "Dumbbell Lateral Raise", sets: 4, reps: "12-20", restSeconds: 60 },
-            { name: "Rear Delt Fly Machine", sets: 3, reps: "12-20", restSeconds: 60 },
-            { name: "Triceps Pressdown", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "Overhead Triceps Extension (Cable)", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "EZ-Bar Curl", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "Hammer Curl", sets: 3, reps: "10-15", restSeconds: 75 },
-        ],
-    },
-    {
-        name: "Legs, Forearms and Abs",
-        exercises: [
-            { name: "Smith Machine Squat", sets: 4, reps: "6-10", restSeconds: 120 },
-            { name: "Leg Press", sets: 4, reps: "10-12", restSeconds: 120 },
-            { name: "Leg Extension", sets: 3, reps: "12-15", restSeconds: 75 },
-            { name: "Seated Leg Curl", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "Standing Calf Raise", sets: 4, reps: "12-20", restSeconds: 60 },
-            { name: "Wrist Curl (Dumbbell)", sets: 3, reps: "12-20", restSeconds: 60 },
-            { name: "Cable Crunch", sets: 3, reps: "12-20", restSeconds: 60 },
-            { name: "Hanging Knee Raise", sets: 3, reps: "10-15", restSeconds: 60 },
-        ],
-    },
-    {
-        name: "Rest (Day 4)",
-        exercises: [],
-    },
-    {
-        name: "Upper",
-        exercises: [
-            { name: "Machine Chest Press", sets: 3, reps: "6-10", restSeconds: 120 },
-            { name: "Incline Dumbbell Press", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Lat Pulldown", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Seated Cable Row", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Shoulder Press Machine", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Triceps Pressdown", sets: 2, reps: "10-15", restSeconds: 60 },
-            { name: "EZ-Bar Curl", sets: 2, reps: "10-15", restSeconds: 60 },
-        ],
-    },
-    {
-        name: "Lower",
-        exercises: [
-            { name: "Smith Machine Squat", sets: 3, reps: "6-10", restSeconds: 120 },
-            { name: "Leg Press", sets: 3, reps: "10-12", restSeconds: 120 },
-            { name: "Leg Extension", sets: 3, reps: "12-15", restSeconds: 75 },
-            { name: "Seated Leg Curl", sets: 3, reps: "10-15", restSeconds: 75 },
-            { name: "Hip Thrust (Smith)", sets: 3, reps: "8-12", restSeconds: 90 },
-            { name: "Standing Calf Raise", sets: 4, reps: "12-20", restSeconds: 60 },
-            { name: "Cable Crunch", sets: 3, reps: "12-20", restSeconds: 60 },
-        ],
-    },
-    {
-        name: "Rest (Day 7)",
-        exercises: [],
-    },
 ];
 
 const FOUR_DAY_PROGRAM_EXERCISES = [
@@ -276,6 +205,14 @@ function normalizeTemplate(template) {
     };
 }
 
+function normalizeFolder(folder) {
+    const name = String(folder?.name || "").trim();
+    return {
+        id: folder?.id ?? Date.now() + Math.floor(Math.random() * 1000000),
+        name,
+    };
+}
+
 function buildTemplateItemsFromDefinitions(definitions, exerciseIdByName) {
     return sanitizeTemplateItems(
         definitions
@@ -315,6 +252,10 @@ function openDB() {
                 const sets = db.createObjectStore("sets", { keyPath: "id" });
                 sets.createIndex("sessionId", "sessionId", { unique: false });
                 sets.createIndex("exerciseId", "exerciseId", { unique: false });
+            }
+            if (event.oldVersion < 2) {
+                const folders = db.createObjectStore("folders", { keyPath: "id" });
+                folders.createIndex("name", "name", { unique: false });
             }
         };
 
@@ -563,27 +504,45 @@ function useCloudSync() {
 }
 
 async function localExportData() {
-    const [exercises, templates, sessions, sets] = await Promise.all([
+    const [exercises, templates, folders, sessions, sets] = await Promise.all([
         tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll())),
         tx(["templates"], "readonly", (store) => requestToPromise(store.getAll())),
+        tx(["folders"], "readonly", (store) => requestToPromise(store.getAll())),
         getSessions({ includeDraft: true }),
         tx(["sets"], "readonly", (store) => requestToPromise(store.getAll())),
     ]);
-    return { exportedAt: new Date().toISOString(), exercises, templates, sessions, sets };
+    return { exportedAt: new Date().toISOString(), exercises, templates, folders, sessions, sets };
 }
 
 async function localImportData(data) {
     if (!data || !Array.isArray(data.exercises) || !Array.isArray(data.templates) || !Array.isArray(data.sessions) || !Array.isArray(data.sets)) {
         throw new Error("Invalid import data");
     }
-    await tx(["exercises", "templates", "sessions", "sets"], "readwrite", (exStore, tmplStore, sessionStore, setStore) => {
+    const folderNames = new Set();
+    const folders = Array.isArray(data.folders) ? data.folders : [];
+    await tx(["exercises", "templates", "folders", "sessions", "sets"], "readwrite", (exStore, tmplStore, folderStore, sessionStore, setStore) => {
         exStore.clear();
         tmplStore.clear();
+        folderStore.clear();
         sessionStore.clear();
         setStore.clear();
 
         data.exercises.forEach((item) => exStore.add(item));
-        data.templates.forEach((item) => tmplStore.add(item));
+        data.templates.forEach((item) => {
+            const normalized = normalizeTemplate(item);
+            tmplStore.add(normalized);
+            if (normalized.folder) {
+                folderNames.add(normalized.folder.toLowerCase());
+            }
+        });
+        folders.forEach((item) => {
+            const normalized = normalizeFolder(item);
+            if (!normalized.name) return;
+            const key = normalized.name.toLowerCase();
+            if (folderNames.has(key)) return;
+            folderNames.add(key);
+            folderStore.add(normalized);
+        });
         data.sessions.forEach((item) => sessionStore.add(item));
         data.sets.forEach((item) => setStore.add(item));
     });
@@ -711,13 +670,39 @@ export async function getExercises() {
 
 // Templates
 export async function addTemplate(template) {
-    const result = await tx(["templates"], "readwrite", (store) => store.add(normalizeTemplate(template)));
+    const normalizedTemplate = normalizeTemplate(template);
+    const result = await tx(["templates", "folders"], "readwrite", (templateStore, folderStore) => {
+        const req = templateStore.add(normalizedTemplate);
+        if (normalizedTemplate.folder) {
+            folderStore.getAll().onsuccess = (event) => {
+                const existing = event.target.result || [];
+                const match = existing.some((folder) => String(folder.name || "").trim().toLowerCase() === normalizedTemplate.folder.toLowerCase());
+                if (!match) {
+                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder });
+                }
+            };
+        }
+        return req;
+    });
     scheduleCloudSync();
     return result;
 }
 
 export async function updateTemplate(template) {
-    const result = await tx(["templates"], "readwrite", (store) => store.put(normalizeTemplate(template)));
+    const normalizedTemplate = normalizeTemplate(template);
+    const result = await tx(["templates", "folders"], "readwrite", (templateStore, folderStore) => {
+        const req = templateStore.put(normalizedTemplate);
+        if (normalizedTemplate.folder) {
+            folderStore.getAll().onsuccess = (event) => {
+                const existing = event.target.result || [];
+                const match = existing.some((folder) => String(folder.name || "").trim().toLowerCase() === normalizedTemplate.folder.toLowerCase());
+                if (!match) {
+                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder });
+                }
+            };
+        }
+        return req;
+    });
     scheduleCloudSync();
     return result;
 }
@@ -730,6 +715,29 @@ export async function deleteTemplate(templateId) {
 
 export async function getTemplates() {
     return tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+}
+
+export async function addFolder(folder) {
+    const normalized = normalizeFolder(folder);
+    if (!normalized.name) {
+        throw new Error("Folder name is required");
+    }
+    const lower = normalized.name.toLowerCase();
+    const result = await tx(["folders"], "readwrite", (store) => {
+        store.getAll().onsuccess = (event) => {
+            const existing = event.target.result || [];
+            if (existing.some((item) => String(item.name || "").trim().toLowerCase() === lower)) {
+                return;
+            }
+            store.add(normalized);
+        };
+    });
+    scheduleCloudSync();
+    return result;
+}
+
+export async function getFolders() {
+    return tx(["folders"], "readonly", (store) => requestToPromise(store.getAll()));
 }
 
 // Sessions
@@ -843,27 +851,45 @@ export async function getAllSets() {
 
 // Export / Import
 export async function exportData() {
-    const [exercises, templates, sessions, sets] = await Promise.all([
+    const [exercises, templates, folders, sessions, sets] = await Promise.all([
         getExercises(),
         getTemplates(),
+        getFolders(),
         getSessions({ includeDraft: true }),
         getAllSets(),
     ]);
-    return { exportedAt: new Date().toISOString(), exercises, templates, sessions, sets };
+    return { exportedAt: new Date().toISOString(), exercises, templates, folders, sessions, sets };
 }
 
 export async function importData(data) {
     if (!data || !Array.isArray(data.exercises) || !Array.isArray(data.templates) || !Array.isArray(data.sessions) || !Array.isArray(data.sets)) {
         throw new Error("Invalid import data");
     }
-    await tx(["exercises", "templates", "sessions", "sets"], "readwrite", (exStore, tmplStore, sessionStore, setStore) => {
+    const folderNames = new Set();
+    const folders = Array.isArray(data.folders) ? data.folders : [];
+    await tx(["exercises", "templates", "folders", "sessions", "sets"], "readwrite", (exStore, tmplStore, folderStore, sessionStore, setStore) => {
         exStore.clear();
         tmplStore.clear();
+        folderStore.clear();
         sessionStore.clear();
         setStore.clear();
 
         data.exercises.forEach((item) => exStore.add(item));
-        data.templates.forEach((item) => tmplStore.add(item));
+        data.templates.forEach((item) => {
+            const normalized = normalizeTemplate(item);
+            tmplStore.add(normalized);
+            if (normalized.folder) {
+                folderNames.add(normalized.folder.toLowerCase());
+            }
+        });
+        folders.forEach((item) => {
+            const normalized = normalizeFolder(item);
+            if (!normalized.name) return;
+            const key = normalized.name.toLowerCase();
+            if (folderNames.has(key)) return;
+            folderNames.add(key);
+            folderStore.add(normalized);
+        });
         data.sessions.forEach((item) => sessionStore.add(item));
         data.sets.forEach((item) => setStore.add(item));
     });
@@ -871,9 +897,10 @@ export async function importData(data) {
 }
 
 export async function clearAll() {
-    await tx(["exercises", "templates", "sessions", "sets"], "readwrite", (exStore, tmplStore, sessionStore, setStore) => {
+    await tx(["exercises", "templates", "folders", "sessions", "sets"], "readwrite", (exStore, tmplStore, folderStore, sessionStore, setStore) => {
         exStore.clear();
         tmplStore.clear();
+        folderStore.clear();
         sessionStore.clear();
         setStore.clear();
     });
@@ -882,8 +909,7 @@ export async function clearAll() {
 
 export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
     const existingExercises = await getExercises();
-    const existingTemplates = await getTemplates();
-    const summary = { addedExercises: 0, addedTemplates: 0, skipped: false };
+    const summary = { addedExercises: 0, skipped: false };
 
     if (onlyIfEmpty && existingExercises.length > 0) {
         summary.skipped = true;
@@ -892,7 +918,6 @@ export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
 
     const existingExerciseNames = new Set(existingExercises.map((item) => normalizeName(item.name)));
     const allExerciseIds = new Set(existingExercises.map((item) => String(item.id)));
-    const allExercises = existingExercises.slice();
     const exercisesToAdd = [];
 
     DEFAULT_EXERCISES.forEach((item) => {
@@ -900,68 +925,20 @@ export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
         if (existingExerciseNames.has(normalized)) return;
         const exercise = { id: createId(allExerciseIds), ...item };
         exercisesToAdd.push(exercise);
-        allExercises.push(exercise);
         existingExerciseNames.add(normalized);
     });
 
-    const exerciseIdByName = new Map(allExercises.map((item) => [normalizeName(item.name), item.id]));
-    const existingTemplateNames = new Set(existingTemplates.map((item) => normalizeName(item.name)));
-    const allTemplateIds = new Set(existingTemplates.map((item) => String(item.id)));
-    const templatesToAdd = [];
-
-    DEFAULT_TEMPLATES.forEach((item) => {
-        const normalized = normalizeName(item.name);
-        if (existingTemplateNames.has(normalized)) return;
-        const items = buildTemplateItemsFromDefinitions(item.exercises, exerciseIdByName);
-        if (item.exercises.length > 0 && items.length === 0) return;
-        templatesToAdd.push({
-            id: createId(allTemplateIds),
-            name: item.name,
-            items,
-            exerciseIds: items.map((entry) => entry.exerciseId),
-        });
-        existingTemplateNames.add(normalized);
-    });
-
-    if (exercisesToAdd.length === 0 && templatesToAdd.length === 0) {
+    if (exercisesToAdd.length === 0) {
         return summary;
     }
 
-    await tx(["exercises", "templates"], "readwrite", (exerciseStore, templateStore) => {
+    await tx(["exercises"], "readwrite", (exerciseStore) => {
         exercisesToAdd.forEach((item) => exerciseStore.add(item));
-        templatesToAdd.forEach((item) => templateStore.add(item));
     });
     scheduleCloudSync();
 
     summary.addedExercises = exercisesToAdd.length;
-    summary.addedTemplates = templatesToAdd.length;
     return summary;
-}
-
-export async function resetTemplatesToDefaultSplit() {
-    const existingExercises = await getExercises();
-    const exerciseIdByName = new Map(existingExercises.map((item) => [normalizeName(item.name), item.id]));
-    const templateIds = new Set();
-    const templatesToAdd = [];
-
-    DEFAULT_TEMPLATES.forEach((item) => {
-        const items = buildTemplateItemsFromDefinitions(item.exercises, exerciseIdByName);
-        if (item.exercises.length > 0 && items.length === 0) return;
-        templatesToAdd.push({
-            id: createId(templateIds),
-            name: item.name,
-            items,
-            exerciseIds: items.map((entry) => entry.exerciseId),
-        });
-    });
-
-    await tx(["templates"], "readwrite", (store) => {
-        store.clear();
-        templatesToAdd.forEach((item) => store.add(item));
-    });
-    scheduleCloudSync();
-
-    return { addedTemplates: templatesToAdd.length };
 }
 
 export async function resetTemplatesToFourDayProgram() {
@@ -995,8 +972,9 @@ export async function resetTemplatesToFourDayProgram() {
         });
     });
 
-    await tx(["exercises", "templates"], "readwrite", (exerciseStore, templateStore) => {
+    await tx(["exercises", "templates", "folders"], "readwrite", (exerciseStore, templateStore, folderStore) => {
         templateStore.clear();
+        folderStore.clear();
         exercisesToAdd.forEach((item) => exerciseStore.add(item));
         templatesToAdd.forEach((item) => templateStore.add(item));
     });
