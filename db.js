@@ -377,11 +377,40 @@ export async function initAuth() {
 
     let { url, anonKey } = getSupabaseConfig();
     if (!url || !anonKey) {
-        try {
-            await import(`./config.js?t=${Date.now()}`);
-            ({ url, anonKey } = getSupabaseConfig());
-        } catch {
-            // Ignore; we'll surface the configured=false state below.
+        const stamp = Date.now();
+        const candidates = [
+            `./config.js?t=${stamp}`,
+            `/lifting-tracker/config.js?t=${stamp}`,
+        ];
+
+        for (const candidate of candidates) {
+            try {
+                await import(candidate);
+                ({ url, anonKey } = getSupabaseConfig());
+                if (url && anonKey) break;
+            } catch {
+                // Try next candidate.
+            }
+        }
+
+        if (!url || !anonKey) {
+            for (const candidate of candidates) {
+                try {
+                    const response = await fetch(candidate, { cache: "no-store" });
+                    if (!response.ok) continue;
+                    const text = await response.text();
+                    const urlMatch = text.match(/__OVERLOAD_SUPABASE_URL\s*=\s*"([^"]*)"/);
+                    const keyMatch = text.match(/__OVERLOAD_SUPABASE_ANON_KEY\s*=\s*"([^"]*)"/);
+                    if (urlMatch?.[1] && keyMatch?.[1]) {
+                        window.__OVERLOAD_SUPABASE_URL = urlMatch[1];
+                        window.__OVERLOAD_SUPABASE_ANON_KEY = keyMatch[1];
+                        ({ url, anonKey } = getSupabaseConfig());
+                        if (url && anonKey) break;
+                    }
+                } catch {
+                    // Try next candidate.
+                }
+            }
         }
     }
     if (!url || !anonKey) {
