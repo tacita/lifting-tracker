@@ -3,7 +3,6 @@ import * as db from "./db.js";
 const views = document.querySelectorAll(".view");
 const tabButtons = document.querySelectorAll(".tab-bar button");
 const toastEl = document.getElementById("toast");
-const headerStatus = document.getElementById("header-status");
 const appEl = document.getElementById("app");
 const authGateEl = document.getElementById("auth-gate");
 const authGateStatusEl = document.getElementById("auth-gate-status");
@@ -1831,11 +1830,7 @@ async function clearData() {
 // PWA registration
 function registerServiceWorker() {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("sw.js").then(() => {
-        headerStatus.textContent = "Offline-ready";
-    }).catch(() => {
-        headerStatus.textContent = "Online";
-    });
+    navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
 // Event bindings

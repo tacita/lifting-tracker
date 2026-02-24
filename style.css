@@ -68,15 +68,6 @@ body {
     text-transform: uppercase;
 }
 
-.status-pill {
-    padding: 6px 10px;
-    border-radius: 12px;
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-size: 12px;
-    background: rgba(110, 231, 183, 0.08);
-}
-
 main {
     display: block;
 }
@@ -296,6 +287,12 @@ button.small {
     position: sticky;
     top: 8px;
     z-index: 16;
+}
+
+.workout-launcher #start-workout {
+    display: block;
+    margin: 0 auto;
+    min-width: 180px;
 }
 
 .session-elapsed-inline {
