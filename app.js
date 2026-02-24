@@ -109,6 +109,14 @@ function formatWeight(value) {
     return Number(value).toFixed(1).replace(/\\.0$/, "");
 }
 
+function formatWeightInput(value) {
+    if (value === undefined || value === null || value === "") return "";
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return "";
+    const rounded = Math.round(numeric * 2) / 2;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 function formatTimer(seconds) {
     const clamped = Math.max(0, Number.parseInt(seconds, 10) || 0);
     const mins = Math.floor(clamped / 60);
@@ -1281,7 +1289,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         <div class="set-row-content">
             <span class="set-index">${setNumber}</span>
             <span class="previous-set">${previousDisplay || "-"}</span>
-            <input type="number" placeholder="lbs" aria-label="Weight" inputmode="decimal" step="0.5" value="${existingSet ? existingSet.weight : ""}">
+            <input type="number" placeholder="lbs" aria-label="Weight" inputmode="decimal" step="0.5" value="${formatWeightInput(existingSet?.weight)}">
             <span class="x">×</span>
             <input type="number" placeholder="Reps" aria-label="Reps" inputmode="numeric" min="1" value="${existingSet ? existingSet.reps : ""}">
             <button class="ghost small mark-set ${existingSet?.isComplete ? "done" : ""}" aria-label="Mark set complete">✓</button>
