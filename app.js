@@ -1207,22 +1207,41 @@ function attachSwipeToDelete(row, content, onDelete) {
     let pointerId = null;
     let startX = 0;
     let startY = 0;
+    let baseX = 0;
     let currentX = 0;
     let swipeArmed = false;
-    const maxSwipe = 120;
-    const deleteThreshold = 108;
+    let open = false;
+    const maxSwipe = 112;
+    const openThreshold = 52;
     const intentThreshold = 14;
 
     const interactiveSelector = "input, button, select, textarea, label";
     const setOffset = (x) => {
         content.style.transform = `translateX(${x}px)`;
         row.classList.toggle("swiping", x < 0);
-        row.classList.toggle("swipe-delete-ready", Math.abs(x) >= deleteThreshold);
+        row.classList.toggle("swipe-delete-ready", Math.abs(x) >= openThreshold);
     };
 
-    const reset = () => {
+    const closeSwipe = () => {
+        open = false;
         currentX = 0;
         setOffset(0);
+        row.classList.remove("swipe-open");
+    };
+
+    const openSwipe = () => {
+        open = true;
+        currentX = -maxSwipe;
+        setOffset(currentX);
+        row.classList.add("swipe-open");
+    };
+
+    const settleSwipe = () => {
+        if (currentX <= -openThreshold) {
+            openSwipe();
+            return;
+        }
+        closeSwipe();
     };
 
     row.addEventListener("pointerdown", (event) => {
@@ -1232,7 +1251,8 @@ function attachSwipeToDelete(row, content, onDelete) {
         pointerId = event.pointerId;
         startX = event.clientX;
         startY = event.clientY;
-        currentX = 0;
+        baseX = open ? -maxSwipe : 0;
+        currentX = baseX;
         swipeArmed = false;
         row.setPointerCapture(pointerId);
     });
@@ -1251,18 +1271,13 @@ function attachSwipeToDelete(row, content, onDelete) {
                 if (row.hasPointerCapture(pointerId)) {
                     row.releasePointerCapture(pointerId);
                 }
-                reset();
+                settleSwipe();
                 return;
             }
             swipeArmed = true;
         }
 
-        if (delta >= 0) {
-            currentX = 0;
-            setOffset(0);
-            return;
-        }
-        currentX = Math.max(-maxSwipe, delta);
+        currentX = Math.max(-maxSwipe, Math.min(0, baseX + delta));
         setOffset(currentX);
     });
 
@@ -1272,12 +1287,7 @@ function attachSwipeToDelete(row, content, onDelete) {
         if (row.hasPointerCapture(pointerId)) {
             row.releasePointerCapture(pointerId);
         }
-        const shouldDelete = event.type === "pointerup" && Math.abs(currentX) >= deleteThreshold;
-        if (shouldDelete) {
-            await onDelete();
-            return;
-        }
-        reset();
+        settleSwipe();
     };
 
     row.addEventListener("pointerup", endSwipe);
@@ -1287,14 +1297,23 @@ function attachSwipeToDelete(row, content, onDelete) {
         if (row.hasPointerCapture(pointerId)) {
             row.releasePointerCapture(pointerId);
         }
-        reset();
+        settleSwipe();
     });
     row.addEventListener("lostpointercapture", () => {
         if (dragging) {
             dragging = false;
-            reset();
+            settleSwipe();
         }
     });
+
+    const deleteAction = row.querySelector(".set-delete-action");
+    if (deleteAction) {
+        deleteAction.addEventListener("click", async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            await onDelete();
+        });
+    }
 }
 
 async function deleteSetRow(row) {
@@ -1370,7 +1389,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.dataset.setId = existingSet.id;
     }
     row.innerHTML = `
-        <div class="set-delete-bg">Delete</div>
+        <div class="set-delete-bg"><button type="button" class="set-delete-action">Delete</button></div>
         <div class="set-row-content">
             <span class="set-index">${setNumber}</span>
             <span class="previous-set">${previousDisplay || "-"}</span>

@@ -437,11 +437,25 @@ button.small {
     font-weight: 700;
     opacity: 0;
     transition: opacity 0.15s ease;
-    pointer-events: none;
+    pointer-events: auto;
 }
 
 .set-row.swiping .set-delete-bg {
     opacity: 1;
+}
+
+.set-row.swipe-open .set-delete-bg {
+    opacity: 1;
+}
+
+.set-delete-action {
+    background: rgba(239, 68, 68, 0.24);
+    border: 1px solid rgba(252, 165, 165, 0.35);
+    color: #fecaca;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
 }
 
 .set-row .mark-set {
