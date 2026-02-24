@@ -1206,9 +1206,12 @@ function attachSwipeToDelete(row, content, onDelete) {
     let dragging = false;
     let pointerId = null;
     let startX = 0;
+    let startY = 0;
     let currentX = 0;
+    let swipeArmed = false;
     const maxSwipe = 120;
-    const deleteThreshold = 88;
+    const deleteThreshold = 108;
+    const intentThreshold = 14;
 
     const interactiveSelector = "input, button, select, textarea, label";
     const setOffset = (x) => {
@@ -1228,13 +1231,32 @@ function attachSwipeToDelete(row, content, onDelete) {
         dragging = true;
         pointerId = event.pointerId;
         startX = event.clientX;
+        startY = event.clientY;
         currentX = 0;
+        swipeArmed = false;
         row.setPointerCapture(pointerId);
     });
 
     row.addEventListener("pointermove", (event) => {
         if (!dragging || event.pointerId !== pointerId) return;
         const delta = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+        const absX = Math.abs(delta);
+        const absY = Math.abs(deltaY);
+
+        if (!swipeArmed) {
+            if (absX < intentThreshold && absY < intentThreshold) return;
+            if (absY > absX) {
+                dragging = false;
+                if (row.hasPointerCapture(pointerId)) {
+                    row.releasePointerCapture(pointerId);
+                }
+                reset();
+                return;
+            }
+            swipeArmed = true;
+        }
+
         if (delta >= 0) {
             currentX = 0;
             setOffset(0);
@@ -1250,7 +1272,7 @@ function attachSwipeToDelete(row, content, onDelete) {
         if (row.hasPointerCapture(pointerId)) {
             row.releasePointerCapture(pointerId);
         }
-        const shouldDelete = Math.abs(currentX) >= deleteThreshold;
+        const shouldDelete = event.type === "pointerup" && Math.abs(currentX) >= deleteThreshold;
         if (shouldDelete) {
             await onDelete();
             return;
@@ -1259,7 +1281,14 @@ function attachSwipeToDelete(row, content, onDelete) {
     };
 
     row.addEventListener("pointerup", endSwipe);
-    row.addEventListener("pointercancel", endSwipe);
+    row.addEventListener("pointercancel", (event) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+        dragging = false;
+        if (row.hasPointerCapture(pointerId)) {
+            row.releasePointerCapture(pointerId);
+        }
+        reset();
+    });
     row.addEventListener("lostpointercapture", () => {
         if (dragging) {
             dragging = false;

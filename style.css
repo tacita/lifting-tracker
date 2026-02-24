@@ -406,6 +406,7 @@ button.small {
     overflow: hidden;
     border-radius: 10px;
     border: 1px solid transparent;
+    touch-action: pan-y;
 }
 
 .set-row-content {
