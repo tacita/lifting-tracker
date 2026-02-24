@@ -483,7 +483,7 @@ button.small {
 
 .previous-set {
     color: var(--muted);
-    font-size: 12px;
+    font-size: 14px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -652,7 +652,7 @@ dialog::backdrop {
     }
 
     .previous-set {
-        font-size: 11px;
+        font-size: 12px;
     }
 
     .rest-timer-controls button {
