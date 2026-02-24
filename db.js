@@ -740,6 +740,27 @@ export async function getFolders() {
     return tx(["folders"], "readonly", (store) => requestToPromise(store.getAll()));
 }
 
+export async function updateFolder(folderId, updates) {
+    const result = await tx(["folders"], "readwrite", (store) => {
+        const getReq = store.get(folderId);
+        getReq.onsuccess = () => {
+            const folder = getReq.result;
+            if (folder) {
+                const updated = { ...folder, ...updates };
+                store.put(updated);
+            }
+        };
+    });
+    scheduleCloudSync();
+    return result;
+}
+
+export async function deleteFolder(folderId) {
+    const result = await tx(["folders"], "readwrite", (store) => store.delete(folderId));
+    scheduleCloudSync();
+    return result;
+}
+
 // Sessions
 export async function addSession(session) {
     const result = await tx(["sessions"], "readwrite", (store) => store.add(session));

@@ -289,22 +289,64 @@ button.small {
     margin-bottom: 10px;
 }
 
+.exercise-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.exercise-title-row .label {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
+.exercise-drag-handle {
+    color: var(--muted);
+    cursor: grab;
+    font-size: 14px;
+    line-height: 1;
+    padding: 4px;
+    user-select: none;
+}
+
+.exercise-drag-handle:active {
+    cursor: grabbing;
+}
+
+.exercise-card.draggable {
+    cursor: default;
+}
+
+.exercise-card-dragging {
+    opacity: 0.6;
+}
+
+.exercise-card-drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
 .exercise-meta-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
+    gap: 6px;
+    flex-wrap: wrap;
 }
 
 .exercise-meta-row .sub {
     margin: 0;
+    font-size: 13px;
+    flex: 1;
+    min-width: 0;
 }
 
 .exercise-header-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-left: auto;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .history-chip {
@@ -377,17 +419,70 @@ button.small {
     border-color: var(--accent);
 }
 
+.templates-folder.collapsed .templates-folder-list {
+    display: none;
+}
+
 .templates-folder-header {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
     margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+    padding: 4px;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+.templates-folder-header:hover {
+    background: var(--surface-soft);
+}
+
+.folder-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.folder-chevron {
+    color: var(--muted);
+    font-size: 12px;
+    width: 16px;
+    display: inline-block;
+}
+
+.templates-folder-header .label {
+    margin: 0;
 }
 
 .templates-folder-list {
     display: grid;
     gap: 8px;
     min-height: 20px;
+}
+
+.template-list-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.template-list-card .drag-handle {
+    color: var(--muted);
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+    padding: 4px;
+}
+
+.template-list-card .drag-handle:active {
+    cursor: grabbing;
+}
+
+.template-card-content {
+    flex: 1;
+    min-width: 0;
 }
 
 .template-list-card.dragging {
@@ -519,7 +614,7 @@ button.small {
 
 .set-row-content {
     display: grid;
-    grid-template-columns: 28px minmax(56px, 1fr) 70px auto 64px auto;
+    grid-template-columns: 28px minmax(56px, 1fr) 56px auto 52px auto;
     gap: 6px;
     align-items: center;
     background: var(--surface);
@@ -531,6 +626,11 @@ button.small {
     color: var(--muted);
     text-align: center;
     font-size: 12px;
+}
+
+.set-row-content input {
+    width: 100%;
+    min-width: 0;
 }
 
 .set-delete-bg {
@@ -606,17 +706,20 @@ button.small {
 
 .previous-set {
     color: var(--muted);
-    font-size: 14px;
+    font-size: 16px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .rest-timer-panel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 10px;
     background: var(--surface);
-    padding: 8px 10px;
+    padding: 8px 12px;
     margin-bottom: 12px;
     position: sticky;
     top: 8px;
@@ -624,16 +727,15 @@ button.small {
     box-shadow: var(--shadow);
 }
 
-.rest-timer-controls {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: nowrap;
-}
-
 .rest-label {
     margin: 0;
     white-space: nowrap;
+}
+
+.workout-elapsed-small {
+    margin: 0;
+    margin-left: auto;
+    color: var(--muted);
 }
 
 .rest-display {
@@ -641,8 +743,10 @@ button.small {
     text-align: center;
     font-weight: 800;
     letter-spacing: 0.5px;
-    min-width: 62px;
-    flex: 1;
+    font-size: 20px;
+    line-height: 1;
+    color: var(--accent);
+    min-width: 48px;
 }
 
 .action-row {
@@ -680,6 +784,49 @@ button.small {
 .toast.success {
     border-color: rgba(110, 231, 183, 0.3);
     color: var(--accent);
+}
+
+dialog {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    max-width: 640px;
+}
+
+.folders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.folder-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.folder-item-info {
+    flex: 1;
+}
+
+.folder-item-info .label {
+    margin: 0 0 4px 0;
+}
+
+.folder-item-info .sub {
+    margin: 0;
+}
+
+.folder-item-actions {
+    display: flex;
+    gap: 8px;
 }
 
 dialog {
@@ -767,7 +914,7 @@ dialog::backdrop {
     }
 
     .set-row-content {
-        grid-template-columns: 24px minmax(48px, 1fr) 64px auto 56px auto;
+        grid-template-columns: 24px minmax(48px, 1fr) 52px auto 48px auto;
         gap: 4px;
         padding: 5px;
     }
@@ -779,10 +926,11 @@ dialog::backdrop {
     }
 
     .previous-set {
-        font-size: 12px;
+        font-size: 14px;
     }
 
-    .rest-timer-controls button {
-        padding: 8px 10px;
+    .rest-display {
+        font-size: 18px;
+        min-width: 44px;
     }
 }

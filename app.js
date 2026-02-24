@@ -15,6 +15,7 @@ const workoutLauncherEl = document.getElementById("workout-launcher");
 const startEmptyWorkoutBtn = document.getElementById("start-empty-workout");
 const workoutTemplatesBrowserEl = document.getElementById("workout-templates-browser");
 const workoutElapsedEl = document.getElementById("workout-elapsed");
+const workoutElapsedSmallEl = document.getElementById("workout-elapsed-small");
 const workoutSection = document.getElementById("workout-session");
 const sessionExercisePickerEl = document.getElementById("session-exercise-picker");
 const sessionAddExerciseSelect = document.getElementById("session-add-exercise");
@@ -68,6 +69,11 @@ const closeModalBtn = document.getElementById("close-modal");
 const modalChartCanvas = document.getElementById("history-chart");
 let modalChart = null;
 
+const manageFoldersModal = document.getElementById("manage-folders-modal");
+const manageFoldersBtn = document.getElementById("manage-folders-btn");
+const closeFoldersModalBtn = document.getElementById("close-folders-modal");
+const foldersListEl = document.getElementById("folders-list");
+
 // Settings refs
 const exportBtn = document.getElementById("export-data");
 const importBtn = document.getElementById("import-data");
@@ -93,6 +99,7 @@ const state = {
     selectedTemplateId: null,
     selectedTemplateExerciseIds: new Set(),
     supersetDraftMode: false,
+    expandedFolders: new Set(),
     workoutTimer: {
         intervalId: null,
     },
@@ -353,13 +360,23 @@ function renderWorkoutElapsed() {
     const hasSession = Boolean(state.activeSession);
     workoutLauncherEl.classList.toggle("hidden", hasSession);
     workoutElapsedEl.classList.toggle("hidden", !hasSession);
+    if (workoutElapsedSmallEl) {
+        workoutElapsedSmallEl.classList.toggle("hidden", !hasSession);
+    }
     if (!hasSession) {
         workoutElapsedEl.textContent = "Elapsed 0:00";
+        if (workoutElapsedSmallEl) {
+            workoutElapsedSmallEl.textContent = "0:00";
+        }
         renderWorkoutControls();
         return;
     }
     const prefix = state.activeSession?.isPaused ? "Paused" : "Elapsed";
-    workoutElapsedEl.textContent = `${prefix} ${formatDuration(getSessionDurationSeconds(state.activeSession))}`;
+    const duration = formatDuration(getSessionDurationSeconds(state.activeSession));
+    workoutElapsedEl.textContent = `${prefix} ${duration}`;
+    if (workoutElapsedSmallEl) {
+        workoutElapsedSmallEl.textContent = duration;
+    }
     renderWorkoutControls();
 }
 
@@ -419,7 +436,7 @@ function renderRestTimer() {
     restLessBtn.disabled = !running;
     restMoreBtn.disabled = !running;
     restStopBtn.disabled = false;
-    restStopBtn.textContent = running ? "Stop" : "Start";
+    restStopBtn.textContent = running ? "Stop Rest" : "Start Rest";
 }
 
 function stopRestTimer() {
@@ -1161,20 +1178,43 @@ function renderTemplatesList() {
 
     groupedList.forEach((group) => {
         const folderName = group.label;
+        const displayName = folderName === "Unfiled" ? "Unorganized" : folderName;
+        const folderKey = folderName === "Unfiled" ? "" : folderName;
+        const isExpanded = state.expandedFolders.has(folderKey);
+        
         const folderSection = document.createElement("section");
         folderSection.className = "templates-folder";
-        folderSection.dataset.folder = folderName === "Unfiled" ? "" : folderName;
+        folderSection.dataset.folder = folderKey;
+        folderSection.classList.toggle("collapsed", !isExpanded);
+        
         folderSection.innerHTML = `
             <div class="templates-folder-header">
-                <p class="label">${escapeHtml(folderName)}</p>
+                <div class="folder-header-left">
+                    <span class="folder-chevron">${isExpanded ? '▼' : '▶'}</span>
+                    <p class="label">${escapeHtml(displayName)}</p>
+                </div>
                 <p class="sub small">${group.templates.length} template${group.templates.length === 1 ? "" : "s"}</p>
             </div>
             <div class="templates-folder-list"></div>
         `;
 
+        const header = folderSection.querySelector(".templates-folder-header");
+        header.addEventListener("click", () => {
+            if (isExpanded) {
+                state.expandedFolders.delete(folderKey);
+            } else {
+                state.expandedFolders.add(folderKey);
+            }
+            renderTemplatesList();
+        });
+
         folderSection.addEventListener("dragover", (event) => {
             event.preventDefault();
             folderSection.classList.add("drag-over");
+            if (!isExpanded) {
+                state.expandedFolders.add(folderKey);
+                setTimeout(() => renderTemplatesList(), 300);
+            }
         });
         folderSection.addEventListener("dragleave", () => folderSection.classList.remove("drag-over"));
         folderSection.addEventListener("drop", async (event) => {
@@ -1187,6 +1227,12 @@ function renderTemplatesList() {
         });
 
         const listEl = folderSection.querySelector(".templates-folder-list");
+        
+        if (!isExpanded) {
+            templatesListEl.appendChild(folderSection);
+            return;
+        }
+        
         group.templates
             .slice()
             .sort((a, b) => a.name.localeCompare(b.name))
@@ -1201,7 +1247,8 @@ function renderTemplatesList() {
                 card.draggable = true;
                 card.dataset.templateId = String(template.id);
                 card.innerHTML = `
-                    <div>
+                    <span class="drag-handle">::</span>
+                    <div class="template-card-content">
                         <p class="label">${escapeHtml(template.name)}</p>
                         <p class="sub">${safeExerciseNames || "No exercises"}</p>
                     </div>
@@ -1254,7 +1301,78 @@ async function moveTemplateToFolder(templateId, folderName) {
     }
     await db.updateTemplate({ ...template, folder: nextFolder });
     await refreshUI();
-    showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unfiled", "success");
+    showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unorganized", "success");
+}
+
+function openManageFoldersModal() {
+    if (!foldersListEl || !manageFoldersModal) return;
+    
+    foldersListEl.innerHTML = "";
+    const folders = state.folders.filter((f) => f.name);
+    
+    if (folders.length === 0) {
+        foldersListEl.innerHTML = '<div class="empty">No folders yet</div>';
+    } else {
+        folders.forEach((folder) => {
+            const templatesInFolder = state.templates.filter((t) => 
+                String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
+            );
+            
+            const folderItem = document.createElement("div");
+            folderItem.className = "folder-item";
+            folderItem.innerHTML = `
+                <div class="folder-item-info">
+                    <p class="label">${escapeHtml(folder.name)}</p>
+                    <p class="sub small">${templatesInFolder.length} template${templatesInFolder.length === 1 ? '' : 's'}</p>
+                </div>
+                <div class="folder-item-actions">
+                    <button class="ghost small rename-folder" data-folder-id="${folder.id}">Rename</button>
+                    <button class="danger ghost small delete-folder" data-folder-id="${folder.id}">Delete</button>
+                </div>
+            `;
+            
+            folderItem.querySelector(".rename-folder").addEventListener("click", async () => {
+                const newName = prompt("Enter new folder name:", folder.name);
+                if (!newName || newName.trim() === "" || newName.trim().toLowerCase() === folder.name.toLowerCase()) return;
+                
+                await db.updateFolder(folder.id, { name: newName.trim() });
+                
+                const templatesToUpdate = state.templates.filter((t) => 
+                    String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
+                );
+                for (const template of templatesToUpdate) {
+                    await db.updateTemplate({ ...template, folder: newName.trim() });
+                }
+                
+                await refreshUI();
+                openManageFoldersModal();
+                showToast("Folder renamed", "success");
+            });
+            
+            folderItem.querySelector(".delete-folder").addEventListener("click", async () => {
+                if (!confirm(`Delete folder "${folder.name}"? Templates will be moved to Unorganized.`)) return;
+                
+                const templatesToMove = state.templates.filter((t) => 
+                    String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
+                );
+                for (const template of templatesToMove) {
+                    await db.updateTemplate({ ...template, folder: "" });
+                }
+                
+                await db.deleteFolder(folder.id);
+                await refreshUI();
+                openManageFoldersModal();
+                showToast("Folder deleted", "success");
+            });
+            
+            foldersListEl.appendChild(folderItem);
+        });
+    }
+    
+    if (closeFoldersModalBtn) {
+        closeFoldersModalBtn.onclick = () => manageFoldersModal.close();
+    }
+    manageFoldersModal.showModal();
 }
 
 // Workout logic
@@ -1420,6 +1538,8 @@ function renderWorkoutExercises() {
         const previousSetDisplays = getPreviousSetDisplays(ex.id);
         const card = document.createElement("div");
         card.className = "exercise-card";
+        card.draggable = true;
+        card.dataset.exerciseId = String(ex.id);
 
         const templateItem = itemByExerciseId.get(String(ex.id));
         const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
@@ -1428,7 +1548,10 @@ function renderWorkoutExercises() {
             : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
         card.innerHTML = `
             <div class="exercise-header">
-                <p class="label">${escapeHtml(ex.name)}</p>
+                <div class="exercise-title-row">
+                    <span class="exercise-drag-handle" aria-label="Drag to reorder">⋮⋮</span>
+                    <p class="label">${escapeHtml(ex.name)}</p>
+                </div>
                 <div class="exercise-meta-row">
                     <p class="sub">${escapeHtml(planText)}</p>
                     <div class="exercise-header-actions">
@@ -1440,6 +1563,51 @@ function renderWorkoutExercises() {
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
             <button class="ghost add-set">+ Add set</button>
         `;
+
+        card.addEventListener("dragstart", (e) => {
+            if (!e.target.classList.contains("exercise-drag-handle") && !e.target.closest(".exercise-drag-handle")) {
+                e.preventDefault();
+                return;
+            }
+            e.dataTransfer.setData("text/plain", String(ex.id));
+            e.dataTransfer.effectAllowed = "move";
+            card.classList.add("exercise-card-dragging");
+        });
+        card.addEventListener("dragend", () => {
+            card.classList.remove("exercise-card-dragging");
+            workoutExercisesEl.querySelectorAll(".exercise-card").forEach((c) => c.classList.remove("exercise-card-drag-over"));
+        });
+        card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            const dragging = workoutExercisesEl.querySelector(".exercise-card-dragging");
+            if (dragging && dragging !== card) {
+                card.classList.add("exercise-card-drag-over");
+            }
+        });
+        card.addEventListener("dragleave", () => card.classList.remove("exercise-card-drag-over"));
+        card.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            card.classList.remove("exercise-card-drag-over");
+            const draggedId = e.dataTransfer.getData("text/plain");
+            if (!draggedId || draggedId === card.dataset.exerciseId) return;
+            const fromIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(draggedId));
+            const toIndex = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card")).indexOf(card);
+            if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+            const reordered = [...state.activeExercises];
+            const [removed] = reordered.splice(fromIndex, 1);
+            reordered.splice(toIndex, 0, removed);
+            state.activeExercises = reordered;
+            const updatedSession = {
+                ...state.activeSession,
+                exerciseIds: reordered.map((ex) => ex.id),
+                notes: workoutNotesEl.value,
+            };
+            await db.updateSession(updatedSession);
+            state.activeSession = updatedSession;
+            state.sessions = state.sessions.map((s) => (String(s.id) === String(updatedSession.id) ? updatedSession : s));
+            renderWorkoutExercises();
+        });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
 
@@ -1613,7 +1781,10 @@ function getPreviousSetDisplays(exerciseId) {
             .slice()
             .sort((a, b) => a.setNumber - b.setNumber);
         if (!sets.length) continue;
-        return sets.map((set) => `${formatWeight(set.weight)}x${set.reps}`);
+        return sets.map((set) => {
+            if (set.isSkipped) return "Skipped";
+            return `${formatWeight(set.weight)}x${set.reps}`;
+        });
     }
     return [];
 }
@@ -1922,7 +2093,10 @@ function openSessionModal(session) {
             block.className = "history-block";
             block.innerHTML = `
                 <p class="label">${escapeHtml(ex ? ex.name : "Exercise")}</p>
-                <p class="sub">${exSets.map((s, i) => `Set ${i + 1}: ${formatWeight(s.weight)} × ${s.reps}`).join(" • ")}</p>
+                <p class="sub">${exSets.map((s, i) => {
+                    if (s.isSkipped) return `Set ${i + 1}: Skipped`;
+                    return `Set ${i + 1}: ${formatWeight(s.weight)} × ${s.reps}`;
+                }).join(" • ")}</p>
             `;
             modalHistoryList.appendChild(block);
         });
@@ -1946,13 +2120,19 @@ function openExerciseModal(exercise) {
     } else {
         sessionsWithExercise.forEach((session) => {
             const exSets = bySession[session.id].sort((a, b) => a.setNumber - b.setNumber);
-            const topSet = exSets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
+            const validSets = exSets.filter((s) => !s.isSkipped && s.weight > 0);
+            const topSet = validSets.length > 0 
+                ? validSets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0]
+                : null;
             const block = document.createElement("div");
             block.className = "history-block";
             block.innerHTML = `
                 <p class="label">${formatDate(session.date)}</p>
-                <p class="sub">${exSets.map((s, i) => `Set ${i + 1}: ${formatWeight(s.weight)} × ${s.reps}`).join(" • ")}</p>
-                <p class="sub small">Top set: ${formatWeight(topSet.weight)} × ${topSet.reps}</p>
+                <p class="sub">${exSets.map((s, i) => {
+                    if (s.isSkipped) return `Set ${i + 1}: Skipped`;
+                    return `Set ${i + 1}: ${formatWeight(s.weight)} × ${s.reps}`;
+                }).join(" • ")}</p>
+                ${topSet ? `<p class="sub small">Top set: ${formatWeight(topSet.weight)} × ${topSet.reps}</p>` : ''}
             `;
             modalHistoryList.appendChild(block);
         });
@@ -1990,7 +2170,9 @@ function renderChart(exercise, sessionsWithExercise, bySession) {
     const data = [];
     sessionsWithExercise.forEach((session) => {
         const sets = bySession[session.id];
-        const topSet = sets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
+        const validSets = sets.filter((s) => !s.isSkipped && s.weight > 0);
+        if (validSets.length === 0) return;
+        const topSet = validSets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
         labels.push(formatDate(session.date));
         data.push(topSet.weight);
     });
@@ -2101,6 +2283,9 @@ function bindEvents() {
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
     makeSupersetBtn.addEventListener("click", createSupersetFromSelection);
     clearSupersetBtn.addEventListener("click", clearSupersetFromSelection);
+    if (manageFoldersBtn) {
+        manageFoldersBtn.addEventListener("click", openManageFoldersModal);
+    }
     restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
     restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
     restStopBtn.addEventListener("click", toggleRestTimer);

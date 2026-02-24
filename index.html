@@ -58,6 +58,15 @@
                             </div>
                         </div>
                     </div>
+                    <div id="rest-timer-panel" class="rest-timer-panel">
+                        <p class="sub small rest-label">Rest</p>
+                        <button id="rest-less" class="ghost small">-10s</button>
+                        <p id="rest-display" class="rest-display">00:00</p>
+                        <button id="rest-more" class="ghost small">+10s</button>
+                        <button id="rest-stop" class="ghost small">Ready</button>
+                        <p id="workout-elapsed-small" class="sub small workout-elapsed-small hidden">0:00</p>
+                    </div>
+                    <div id="workout-exercises"></div>
                     <div id="session-exercise-picker" class="field hidden">
                         <label for="session-add-exercise">Add exercise</label>
                         <div class="inline-actions">
@@ -65,16 +74,6 @@
                             <button id="session-add-exercise-btn" class="ghost">Add</button>
                         </div>
                     </div>
-                    <div id="rest-timer-panel" class="rest-timer-panel">
-                        <div class="rest-timer-controls">
-                            <p class="sub small rest-label">Rest</p>
-                            <button id="rest-less" class="ghost small">-10s</button>
-                            <p id="rest-display" class="rest-display">00:00</p>
-                            <button id="rest-more" class="ghost small">+10s</button>
-                            <button id="rest-stop" class="ghost small">Stop</button>
-                        </div>
-                    </div>
-                    <div id="workout-exercises"></div>
                     <div class="field">
                         <label for="workout-notes">Notes</label>
                         <textarea id="workout-notes" rows="2" placeholder="How did it feel?"></textarea>
@@ -138,6 +137,7 @@
                 <div class="card">
                     <div class="section-header">
                         <h2>Templates</h2>
+                        <button id="manage-folders-btn" class="ghost small">Manage Folders</button>
                     </div>
                     <div class="field">
                         <label for="template-folder-create">Create folder</label>
@@ -282,6 +282,14 @@
         </div>
         <canvas id="history-chart" height="200"></canvas>
         <div id="modal-history-list" class="history-list"></div>
+    </dialog>
+
+    <dialog id="manage-folders-modal">
+        <div class="modal-header">
+            <h3>Manage Folders</h3>
+            <button id="close-folders-modal" class="ghost">Close</button>
+        </div>
+        <div id="folders-list" class="folders-list"></div>
     </dialog>
 
     <script>
