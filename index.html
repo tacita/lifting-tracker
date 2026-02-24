@@ -123,27 +123,22 @@
             <section id="view-templates" class="view">
                 <div class="card">
                     <h2>Create template</h2>
-                    <div class="field">
-                        <label for="template-name">Template name</label>
-                        <input id="template-name" type="text" placeholder="e.g., Monday Push">
+                    <div class="create-template-row">
+                        <input id="template-name" type="text" placeholder="Template name">
+                        <span class="folder-input-wrap">
+                            <input id="template-folder" type="text" placeholder="Folder (optional)" autocomplete="off">
+                            <button type="button" id="clear-template-folder" class="ghost small icon-btn folder-clear" aria-label="Clear folder" title="Clear folder">×</button>
+                        </span>
+                        <button id="create-template" class="ghost small icon-btn" aria-label="Create template" title="Create template">✓</button>
                     </div>
-                    <div class="field">
-                        <label for="template-folder">Folder (optional)</label>
-                        <input id="template-folder" type="text" list="template-folder-options" placeholder="e.g., February">
-                    </div>
-                    <button id="create-template" class="primary">Create template</button>
                 </div>
 
                 <div class="card">
                     <div class="section-header">
                         <h2>Templates</h2>
-                        <button id="manage-folders-btn" class="ghost small">Manage Folders</button>
-                    </div>
-                    <div class="field">
-                        <label for="template-folder-create">Create folder</label>
-                        <div class="inline-actions">
-                            <input id="template-folder-create" type="text" list="template-folder-options" placeholder="e.g., February">
-                            <button id="create-template-folder" class="ghost">Create</button>
+                        <div class="header-actions">
+                            <button id="create-folder-btn" class="ghost small icon-btn" aria-label="Create folder" title="Create folder">📁</button>
+                            <button id="manage-folders-btn" class="ghost small">Manage Folders</button>
                         </div>
                     </div>
                     <div id="templates-list"></div>
@@ -290,6 +285,18 @@
             <button id="close-folders-modal" class="ghost">Close</button>
         </div>
         <div id="folders-list" class="folders-list"></div>
+    </dialog>
+
+    <dialog id="delete-folder-modal">
+        <div class="modal-header">
+            <h3>Delete folder</h3>
+            <button id="close-delete-folder-modal" class="ghost">Cancel</button>
+        </div>
+        <p id="delete-folder-message" class="delete-folder-message"></p>
+        <div class="delete-folder-actions">
+            <button id="delete-folder-move-btn" class="ghost">Move to Unorganized</button>
+            <button id="delete-folder-delete-all-btn" class="danger ghost">Delete all contents</button>
+        </div>
     </dialog>
 
     <script>

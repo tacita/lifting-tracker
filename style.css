@@ -139,6 +139,40 @@ h2, h3 {
     font-size: 14px;
 }
 
+.create-template-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.folder-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.folder-input-wrap input {
+    flex: 1;
+    min-width: 0;
+}
+
+.folder-input-wrap .folder-clear {
+    flex-shrink: 0;
+    visibility: hidden;
+}
+
+.folder-input-wrap.has-value .folder-clear {
+    visibility: visible;
+}
+
+@media (max-width: 520px) {
+    .create-template-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 input, select, textarea, button {
     font: inherit;
 }
@@ -198,6 +232,12 @@ button.small {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .grid-2 {
@@ -409,9 +449,9 @@ button.small {
 
 .templates-folder {
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 10px;
+    border-radius: 10px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
     background: var(--surface);
 }
 
@@ -427,11 +467,11 @@ button.small {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     cursor: pointer;
     user-select: none;
-    padding: 4px;
-    border-radius: 8px;
+    padding: 4px 2px;
+    border-radius: 6px;
     transition: background 0.15s ease;
 }
 
@@ -442,13 +482,13 @@ button.small {
 .folder-header-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 
 .folder-chevron {
     color: var(--muted);
-    font-size: 12px;
-    width: 16px;
+    font-size: 11px;
+    width: 14px;
     display: inline-block;
 }
 
@@ -457,15 +497,21 @@ button.small {
 }
 
 .templates-folder-list {
-    display: grid;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     min-height: 20px;
 }
 
 .template-list-card {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-soft);
+    margin-bottom: 0;
 }
 
 .template-list-card .drag-handle {
@@ -473,16 +519,31 @@ button.small {
     font-weight: 700;
     cursor: grab;
     user-select: none;
-    padding: 4px;
+    padding: 2px 4px;
+    flex-shrink: 0;
 }
 
 .template-list-card .drag-handle:active {
     cursor: grabbing;
 }
 
-.template-card-content {
+.template-name {
     flex: 1;
     min-width: 0;
+    font-weight: 600;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.template-list-card .template-action {
+    flex-shrink: 0;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 6px;
+    font-size: 16px;
+    line-height: 1;
 }
 
 .template-list-card.dragging {
@@ -849,6 +910,17 @@ dialog::backdrop {
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 10px;
+}
+
+.delete-folder-message {
+    margin: 0 0 14px;
+    color: var(--text);
+}
+
+.delete-folder-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .history-block {

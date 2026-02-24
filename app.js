@@ -42,9 +42,9 @@ const repCeilingInput = document.getElementById("rep-ceiling");
 const weightIncrementInput = document.getElementById("weight-increment");
 const templateNameInput = document.getElementById("template-name");
 const templateFolderInput = document.getElementById("template-folder");
+const clearTemplateFolderBtn = document.getElementById("clear-template-folder");
 const createTemplateBtn = document.getElementById("create-template");
-const templateFolderCreateInput = document.getElementById("template-folder-create");
-const createTemplateFolderBtn = document.getElementById("create-template-folder");
+const createFolderBtn = document.getElementById("create-folder-btn");
 const templatesListEl = document.getElementById("templates-list");
 const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
@@ -73,6 +73,11 @@ const manageFoldersModal = document.getElementById("manage-folders-modal");
 const manageFoldersBtn = document.getElementById("manage-folders-btn");
 const closeFoldersModalBtn = document.getElementById("close-folders-modal");
 const foldersListEl = document.getElementById("folders-list");
+const deleteFolderModal = document.getElementById("delete-folder-modal");
+const deleteFolderMessageEl = document.getElementById("delete-folder-message");
+const closeDeleteFolderModalBtn = document.getElementById("close-delete-folder-modal");
+const deleteFolderMoveBtn = document.getElementById("delete-folder-move-btn");
+const deleteFolderDeleteAllBtn = document.getElementById("delete-folder-delete-all-btn");
 
 // Settings refs
 const exportBtn = document.getElementById("export-data");
@@ -100,6 +105,7 @@ const state = {
     selectedTemplateExerciseIds: new Set(),
     supersetDraftMode: false,
     expandedFolders: new Set(),
+    pendingDeleteFolder: null,
     hasInitializedFolderExpansion: false,
     workoutTimer: {
         intervalId: null,
@@ -598,6 +604,10 @@ function getSupersetMetaByExercise(templateItems) {
 function setView(viewId) {
     views.forEach((v) => v.classList.toggle("active", v.id === viewId));
     tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === viewId));
+    if (viewId === "view-templates") {
+        state.expandedFolders.clear();
+        renderTemplatesList();
+    }
 }
 
 // Data loading
@@ -794,9 +804,6 @@ async function createTemplate() {
     });
     templateNameInput.value = "";
     templateFolderInput.value = "";
-    if (folder && templateFolderCreateInput) {
-        templateFolderCreateInput.value = folder;
-    }
     showToast("Template created", "success");
     await refreshUI();
     const created = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
@@ -808,9 +815,10 @@ async function createTemplate() {
 }
 
 async function createTemplateFolder() {
-    const name = templateFolderCreateInput?.value.trim() || "";
+    const raw = prompt("Folder name:");
+    const name = raw == null ? "" : String(raw).trim();
     if (!name) {
-        showToast("Enter a folder name", "error");
+        if (raw !== null) showToast("Enter a folder name", "error");
         return;
     }
     if (name.toLowerCase() === "unfiled") {
@@ -823,7 +831,6 @@ async function createTemplateFolder() {
         return;
     }
     await db.addFolder({ id: uuid(), name });
-    templateFolderCreateInput.value = "";
     await refreshUI();
     showToast("Folder created", "success");
 }
@@ -1253,14 +1260,10 @@ function renderTemplatesList() {
                 card.draggable = true;
                 card.dataset.templateId = String(template.id);
                 card.innerHTML = `
-                    <span class="drag-handle">::</span>
-                    <div class="template-card-content">
-                        <p class="label">${escapeHtml(template.name)}</p>
-                    </div>
-                    <div class="list-actions">
-                        <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>
-                        <button class="danger ghost small" data-action="delete-template">Delete</button>
-                    </div>
+                    <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+                    <span class="template-name">${escapeHtml(template.name)}</span>
+                    <button type="button" class="ghost icon-btn template-action" data-action="edit-template" aria-label="${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit template"}">✎</button>
+                    <button type="button" class="danger ghost icon-btn template-action" data-action="delete-template" aria-label="Delete template">🗑</button>
                 `;
 
                 card.addEventListener("dragstart", (event) => {
@@ -1355,19 +1358,22 @@ function openManageFoldersModal() {
             });
             
             folderItem.querySelector(".delete-folder").addEventListener("click", async () => {
-                if (!confirm(`Delete folder "${folder.name}"? Templates will be moved to Unorganized.`)) return;
-                
-                const templatesToMove = state.templates.filter((t) => 
+                const templatesInFolder = state.templates.filter((t) =>
                     String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
                 );
-                for (const template of templatesToMove) {
-                    await db.updateTemplate({ ...template, folder: "" });
+                if (templatesInFolder.length === 0) {
+                    if (!confirm(`Delete folder "${folder.name}"?`)) return;
+                    await db.deleteFolder(folder.id);
+                    await refreshUI();
+                    openManageFoldersModal();
+                    showToast("Folder deleted", "success");
+                    return;
                 }
-                
-                await db.deleteFolder(folder.id);
-                await refreshUI();
-                openManageFoldersModal();
-                showToast("Folder deleted", "success");
+                const n = templatesInFolder.length;
+                state.pendingDeleteFolder = { folder, templatesInFolder };
+                deleteFolderMessageEl.textContent = `"${folder.name}" has ${n} template${n === 1 ? "" : "s"}. Move them to Unorganized or delete them?`;
+                manageFoldersModal.close();
+                deleteFolderModal.showModal();
             });
             
             foldersListEl.appendChild(folderItem);
@@ -1378,6 +1384,41 @@ function openManageFoldersModal() {
         closeFoldersModalBtn.onclick = () => manageFoldersModal.close();
     }
     manageFoldersModal.showModal();
+}
+
+async function finishDeleteFolder() {
+    state.pendingDeleteFolder = null;
+    deleteFolderModal.close();
+    await refreshUI();
+    openManageFoldersModal();
+    showToast("Folder deleted", "success");
+}
+
+function wireDeleteFolderModal() {
+    if (!deleteFolderModal) return;
+    closeDeleteFolderModalBtn.onclick = () => {
+        state.pendingDeleteFolder = null;
+        deleteFolderModal.close();
+        openManageFoldersModal();
+    };
+    deleteFolderMoveBtn.onclick = async () => {
+        const pending = state.pendingDeleteFolder;
+        if (!pending) return;
+        for (const template of pending.templatesInFolder) {
+            await db.updateTemplate({ ...template, folder: "" });
+        }
+        await db.deleteFolder(pending.folder.id);
+        await finishDeleteFolder();
+    };
+    deleteFolderDeleteAllBtn.onclick = async () => {
+        const pending = state.pendingDeleteFolder;
+        if (!pending) return;
+        for (const template of pending.templatesInFolder) {
+            await db.deleteTemplate(template.id);
+        }
+        await db.deleteFolder(pending.folder.id);
+        await finishDeleteFolder();
+    };
 }
 
 // Workout logic
@@ -2283,7 +2324,21 @@ function bindEvents() {
     loadDefaultLibraryBtn.addEventListener("click", loadDefaultLibrary);
     clearExercisesBtn.addEventListener("click", clearExercises);
     createTemplateBtn.addEventListener("click", createTemplate);
-    createTemplateFolderBtn.addEventListener("click", createTemplateFolder);
+    createFolderBtn.addEventListener("click", createTemplateFolder);
+    function syncFolderClearVisibility() {
+        const wrap = templateFolderInput?.closest(".folder-input-wrap");
+        if (wrap) wrap.classList.toggle("has-value", (templateFolderInput.value || "").trim().length > 0);
+    }
+    templateFolderInput?.addEventListener("input", syncFolderClearVisibility);
+    templateFolderInput?.addEventListener("change", syncFolderClearVisibility);
+    clearTemplateFolderBtn?.addEventListener("click", () => {
+        if (templateFolderInput) {
+            templateFolderInput.value = "";
+            templateFolderInput.focus();
+            syncFolderClearVisibility();
+        }
+    });
+    syncFolderClearVisibility();
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
     makeSupersetBtn.addEventListener("click", createSupersetFromSelection);
@@ -2291,6 +2346,7 @@ function bindEvents() {
     if (manageFoldersBtn) {
         manageFoldersBtn.addEventListener("click", openManageFoldersModal);
     }
+    wireDeleteFolderModal();
     restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
     restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
     restStopBtn.addEventListener("click", toggleRestTimer);
