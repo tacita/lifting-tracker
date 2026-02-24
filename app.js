@@ -62,9 +62,6 @@ const exportBtn = document.getElementById("export-data");
 const importBtn = document.getElementById("import-data");
 const importInput = document.getElementById("import-file");
 const clearDataBtn = document.getElementById("clear-data");
-const supabaseUrlInput = document.getElementById("supabase-url");
-const supabaseAnonKeyInput = document.getElementById("supabase-anon-key");
-const saveSupabaseConfigBtn = document.getElementById("save-supabase-config");
 const authEmailInput = document.getElementById("auth-email");
 const signInGoogleBtn = document.getElementById("sign-in-google");
 const sendMagicLinkBtn = document.getElementById("send-magic-link");
@@ -125,13 +122,13 @@ function escapeHtml(value) {
 }
 
 function renderAuthState(auth) {
-    const shouldGate = Boolean(auth?.configured && !auth?.loading && !auth?.user);
+    const shouldGate = Boolean(!auth?.loading && !auth?.user);
     authGateEl.classList.toggle("hidden", !shouldGate);
     appEl.classList.toggle("hidden", shouldGate);
 
     if (authGateStatusEl) {
         if (!auth?.configured) {
-            authGateStatusEl.textContent = "Configure Supabase in Settings to enable sign-in.";
+            authGateStatusEl.textContent = "Sign-in is currently unavailable.";
         } else if (auth?.loading) {
             authGateStatusEl.textContent = "Loading account...";
         } else if (!auth?.user) {
@@ -142,42 +139,38 @@ function renderAuthState(auth) {
     }
 
     if (!auth?.configured) {
-        authStatusEl.textContent = "Set Supabase URL + anon key";
+        authStatusEl.textContent = "Sign-in unavailable";
+        signInGoogleBtn.classList.remove("hidden");
+        sendMagicLinkBtn.classList.remove("hidden");
+        authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
         syncNowBtn.disabled = true;
         return;
     }
     if (auth.loading) {
         authStatusEl.textContent = "Loading account...";
+        signInGoogleBtn.classList.remove("hidden");
+        sendMagicLinkBtn.classList.remove("hidden");
+        authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
         syncNowBtn.disabled = true;
         return;
     }
     if (!auth.user) {
         authStatusEl.textContent = "Not signed in";
+        signInGoogleBtn.classList.remove("hidden");
+        sendMagicLinkBtn.classList.remove("hidden");
+        authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
         syncNowBtn.disabled = true;
         return;
     }
     authStatusEl.textContent = auth.user.email || auth.user.id;
+    signInGoogleBtn.classList.add("hidden");
+    sendMagicLinkBtn.classList.add("hidden");
+    authEmailInput.closest(".field")?.classList.add("hidden");
     signOutBtn.disabled = false;
     syncNowBtn.disabled = false;
-}
-
-async function saveSupabaseConfig() {
-    const url = supabaseUrlInput.value.trim();
-    const anonKey = supabaseAnonKeyInput.value.trim();
-    if (!url || !anonKey) {
-        showToast("Enter Supabase URL and anon key", "error");
-        return;
-    }
-    try {
-        await db.setSupabaseConfig({ url, anonKey });
-        showToast("Supabase config saved", "success");
-    } catch (err) {
-        console.error(err);
-        showToast(err?.message || "Could not save config", "error");
-    }
 }
 
 async function signInWithGoogle() {
@@ -1418,7 +1411,6 @@ function bindEvents() {
     importBtn.addEventListener("click", triggerImport);
     importInput.addEventListener("change", handleImport);
     clearDataBtn.addEventListener("click", clearData);
-    saveSupabaseConfigBtn.addEventListener("click", saveSupabaseConfig);
     signInGoogleBtn.addEventListener("click", signInWithGoogle);
     sendMagicLinkBtn.addEventListener("click", sendMagicLink);
     gateSignInGoogleBtn.addEventListener("click", signInWithGoogle);
@@ -1431,15 +1423,6 @@ async function init() {
     bindEvents();
     registerServiceWorker();
     renderRestTimer();
-    const config = db.getSupabaseConfig();
-    supabaseUrlInput.value = config.url || "";
-    supabaseAnonKeyInput.value = config.anonKey || "";
-    if (db.isSupabaseConfigHardcoded()) {
-        supabaseUrlInput.disabled = true;
-        supabaseAnonKeyInput.disabled = true;
-        saveSupabaseConfigBtn.disabled = true;
-        saveSupabaseConfigBtn.textContent = "Supabase config is embedded";
-    }
     db.onAuthStateChange(async (auth) => {
         renderAuthState(auth);
         if (auth?.user && !auth.loading) {
