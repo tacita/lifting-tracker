@@ -1214,6 +1214,7 @@ function attachSwipeToDelete(row, content, onDelete) {
     const maxSwipe = 112;
     const openThreshold = 52;
     const intentThreshold = 14;
+    let ignoreDeleteTapUntil = 0;
 
     const interactiveSelector = "input, button, select, textarea, label";
     const setOffset = (x) => {
@@ -1234,6 +1235,7 @@ function attachSwipeToDelete(row, content, onDelete) {
         currentX = -maxSwipe;
         setOffset(currentX);
         row.classList.add("swipe-open");
+        ignoreDeleteTapUntil = Date.now() + 320;
     };
 
     const settleSwipe = () => {
@@ -1311,6 +1313,9 @@ function attachSwipeToDelete(row, content, onDelete) {
         deleteAction.addEventListener("click", async (event) => {
             event.preventDefault();
             event.stopPropagation();
+            if (Date.now() < ignoreDeleteTapUntil) {
+                return;
+            }
             await onDelete();
         });
     }
