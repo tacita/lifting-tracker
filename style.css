@@ -365,6 +365,35 @@ button.small {
     overflow: hidden;
 }
 
+.templates-folder {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--surface);
+}
+
+.templates-folder.drag-over {
+    border-color: var(--accent);
+}
+
+.templates-folder-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+
+.templates-folder-list {
+    display: grid;
+    gap: 8px;
+    min-height: 20px;
+}
+
+.template-list-card.dragging {
+    opacity: 0.55;
+}
+
 .session-elapsed-inline {
     margin: 0;
     font-size: 12px;

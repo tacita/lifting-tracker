@@ -48,6 +48,7 @@ const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
 const templateEditorNameInput = document.getElementById("template-editor-name");
 const templateEditorFolderInput = document.getElementById("template-editor-folder");
+const templateFolderOptionsEl = document.getElementById("template-folder-options");
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
@@ -589,6 +590,7 @@ async function refreshData() {
 
 async function refreshUI() {
     await refreshData();
+    renderFolderSuggestions();
     renderWorkoutLauncher();
     renderExercises();
     renderTemplatesList();
@@ -599,6 +601,26 @@ async function refreshUI() {
 
 function getTemplateFolderName(template) {
     return String(template?.folder || "").trim();
+}
+
+function getFolderNames() {
+    return Array.from(
+        new Set(
+            state.templates
+                .map((template) => getTemplateFolderName(template))
+                .filter(Boolean)
+        )
+    ).sort((a, b) => a.localeCompare(b));
+}
+
+function renderFolderSuggestions() {
+    if (!templateFolderOptionsEl) return;
+    templateFolderOptionsEl.innerHTML = "";
+    getFolderNames().forEach((folderName) => {
+        const option = document.createElement("option");
+        option.value = folderName;
+        templateFolderOptionsEl.appendChild(option);
+    });
 }
 
 function getTemplatesGroupedByFolder() {
@@ -1106,51 +1128,111 @@ function renderTemplatesList() {
         return;
     }
 
-    state.templates
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach((template) => {
-            const exerciseNames = getTemplateItems(template)
-                .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
-                .filter(Boolean);
-            const safeExerciseNames = exerciseNames.map((name) => escapeHtml(name)).join(", ");
+    const grouped = new Map();
+    state.templates.forEach((template) => {
+        const folder = getTemplateFolderName(template) || "Unfiled";
+        if (!grouped.has(folder)) grouped.set(folder, []);
+        grouped.get(folder).push(template);
+    });
 
-            const card = document.createElement("div");
-            card.className = "list-card";
-            card.innerHTML = `
-                <div>
-                    <p class="label">${escapeHtml(template.name)}</p>
-                    <p class="sub small">${escapeHtml(getTemplateFolderName(template) || "Unfiled")}</p>
-                    <p class="sub">${safeExerciseNames || "No exercises"}</p>
-                </div>
-                <div class="list-actions">
-                    <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>
-                    <button class="danger ghost small" data-action="delete-template">Delete</button>
-                </div>
-            `;
+    const folderNames = Array.from(grouped.keys()).sort((a, b) => {
+        if (a === "Unfiled") return -1;
+        if (b === "Unfiled") return 1;
+        return a.localeCompare(b);
+    });
 
-            card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
-                state.selectedTemplateId = template.id;
-                clearTemplateSelection();
-                setSupersetDraftMode(false);
-                renderTemplatesList();
-                renderTemplateEditor();
-            });
+    folderNames.forEach((folderName) => {
+        const folderSection = document.createElement("section");
+        folderSection.className = "templates-folder";
+        folderSection.dataset.folder = folderName === "Unfiled" ? "" : folderName;
+        folderSection.innerHTML = `
+            <div class="templates-folder-header">
+                <p class="label">${escapeHtml(folderName)}</p>
+                <p class="sub small">${grouped.get(folderName).length} template${grouped.get(folderName).length === 1 ? "" : "s"}</p>
+            </div>
+            <div class="templates-folder-list"></div>
+        `;
 
-            card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
-                if (!confirm(`Delete template "${template.name}"?`)) return;
-                await db.deleteTemplate(template.id);
-                if (String(state.selectedTemplateId) === String(template.id)) {
-                    state.selectedTemplateId = null;
-                }
-                clearTemplateSelection();
-                setSupersetDraftMode(false);
-                await refreshUI();
-                showToast("Template deleted", "success");
-            });
-
-            templatesListEl.appendChild(card);
+        folderSection.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            folderSection.classList.add("drag-over");
         });
+        folderSection.addEventListener("dragleave", () => folderSection.classList.remove("drag-over"));
+        folderSection.addEventListener("drop", async (event) => {
+            event.preventDefault();
+            folderSection.classList.remove("drag-over");
+            const templateId = event.dataTransfer?.getData("text/template-id");
+            if (!templateId) return;
+            const targetFolder = folderSection.dataset.folder || "";
+            await moveTemplateToFolder(templateId, targetFolder);
+        });
+
+        const listEl = folderSection.querySelector(".templates-folder-list");
+        grouped.get(folderName)
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach((template) => {
+                const exerciseNames = getTemplateItems(template)
+                    .map((item) => state.exercises.find((exercise) => String(exercise.id) === String(item.exerciseId))?.name)
+                    .filter(Boolean);
+                const safeExerciseNames = exerciseNames.map((name) => escapeHtml(name)).join(", ");
+
+                const card = document.createElement("div");
+                card.className = "list-card template-list-card";
+                card.draggable = true;
+                card.dataset.templateId = String(template.id);
+                card.innerHTML = `
+                    <div>
+                        <p class="label">${escapeHtml(template.name)}</p>
+                        <p class="sub">${safeExerciseNames || "No exercises"}</p>
+                    </div>
+                    <div class="list-actions">
+                        <button class="ghost small" data-action="edit-template">${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit"}</button>
+                        <button class="danger ghost small" data-action="delete-template">Delete</button>
+                    </div>
+                `;
+
+                card.addEventListener("dragstart", (event) => {
+                    event.dataTransfer?.setData("text/template-id", String(template.id));
+                    card.classList.add("dragging");
+                });
+                card.addEventListener("dragend", () => card.classList.remove("dragging"));
+
+                card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
+                    state.selectedTemplateId = template.id;
+                    clearTemplateSelection();
+                    setSupersetDraftMode(false);
+                    renderTemplatesList();
+                    renderTemplateEditor();
+                });
+
+                card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
+                    if (!confirm(`Delete template "${template.name}"?`)) return;
+                    await db.deleteTemplate(template.id);
+                    if (String(state.selectedTemplateId) === String(template.id)) {
+                        state.selectedTemplateId = null;
+                    }
+                    clearTemplateSelection();
+                    setSupersetDraftMode(false);
+                    await refreshUI();
+                    showToast("Template deleted", "success");
+                });
+
+                listEl.appendChild(card);
+            });
+
+        templatesListEl.appendChild(folderSection);
+    });
+}
+
+async function moveTemplateToFolder(templateId, folderName) {
+    const template = state.templates.find((item) => String(item.id) === String(templateId));
+    if (!template) return;
+    const nextFolder = String(folderName || "").trim();
+    if (getTemplateFolderName(template) === nextFolder) return;
+    await db.updateTemplate({ ...template, folder: nextFolder });
+    await refreshUI();
+    showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unfiled", "success");
 }
 
 // Workout logic

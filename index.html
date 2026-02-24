@@ -130,7 +130,7 @@
                     </div>
                     <div class="field">
                         <label for="template-folder">Folder (optional)</label>
-                        <input id="template-folder" type="text" placeholder="e.g., February">
+                        <input id="template-folder" type="text" list="template-folder-options" placeholder="e.g., February">
                     </div>
                     <button id="create-template" class="primary">Create template</button>
                 </div>
@@ -156,7 +156,7 @@
                         </div>
                         <div class="field">
                             <label for="template-editor-folder">Folder</label>
-                            <input id="template-editor-folder" type="text" placeholder="Folder name (optional)">
+                            <input id="template-editor-folder" type="text" list="template-folder-options" placeholder="Folder name (optional)">
                         </div>
                         <div class="field">
                             <label for="template-add-exercise">Add exercise</label>
@@ -265,6 +265,7 @@
             <button data-view="view-settings">Settings</button>
         </nav>
     </div>
+    <datalist id="template-folder-options"></datalist>
 
     <div id="toast" class="toast hidden"></div>
 
