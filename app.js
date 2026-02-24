@@ -72,6 +72,8 @@ const sendMagicLinkBtn = document.getElementById("send-magic-link");
 const signOutBtn = document.getElementById("sign-out");
 const authStatusEl = document.getElementById("auth-status");
 const syncNowBtn = document.getElementById("sync-now");
+const themeModeSelect = document.getElementById("theme-mode");
+const THEME_MODE_KEY = "overload-theme-mode";
 
 const state = {
     exercises: [],
@@ -161,6 +163,20 @@ function escapeHtml(value) {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#39;");
+}
+
+function applyThemeMode(mode) {
+    const nextMode = mode === "light" ? "light" : "dark";
+    document.body.dataset.theme = nextMode;
+    localStorage.setItem(THEME_MODE_KEY, nextMode);
+    if (themeModeSelect) {
+        themeModeSelect.value = nextMode;
+    }
+}
+
+function initThemeMode() {
+    const savedMode = localStorage.getItem(THEME_MODE_KEY) || "dark";
+    applyThemeMode(savedMode);
 }
 
 function renderAuthState(auth) {
@@ -1870,9 +1886,13 @@ function bindEvents() {
     gateSendMagicLinkBtn.addEventListener("click", sendMagicLink);
     signOutBtn.addEventListener("click", signOut);
     syncNowBtn.addEventListener("click", syncNow);
+    if (themeModeSelect) {
+        themeModeSelect.addEventListener("change", (event) => applyThemeMode(event.target.value));
+    }
 }
 
 async function init() {
+    initThemeMode();
     bindEvents();
     registerServiceWorker();
     renderWorkoutElapsed();
