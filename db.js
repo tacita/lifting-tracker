@@ -375,7 +375,15 @@ export async function initAuth() {
     authState.loading = true;
     notifyAuthListeners();
 
-    const { url, anonKey } = getSupabaseConfig();
+    let { url, anonKey } = getSupabaseConfig();
+    if (!url || !anonKey) {
+        try {
+            await import(`./config.js?t=${Date.now()}`);
+            ({ url, anonKey } = getSupabaseConfig());
+        } catch {
+            // Ignore; we'll surface the configured=false state below.
+        }
+    }
     if (!url || !anonKey) {
         authState = { configured: false, user: null, loading: false };
         notifyAuthListeners();

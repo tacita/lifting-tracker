@@ -80,6 +80,7 @@ const state = {
     activeExercises: [],
     selectedTemplateId: null,
     selectedTemplateExerciseIds: new Set(),
+    supersetDraftMode: false,
     restTimer: {
         remainingSeconds: 0,
         running: false,
@@ -349,6 +350,13 @@ function applyTemplateItems(template, items) {
 
 function clearTemplateSelection() {
     state.selectedTemplateExerciseIds = new Set();
+}
+
+function setSupersetDraftMode(enabled) {
+    state.supersetDraftMode = Boolean(enabled);
+    if (makeSupersetBtn) {
+        makeSupersetBtn.textContent = state.supersetDraftMode ? "Save superset" : "Make superset";
+    }
 }
 
 function getSupersetMetaByExercise(templateItems) {
@@ -679,6 +687,11 @@ async function updateTemplateItemConfig(index, patch) {
 async function createSupersetFromSelection() {
     const template = getSelectedTemplate();
     if (!template) return;
+    if (!state.supersetDraftMode) {
+        setSupersetDraftMode(true);
+        showToast("Select exercises, then tap Save superset", "info");
+        return;
+    }
     const currentItems = getTemplateItems(template);
     const selected = currentItems.filter((item) => state.selectedTemplateExerciseIds.has(String(item.exerciseId)));
     if (selected.length < 2) {
@@ -701,6 +714,7 @@ async function createSupersetFromSelection() {
 
     clearTemplateSelection();
     await saveTemplate(applyTemplateItems(template, nextItems), "Superset created");
+    setSupersetDraftMode(false);
 }
 
 async function clearSupersetFromSelection() {
@@ -724,6 +738,7 @@ async function clearSupersetFromSelection() {
 
     clearTemplateSelection();
     await saveTemplate(applyTemplateItems(template, nextItems), "Superset cleared");
+    setSupersetDraftMode(false);
 }
 
 function renderTemplateEditor() {
@@ -733,6 +748,7 @@ function renderTemplateEditor() {
         templateEditorEmptyEl.classList.remove("hidden");
         templateExercisePickerEl.innerHTML = "";
         clearTemplateSelection();
+        setSupersetDraftMode(false);
         return;
     }
 
@@ -753,6 +769,7 @@ function renderTemplateEditor() {
     if (templateItems.length === 0) {
         templateExercisePickerEl.innerHTML = `<div class="empty">No exercises yet. Add one above.</div>`;
         clearTemplateSelection();
+        setSupersetDraftMode(false);
         return;
     }
 
@@ -823,6 +840,9 @@ function renderTemplateEditor() {
                 state.selectedTemplateExerciseIds.delete(String(templateItem.exerciseId));
             }
             row.classList.toggle("selected", event.target.checked);
+            if (state.selectedTemplateExerciseIds.size > 0) {
+                setSupersetDraftMode(true);
+            }
         });
 
         row.querySelectorAll("input[data-field]").forEach((input) => {
@@ -874,6 +894,7 @@ function renderTemplatesList() {
             card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
                 state.selectedTemplateId = template.id;
                 clearTemplateSelection();
+                setSupersetDraftMode(false);
                 renderTemplatesList();
                 renderTemplateEditor();
             });
@@ -885,6 +906,7 @@ function renderTemplatesList() {
                     state.selectedTemplateId = null;
                 }
                 clearTemplateSelection();
+                setSupersetDraftMode(false);
                 await refreshUI();
                 showToast("Template deleted", "success");
             });
