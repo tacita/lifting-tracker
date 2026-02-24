@@ -40,13 +40,12 @@
         <main id="views">
             <!-- Workout View -->
             <section id="view-workout" class="view active">
-                <div class="card">
+                <div id="workout-launcher" class="card workout-launcher">
                     <div class="field">
                         <label for="workout-template">Template</label>
                         <select id="workout-template"></select>
                     </div>
                     <button id="start-workout" class="primary">Start workout</button>
-                    <div id="workout-elapsed" class="session-elapsed hidden" aria-live="polite">00:00</div>
                 </div>
 
                 <section id="workout-session" class="card hidden">
@@ -56,6 +55,7 @@
                             <h2 id="session-template-label">Workout</h2>
                         </div>
                         <div class="session-actions">
+                            <p id="workout-elapsed" class="session-elapsed-inline hidden" aria-live="polite">Elapsed 0:00</p>
                             <button id="cancel-workout" class="ghost">Cancel</button>
                         </div>
                     </div>

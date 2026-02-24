@@ -12,6 +12,7 @@ const gateAuthEmailInput = document.getElementById("gate-auth-email");
 const gateSendMagicLinkBtn = document.getElementById("gate-send-magic-link");
 
 // Workout view refs
+const workoutLauncherEl = document.getElementById("workout-launcher");
 const templateSelect = document.getElementById("workout-template");
 const startWorkoutBtn = document.getElementById("start-workout");
 const workoutElapsedEl = document.getElementById("workout-elapsed");
@@ -314,10 +315,10 @@ function getSessionDurationSeconds(session) {
 
 function renderWorkoutElapsed() {
     const hasSession = Boolean(state.activeSession);
-    startWorkoutBtn.classList.toggle("hidden", hasSession);
+    workoutLauncherEl.classList.toggle("hidden", hasSession);
     workoutElapsedEl.classList.toggle("hidden", !hasSession);
     if (!hasSession) {
-        workoutElapsedEl.textContent = "00:00";
+        workoutElapsedEl.textContent = "Elapsed 0:00";
         return;
     }
     workoutElapsedEl.textContent = `Elapsed ${formatDuration(getSessionDurationSeconds(state.activeSession))}`;
