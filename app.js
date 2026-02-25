@@ -2400,7 +2400,7 @@ function getPreviousSetDisplays(exerciseId) {
         if (!sets.length) continue;
         return sets.map((set) => {
             if (set.isSkipped) return "Skipped";
-            return `${formatWeight(set.weight)}lbs x ${set.reps}`;
+            return `${formatWeight(set.weight)} x ${set.reps}`;
         });
     }
     return [];
