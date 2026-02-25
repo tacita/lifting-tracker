@@ -515,13 +515,12 @@ function renderWorkoutElapsed() {
     workoutLauncherEl.classList.toggle("hidden", hasSession);
     workoutElapsedEl.classList.toggle("hidden", !hasSession);
     if (!hasSession) {
-        workoutElapsedEl.textContent = "Elapsed 0:00";
+        workoutElapsedEl.textContent = "Workout time: 0:00";
         renderWorkoutControls();
         return;
     }
-    const prefix = state.activeSession?.isPaused ? "Paused" : "Elapsed";
     const duration = formatDuration(getSessionDurationSeconds(state.activeSession));
-    workoutElapsedEl.textContent = `${prefix} ${duration}`;
+    workoutElapsedEl.textContent = `Workout time: ${duration}`;
     renderWorkoutControls();
 }
 
