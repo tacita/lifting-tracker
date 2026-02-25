@@ -2541,6 +2541,18 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
             propagatePrefillToRemainingSets(container, row, saved.weight, saved.reps);
         });
     });
+    weightInput.addEventListener("focus", () => {
+        if (weightInput.classList.contains("auto-populated")) {
+            weightInput.value = "";
+            weightInput.classList.remove("auto-populated");
+        }
+    });
+    repsInput.addEventListener("focus", () => {
+        if (repsInput.classList.contains("auto-populated")) {
+            repsInput.value = "";
+            repsInput.classList.remove("auto-populated");
+        }
+    });
 
     row.querySelector(".mark-set").addEventListener("click", async () => {
         let setRecord = null;
