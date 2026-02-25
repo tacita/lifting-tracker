@@ -1210,9 +1210,14 @@ function renderTemplateEditor() {
         row.innerHTML = `
             <span class="drag-handle">::</span>
             <input type="checkbox" data-action="select-item" ${state.selectedTemplateExerciseIds.has(String(templateItem.exerciseId)) ? "checked" : ""} aria-label="Select for superset">
-            <div class="picker-title">
-                <div>${escapeHtml(exercise.name)}</div>
-                ${supersetMeta ? `<div class="template-superset-label">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
+            <div class="picker-main">
+                <div class="picker-top-row">
+                    <div class="picker-title">
+                        <div>${escapeHtml(exercise.name)}</div>
+                        ${supersetMeta ? `<div class="template-superset-label">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
+                    </div>
+                    <button class="danger ghost small" data-action="remove">Remove</button>
+                </div>
                 <div class="template-config-grid">
                     <label>
                         <span class="sub small">Sets</span>
@@ -1228,7 +1233,6 @@ function renderTemplateEditor() {
                     </label>
                 </div>
             </div>
-            <button class="danger ghost small" data-action="remove">Remove</button>
         `;
 
         row.addEventListener("dragstart", (event) => {

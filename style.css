@@ -616,8 +616,9 @@ button.small {
 }
 
 .picker-item {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: start;
     gap: 10px;
     padding: 8px 10px;
     border-radius: 8px;
@@ -638,8 +639,24 @@ button.small {
     border-color: var(--accent);
 }
 
+.picker-main {
+    min-width: 0;
+}
+
+.picker-top-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
 .picker-title {
+    min-width: 0;
     flex: 1;
+}
+
+.picker-top-row [data-action="remove"] {
+    flex-shrink: 0;
 }
 
 .template-config-grid {
@@ -1029,7 +1046,16 @@ dialog::backdrop {
     }
 
     .template-config-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+    }
+
+    .template-config-grid label {
+        gap: 3px;
+    }
+
+    .template-config-grid input {
+        padding: 7px;
     }
 
     .set-row-content {
