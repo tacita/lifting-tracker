@@ -131,7 +131,7 @@ function formatDate(iso) {
 }
 
 function formatWeight(value) {
-    return Number(value).toFixed(1).replace(/\\.0$/, "");
+    return Number(value).toFixed(1).replace(/\.0$/, "");
 }
 
 function formatWeightInput(value) {
@@ -433,7 +433,7 @@ function renderRestTimer() {
     restLessBtn.disabled = !running;
     restMoreBtn.disabled = !running;
     restStopBtn.disabled = false;
-    restStopBtn.textContent = running ? "Stop Rest" : "Start Rest";
+    restStopBtn.textContent = running ? "End" : "Rest";
 }
 
 function stopRestTimer() {
@@ -1952,6 +1952,75 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
     return payload;
 }
 
+function buildRepsTextForTemplate(exercise, setsForExercise) {
+    const repValues = setsForExercise
+        .filter((set) => !set.isSkipped)
+        .map((set) => Number.parseInt(set.reps, 10))
+        .filter((value) => Number.isFinite(value) && value > 0);
+    if (repValues.length === 0) {
+        return `${exercise.repFloor}-${exercise.repCeiling}`;
+    }
+    const min = Math.min(...repValues);
+    const max = Math.max(...repValues);
+    return min === max ? String(min) : `${min}-${max}`;
+}
+
+async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
+    if (!state.activeSession || state.activeSession.templateId || state.activeExercises.length === 0) {
+        return null;
+    }
+
+    if (!confirm("Save this empty workout as a new template?")) {
+        return null;
+    }
+
+    let templateName = "";
+    while (!templateName) {
+        const suggested = `Workout ${formatDate(state.activeSession.date || new Date().toISOString())}`;
+        const entered = prompt("Template name", suggested);
+        if (entered === null) return null;
+        const trimmed = entered.trim();
+        if (!trimmed) {
+            showToast("Template name is required", "error");
+            continue;
+        }
+        const duplicate = state.templates.find((template) => template.name.toLowerCase() === trimmed.toLowerCase());
+        if (duplicate) {
+            showToast("Template name already exists", "error");
+            continue;
+        }
+        templateName = trimmed;
+    }
+
+    const folderInput = prompt("Template folder (optional)", "");
+    if (folderInput === null) return null;
+    const folderName = folderInput.trim();
+
+    const items = state.activeExercises.map((exercise) => {
+        const setsForExercise = sessionSets.filter((set) => String(set.exerciseId) === String(exercise.id));
+        const setNumbers = setsForExercise
+            .map((set) => Number.parseInt(set.setNumber, 10))
+            .filter((value) => Number.isFinite(value) && value > 0);
+        return {
+            exerciseId: exercise.id,
+            sets: Math.max(1, setNumbers.length ? Math.max(...setNumbers) : 1),
+            reps: buildRepsTextForTemplate(exercise, setsForExercise),
+            restSeconds: getTemplateRestSecondsForExercise(exercise.id),
+            supersetId: null,
+            supersetOrder: 0,
+        };
+    });
+
+    await db.addTemplate({
+        id: uuid(),
+        name: templateName,
+        folder: folderName,
+        items,
+        exerciseIds: items.map((item) => item.exerciseId),
+    });
+    return templateName;
+}
+
 async function finishWorkout() {
     if (!state.activeSession) {
         showToast("No active workout", "error");
@@ -1963,6 +2032,8 @@ async function finishWorkout() {
         showToast("Log at least one set", "error");
         return;
     }
+
+    const createdTemplateName = await maybeSaveEmptyWorkoutAsTemplate(sessionSets);
 
     const updated = {
         ...state.activeSession,
@@ -1993,7 +2064,10 @@ async function finishWorkout() {
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
     sessionExercisePickerEl.classList.add("hidden");
-    showToast("Workout saved", "success");
+    showToast(
+        createdTemplateName ? `Workout saved • Template "${createdTemplateName}" created` : "Workout saved",
+        "success"
+    );
     await refreshUI();
 }
 
