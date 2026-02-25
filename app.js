@@ -666,7 +666,9 @@ function updateWorkoutFloatingWidget() {
     let currentExerciseId = null;
     for (const ex of state.activeExercises) {
         const exSets = sessionSets.filter((s) => s.exerciseId === ex.id);
-        if (!exSets.some(s => s.isComplete)) {
+        // Check if this exercise has incomplete sets (either no sets yet, or unfinished ones)
+        const hasIncompleteSet = exSets.length === 0 || exSets.some(s => !s.isComplete);
+        if (hasIncompleteSet) {
             currentExerciseId = ex.id;
             break;
         }
