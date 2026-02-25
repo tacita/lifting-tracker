@@ -2515,6 +2515,8 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
     if (isAutoPopulated) {
         weightInput.classList.add("auto-populated");
         repsInput.classList.add("auto-populated");
+        row.dataset.prefilledWeight = String(existingSet.weight);
+        row.dataset.prefilledReps = String(existingSet.reps);
     }
     
     const removeAutoPopulatedClass = () => {
@@ -2529,17 +2531,11 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
     
     weightInput.addEventListener("input", () => {
         removeAutoPopulatedClass();
-        save().then((saved) => {
-            if (!saved) return;
-            propagatePrefillToRemainingSets(container, row, saved.weight, saved.reps);
-        });
+        save();
     });
     repsInput.addEventListener("input", () => {
         removeAutoPopulatedClass();
-        save().then((saved) => {
-            if (!saved) return;
-            propagatePrefillToRemainingSets(container, row, saved.weight, saved.reps);
-        });
+        save();
     });
     weightInput.addEventListener("focus", () => {
         if (weightInput.classList.contains("auto-populated")) {
@@ -2598,7 +2594,15 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
             removeAutoPopulatedClass();
         }
         if (nextComplete) {
-            propagatePrefillToRemainingSets(container, row, updated.weight, updated.reps);
+            const hadPrefillBaseline = row.dataset.prefilledWeight != null && row.dataset.prefilledReps != null;
+            const prefillWeight = hadPrefillBaseline ? parseFloat(row.dataset.prefilledWeight) : null;
+            const prefillReps = hadPrefillBaseline ? parseInt(row.dataset.prefilledReps, 10) : null;
+            const changedPrefilledValues = hadPrefillBaseline
+                && Number.isFinite(prefillWeight)
+                && Number.isFinite(prefillReps)
+                && (prefillWeight !== updated.weight || prefillReps !== updated.reps);
+
+            applyCompletionPrefillRules(container, row, updated.weight, updated.reps, changedPrefilledValues);
             const nextSetRow = row.nextElementSibling;
             if (!nextSetRow) {
                 // Only create next set if we haven't reached planned set count
@@ -2635,22 +2639,43 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
     container.appendChild(row);
 }
 
-function propagatePrefillToRemainingSets(container, sourceRow, weight, reps) {
+function applyCompletionPrefillRules(container, sourceRow, weight, reps, forceOverride = false) {
     if (!Number.isFinite(weight) || !Number.isFinite(reps)) return;
     const rows = Array.from(container.querySelectorAll(".set-row"));
     const sourceIndex = rows.indexOf(sourceRow);
     if (sourceIndex === -1) return;
-    for (let i = sourceIndex + 1; i < rows.length; i += 1) {
-        const row = rows[i];
-        if (row.classList.contains("set-complete")) continue;
+
+    const remainingRows = rows.slice(sourceIndex + 1).filter((row) => !row.classList.contains("set-complete"));
+    if (!remainingRows.length) return;
+
+    if (!forceOverride) {
+        const hasAnyPrefilledNextRow = remainingRows.some((row) => {
+            const nextWeightInput = row.querySelector("input[inputmode='decimal']");
+            const nextRepsInput = row.querySelector("input[inputmode='numeric']");
+            return nextWeightInput?.classList.contains("auto-populated") && nextRepsInput?.classList.contains("auto-populated");
+        });
+        if (hasAnyPrefilledNextRow) {
+            return;
+        }
+    }
+
+    remainingRows.forEach((row) => {
         const nextWeightInput = row.querySelector("input[inputmode='decimal']");
         const nextRepsInput = row.querySelector("input[inputmode='numeric']");
-        if (!nextWeightInput || !nextRepsInput) continue;
+        if (!nextWeightInput || !nextRepsInput) return;
+
+        if (!forceOverride) {
+            const hasValue = String(nextWeightInput.value || "").trim().length > 0 || String(nextRepsInput.value || "").trim().length > 0;
+            if (hasValue) return;
+        }
+
         nextWeightInput.value = formatWeightInput(weight);
         nextRepsInput.value = String(reps);
         nextWeightInput.classList.add("auto-populated");
         nextRepsInput.classList.add("auto-populated");
-    }
+        row.dataset.prefilledWeight = String(weight);
+        row.dataset.prefilledReps = String(reps);
+    });
 }
 
 async function saveSetRow(container, exercise, row, weightInput, repsInput) {
