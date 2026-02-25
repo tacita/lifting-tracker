@@ -81,10 +81,7 @@
                     </div>
                     <div id="workout-exercises"></div>
                     <div id="session-exercise-picker" class="field hidden">
-                        <div class="inline-actions">
-                            <select id="session-add-exercise" aria-label="Add exercise"></select>
-                            <button id="session-add-exercise-btn" class="ghost">Add</button>
-                        </div>
+                        <button id="session-add-exercise-btn" class="primary">Add exercise</button>
                     </div>
                     <div class="field">
                         <label for="workout-notes">Notes</label>
@@ -322,6 +319,17 @@
         <div class="delete-folder-actions">
             <button id="confirm-modal-cancel" class="ghost">Cancel</button>
             <button id="confirm-modal-confirm" class="danger ghost">Confirm</button>
+        </div>
+    </dialog>
+
+    <dialog id="select-exercise-modal">
+        <div class="modal-header">
+            <h3>Add exercise</h3>
+            <button id="select-exercise-cancel-top" class="ghost icon-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-content">
+            <input id="select-exercise-search" type="text" placeholder="Search exercises..." class="exercise-search-input">
+            <div id="select-exercise-list" class="exercise-select-list"></div>
         </div>
     </dialog>
 

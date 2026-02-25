@@ -37,6 +37,12 @@ const widgetSetEl = document.getElementById("widget-set");
 const widgetRestTimeEl = document.getElementById("widget-rest-time");
 const expandWorkoutBtn = document.getElementById("expand-workout-btn");
 
+// Select exercise modal refs
+const selectExerciseModal = document.getElementById("select-exercise-modal");
+const selectExerciseSearchInput = document.getElementById("select-exercise-search");
+const selectExerciseList = document.getElementById("select-exercise-list");
+const selectExerciseCancelTopBtn = document.getElementById("select-exercise-cancel-top");
+
 // Create exercise modal refs
 const createExerciseModal = document.getElementById("create-exercise-modal");
 const createExerciseNameInput = document.getElementById("create-exercise-name");
@@ -1965,41 +1971,7 @@ function renderSessionExercisePicker() {
         return;
     }
     sessionExercisePickerEl.classList.remove("hidden");
-    const inSession = new Set(state.activeExercises.map((exercise) => String(exercise.id)));
-    const available = state.exercises.filter((exercise) => !inSession.has(String(exercise.id)));
-    sessionAddExerciseSelect.innerHTML = "";
-
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = "Add exercise...";
-    placeholder.selected = true;
-    sessionAddExerciseSelect.appendChild(placeholder);
-
-    if (available.length === 0) {
-        sessionAddExerciseSelect.disabled = true;
-        sessionAddExerciseBtn.disabled = true;
-        return;
-    }
-    available.forEach((exercise) => {
-        const option = document.createElement("option");
-        option.value = exercise.id;
-        option.textContent = exercise.name;
-        sessionAddExerciseSelect.appendChild(option);
-    });
-    
-    // Add separator and "Create new exercise" option
-    const separator = document.createElement("option");
-    separator.disabled = true;
-    separator.textContent = "─────";
-    sessionAddExerciseSelect.appendChild(separator);
-    
-    const createOption = document.createElement("option");
-    createOption.value = "__create_new__";
-    createOption.textContent = "+ Create new exercise";
-    sessionAddExerciseSelect.appendChild(createOption);
-    
-    sessionAddExerciseSelect.disabled = false;
-    sessionAddExerciseBtn.disabled = true;
+    sessionAddExerciseBtn.disabled = false;
 }
 
 async function addExerciseToActiveSession() {
@@ -2023,18 +1995,71 @@ async function addExerciseToActiveSession() {
     renderWorkoutExercises();
 }
 
-function handleSessionExerciseSelectChange() {
-    if (!sessionAddExerciseSelect || !sessionAddExerciseBtn) return;
+function openSelectExerciseModal() {
+    selectExerciseSearchInput.value = "";
+    renderSelectExerciseList("");
+    selectExerciseSearchInput.focus();
+    selectExerciseModal.showModal();
+}
+
+function renderSelectExerciseList(searchTerm = "") {
+    const inSession = new Set(state.activeExercises.map((exercise) => String(exercise.id)));
+    let available = state.exercises.filter((exercise) => !inSession.has(String(exercise.id)));
     
-    if (sessionAddExerciseSelect.value === "__create_new__") {
-        // Reset to placeholder
-        sessionAddExerciseSelect.value = "";
-        sessionAddExerciseBtn.disabled = true;
-        openCreateExerciseModal();
+    if (searchTerm.trim()) {
+        const lowerTerm = searchTerm.toLowerCase();
+        available = available.filter((exercise) => exercise.name.toLowerCase().includes(lowerTerm));
+    }
+    
+    selectExerciseList.innerHTML = "";
+    
+    if (available.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = searchTerm.trim() ? "No exercises found" : "All exercises already added";
+        selectExerciseList.appendChild(empty);
+        
+        const createBtn = document.createElement("button");
+        createBtn.className = "primary";
+        createBtn.textContent = "+ Create new exercise";
+        createBtn.style.marginTop = "12px";
+        createBtn.addEventListener("click", () => {
+            selectExerciseModal.close();
+            openCreateExerciseModal();
+        });
+        selectExerciseList.appendChild(createBtn);
         return;
     }
     
-    sessionAddExerciseBtn.disabled = !sessionAddExerciseSelect.value;
+    available.forEach((exercise) => {
+        const item = document.createElement("div");
+        item.className = "exercise-select-item";
+        item.innerHTML = `
+            <p class="exercise-select-item-name">${escapeHtml(exercise.name)}</p>
+            <p class="exercise-select-item-meta">${exercise.repFloor}–${exercise.repCeiling} reps • +${formatWeight(exercise.weightIncrement)} lbs</p>
+        `;
+        item.addEventListener("click", () => selectAndAddExercise(exercise));
+        selectExerciseList.appendChild(item);
+    });
+}
+
+async function selectAndAddExercise(exercise) {
+    if (!state.activeSession) return;
+    if (state.activeExercises.some((item) => String(item.id) === String(exercise.id))) return;
+    
+    state.activeExercises.push(exercise);
+    const updatedSession = {
+        ...state.activeSession,
+        exerciseIds: state.activeExercises.map((item) => item.id),
+        notes: workoutNotesEl.value,
+    };
+    await db.updateSession(updatedSession);
+    state.activeSession = updatedSession;
+    state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
+    
+    selectExerciseModal.close();
+    renderSessionExercisePicker();
+    renderWorkoutExercises();
 }
 
 function openCreateExerciseModal() {
@@ -3053,8 +3078,11 @@ function bindEvents() {
         })
     );
     startEmptyWorkoutBtn.addEventListener("click", () => startWorkout(null));
-    sessionAddExerciseBtn.addEventListener("click", addExerciseToActiveSession);
-    sessionAddExerciseSelect.addEventListener("change", handleSessionExerciseSelectChange);
+    sessionAddExerciseBtn.addEventListener("click", openSelectExerciseModal);
+    selectExerciseCancelTopBtn.addEventListener("click", () => selectExerciseModal.close());
+    selectExerciseSearchInput.addEventListener("input", (e) => {
+        renderSelectExerciseList(e.target.value);
+    });
     pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);

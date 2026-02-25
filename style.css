@@ -1104,6 +1104,61 @@ dialog::backdrop {
     margin-top: 16px;
 }
 
+.exercise-search-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 12px;
+}
+
+.exercise-search-input::placeholder {
+    color: var(--muted);
+}
+
+.exercise-search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.exercise-select-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.exercise-select-item {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.exercise-select-item:hover {
+    border-color: var(--accent);
+    background: rgba(147, 197, 253, 0.08);
+}
+
+.exercise-select-item-name {
+    margin: 0;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+}
+
+.exercise-select-item-meta {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: var(--muted);
+}
+
 .delete-folder-message {
     margin: 0 0 14px;
     color: var(--text);
