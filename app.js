@@ -2259,7 +2259,7 @@ function attachSwipeToDelete(row, content, onDelete) {
     const openThreshold = 52;
     const intentThreshold = 14;
 
-    const interactiveSelector = "button, select, textarea, label";
+    const interactiveSelector = "button, select, textarea, label, input";
     const setOffset = (x) => {
         content.style.transform = `translateX(${x}px)`;
         row.classList.toggle("swiping", x < 0);
