@@ -2297,6 +2297,34 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.classList.toggle("set-complete", nextComplete);
         row.querySelector(".mark-set").classList.toggle("done", nextComplete);
         if (nextComplete) {
+            // Auto-populate next set with current set's weight/reps
+            const nextSetRow = row.nextElementSibling;
+            if (nextSetRow && nextSetRow.classList.contains("set-row")) {
+                const nextWeightInput = nextSetRow.querySelector("input[inputmode='decimal']");
+                const nextRepsInput = nextSetRow.querySelector("input[inputmode='numeric']");
+                if (nextWeightInput && nextRepsInput) {
+                    if (!nextWeightInput.value && !nextRepsInput.value) {
+                        nextWeightInput.value = formatWeightInput(updated.weight);
+                        nextRepsInput.value = updated.reps;
+                        nextWeightInput.focus();
+                    }
+                }
+            } else if (!nextSetRow) {
+                // Create next set if it doesn't exist
+                const setRowCount = container.querySelectorAll(".set-row").length;
+                const newSetNumber = setRowCount + 1;
+                const previousDisplay = getPreviousSetDisplays(exercise.id)[newSetNumber - 1] || "";
+                addSetRow(container, exercise, null, newSetNumber, previousDisplay, supersetMeta);
+                const newRow = container.querySelector(".set-row:last-of-type");
+                const newWeightInput = newRow.querySelector("input[inputmode='decimal']");
+                const newRepsInput = newRow.querySelector("input[inputmode='numeric']");
+                if (newWeightInput && newRepsInput) {
+                    newWeightInput.value = formatWeightInput(updated.weight);
+                    newRepsInput.value = updated.reps;
+                    newWeightInput.focus();
+                }
+            }
+
             if (supersetMeta?.memberExerciseIds?.length > 1) {
                 if (isSupersetRoundComplete(supersetMeta, updated.setNumber)) {
                     startRestTimer(supersetMeta.restSeconds);
