@@ -2503,12 +2503,16 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         return saveSetRow(container, exercise, row, weightInput, repsInput);
     };
     
-    // Clear input on focus
+    // Clear input on focus, but only if it already has a value (user is editing existing value)
     weightInput.addEventListener("focus", () => {
-        weightInput.value = "";
+        if (weightInput.value) {
+            weightInput.value = "";
+        }
     });
     repsInput.addEventListener("focus", () => {
-        repsInput.value = "";
+        if (repsInput.value) {
+            repsInput.value = "";
+        }
     });
     
     weightInput.addEventListener("input", () => {
