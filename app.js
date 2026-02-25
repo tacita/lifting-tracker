@@ -2495,6 +2495,15 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         removeAutoPopulatedClass();
         return saveSetRow(container, exercise, row, weightInput, repsInput);
     };
+    
+    // Clear input on focus
+    weightInput.addEventListener("focus", () => {
+        weightInput.value = "";
+    });
+    repsInput.addEventListener("focus", () => {
+        repsInput.value = "";
+    });
+    
     weightInput.addEventListener("input", () => {
         removeAutoPopulatedClass();
         save();
