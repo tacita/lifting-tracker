@@ -399,6 +399,16 @@ button.small {
     padding: 10px;
     margin-bottom: 10px;
     background: var(--surface);
+    transition: border-color 0.2s, margin-bottom 0.2s;
+}
+
+.exercise-card[data-superset-id] {
+    border-left: 4px solid var(--accent);
+    margin-bottom: 4px;
+}
+
+.exercise-card[data-superset-id]:last-of-type:not([data-superset-id] ~ [data-superset-id]) {
+    margin-bottom: 10px;
 }
 
 .exercise-header {
@@ -445,6 +455,11 @@ button.small {
 .exercise-card-drag-over {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px var(--accent);
+}
+
+.exercise-card[data-superset-id]:hover {
+    border-left-color: var(--accent);
+    box-shadow: inset -3px 0 0 var(--accent);
 }
 
 .exercise-meta-row {
@@ -692,6 +707,17 @@ button.small {
     border: 1px solid var(--border);
     background: var(--surface-alt);
     color: var(--text);
+    transition: border-color 0.2s, margin-bottom 0.2s;
+    margin-bottom: 8px;
+}
+
+.picker-item[data-superset-id] {
+    border-left: 4px solid var(--accent);
+    margin-bottom: 4px;
+}
+
+.picker-item[data-superset-id]:hover {
+    border-left-color: var(--accent);
 }
 
 .picker-item.draggable {
@@ -779,8 +805,15 @@ button.small {
 .template-superset-label {
     display: inline-block;
     margin-top: 4px;
-    font-size: 12px;
-    color: #93c5fd;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    background: rgba(147, 197, 253, 0.12);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    color: var(--accent);
 }
 
 .picker-item.selected {
@@ -789,12 +822,16 @@ button.small {
 }
 
 .superset-badge {
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 999px;
-    border: 1px solid rgba(147, 197, 253, 0.35);
-    color: #93c5fd;
-    font-size: 12px;
+    background: rgba(147, 197, 253, 0.12);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 11px;
     font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
 .set-row {

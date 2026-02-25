@@ -1459,6 +1459,9 @@ function renderTemplateEditor() {
         row.className = "picker-item draggable";
         row.draggable = true;
         row.dataset.index = String(index);
+        if (supersetMeta?.supersetId) {
+            row.dataset.supersetId = supersetMeta.supersetId;
+        }
         row.classList.toggle("selected", state.selectedTemplateExerciseIds.has(String(templateItem.exerciseId)));
         row.innerHTML = `
             <span class="drag-handle">::</span>
@@ -2026,6 +2029,9 @@ function renderWorkoutExercises() {
         card.className = "exercise-card";
         card.draggable = true;
         card.dataset.exerciseId = String(ex.id);
+        if (supersetMeta?.supersetId) {
+            card.dataset.supersetId = supersetMeta.supersetId;
+        }
 
         const templateItem = itemByExerciseId.get(String(ex.id));
         const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
