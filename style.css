@@ -67,12 +67,32 @@ body {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 18px;
+    padding: 40px 32px;
     box-shadow: var(--shadow);
 }
 
 .auth-card h1 {
-    margin: 0 0 10px;
+    margin: 0 0 8px;
+}
+
+.action-row {
+    margin: 28px 0;
+}
+
+.auth-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 28px 0 24px;
+}
+
+.auth-alt-label {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin: 0 0 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
 }
 
 #app {
