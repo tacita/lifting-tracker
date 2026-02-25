@@ -1648,6 +1648,12 @@ function renderWorkoutExercises() {
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
 
         const setsContainer = card.querySelector(".sets-container");
+        setsContainer.innerHTML = `
+            <div class="set-row-header" aria-hidden="true">
+                <span class="weight-label">lbs</span>
+                <span class="reps-label">reps</span>
+            </div>
+        `;
         setsContainer.dataset.previousSetDisplays = JSON.stringify(previousSetDisplays);
         const plannedSetCount = Math.max(1, Number.parseInt(templateItem?.sets, 10) || 1);
         const rowCount = Math.max(plannedSetCount, exSets.length || 0);

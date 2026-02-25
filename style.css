@@ -564,6 +564,33 @@ button.small {
     gap: 6px;
 }
 
+.set-row-header {
+    display: grid;
+    grid-template-columns: 28px minmax(56px, 1fr) 56px 14px 52px 38px;
+    gap: 6px;
+    align-items: center;
+    padding: 0 6px 2px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.set-row-header .weight-label {
+    grid-column: 3;
+    justify-self: stretch;
+    text-align: left;
+    padding-left: 12px;
+}
+
+.set-row-header .reps-label {
+    grid-column: 5;
+    justify-self: stretch;
+    text-align: left;
+    padding-left: 12px;
+}
+
 .picker-list {
     display: grid;
     gap: 8px;
@@ -676,7 +703,7 @@ button.small {
 
 .set-row-content {
     display: grid;
-    grid-template-columns: 28px minmax(56px, 1fr) 56px auto 52px auto;
+    grid-template-columns: 28px minmax(56px, 1fr) 56px 14px 52px 38px;
     gap: 6px;
     align-items: center;
     background: var(--surface);
@@ -986,9 +1013,15 @@ dialog::backdrop {
     }
 
     .set-row-content {
-        grid-template-columns: 24px minmax(48px, 1fr) 58px auto 54px auto;
+        grid-template-columns: 24px minmax(48px, 1fr) 58px 12px 54px 36px;
         gap: 4px;
         padding: 5px;
+    }
+
+    .set-row-header {
+        grid-template-columns: 24px minmax(48px, 1fr) 58px 12px 54px 36px;
+        gap: 4px;
+        padding: 0 5px 2px;
     }
 
     .set-index {
