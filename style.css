@@ -135,6 +135,29 @@ body {
     min-width: 0;
 }
 
+.widget-rest-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px;
+}
+
+.widget-rest-controls.hidden {
+    display: none;
+}
+
+.widget-rest-display {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent);
+    min-width: 40px;
+    text-align: center;
+}
+
+#rest-timer-panel {
+    display: none;
+}
+
 .widget-exercise {
     margin: 0;
     font-size: 15px;

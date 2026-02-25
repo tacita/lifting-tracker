@@ -34,7 +34,11 @@ const restDisplayEl = document.getElementById("rest-display");
 const workoutFloatingWidget = document.getElementById("workout-floating-widget");
 const widgetExerciseEl = document.getElementById("widget-exercise");
 const widgetSetEl = document.getElementById("widget-set");
-const widgetRestTimeEl = document.getElementById("widget-rest-time");
+const widgetRestControls = document.getElementById("widget-rest-controls");
+const widgetRestDisplay = document.getElementById("widget-rest-display");
+const widgetRestLessBtn = document.getElementById("widget-rest-less");
+const widgetRestMoreBtn = document.getElementById("widget-rest-more");
+const widgetRestEndBtn = document.getElementById("widget-rest-end");
 const expandWorkoutBtn = document.getElementById("expand-workout-btn");
 
 // Select exercise modal refs
@@ -588,11 +592,6 @@ function renderRestTimer() {
     }
     
     restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
-    const running = state.restTimer.running;
-    restLessBtn.disabled = !running;
-    restMoreBtn.disabled = !running;
-    restStopBtn.disabled = false;
-    restStopBtn.textContent = running ? "End" : "Rest";
     updateWorkoutFloatingWidget();
 }
 
@@ -686,10 +685,12 @@ function updateWorkoutFloatingWidget() {
     widgetExerciseEl.textContent = currentExercise.name;
     widgetSetEl.textContent = `Set ${nextSetNumber}`;
     
+    // Show/hide rest controls based on timer state
     if (state.restTimer.running) {
-        widgetRestTimeEl.textContent = formatTimer(state.restTimer.remainingSeconds);
+        widgetRestControls.classList.remove("hidden");
+        widgetRestDisplay.textContent = formatTimer(state.restTimer.remainingSeconds);
     } else {
-        widgetRestTimeEl.textContent = "—";
+        widgetRestControls.classList.add("hidden");
     }
 }
 
@@ -3085,6 +3086,12 @@ function bindEvents() {
     selectExerciseSearchInput.addEventListener("input", (e) => {
         renderSelectExerciseList(e.target.value);
     });
+    
+    // Widget rest timer controls
+    widgetRestLessBtn.addEventListener("click", () => adjustRestTimer(-10));
+    widgetRestMoreBtn.addEventListener("click", () => adjustRestTimer(10));
+    widgetRestEndBtn.addEventListener("click", toggleRestTimer);
+    
     pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);
@@ -3113,9 +3120,6 @@ function bindEvents() {
         manageFoldersBtn.addEventListener("click", openManageFoldersModal);
     }
     wireDeleteFolderModal();
-    restLessBtn.addEventListener("click", () => adjustRestTimer(-10));
-    restMoreBtn.addEventListener("click", () => adjustRestTimer(10));
-    restStopBtn.addEventListener("click", toggleRestTimer);
     refreshHistoryBtn.addEventListener("click", renderHistory);
     exportBtn.addEventListener("click", exportData);
     importBtn.addEventListener("click", triggerImport);
