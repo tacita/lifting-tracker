@@ -652,35 +652,60 @@ function updateWorkoutFloatingWidget() {
     }
 
     workoutFloatingWidget.classList.remove("hidden");
-    
-    // Find current exercise being logged (first one with incomplete sets, or last one)
-    const sessionId = state.activeSession?.id;
-    const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
-    
-    let currentExerciseId = null;
-    for (const ex of state.activeExercises) {
-        const exSets = sessionSets.filter((s) => s.exerciseId === ex.id);
-        // Check if this exercise has incomplete sets (either no sets yet, or unfinished ones)
-        const hasIncompleteSet = exSets.length === 0 || exSets.some(s => !s.isComplete);
-        if (hasIncompleteSet) {
-            currentExerciseId = ex.id;
+
+    const activeTemplate = state.activeSession?.templateId
+        ? state.templates.find((template) => String(template.id) === String(state.activeSession.templateId))
+        : null;
+    const templateItemByExerciseId = new Map(
+        getTemplateItems(activeTemplate).map((item) => [String(item.exerciseId), item])
+    );
+    const sessionId = state.activeSession.id;
+    const sessionSets = state.sets.filter((set) => String(set.sessionId) === String(sessionId));
+
+    const getProgress = (exercise) => {
+        const exerciseId = String(exercise.id);
+        const card = workoutExercisesEl.querySelector(`.exercise-card[data-exercise-id="${exerciseId}"]`);
+        if (card) {
+            const rows = Array.from(card.querySelectorAll(".set-row"));
+            const totalSets = rows.length;
+            const nextIncompleteIndex = rows.findIndex((row) => !row.classList.contains("set-complete"));
+            const completeSets = rows.reduce((count, row) => count + (row.classList.contains("set-complete") ? 1 : 0), 0);
+            return { totalSets, nextIncompleteIndex, completeSets };
+        }
+
+        const setsForExercise = sessionSets
+            .filter((set) => String(set.exerciseId) === exerciseId)
+            .slice()
+            .sort((a, b) => a.setNumber - b.setNumber);
+        const plannedSets = Math.max(1, Number.parseInt(templateItemByExerciseId.get(exerciseId)?.sets, 10) || setsForExercise.length || 1);
+        const completeSets = setsForExercise.filter((set) => Boolean(set.isComplete)).length;
+        const nextIncompleteIndex = completeSets < plannedSets ? completeSets : -1;
+        return { totalSets: plannedSets, nextIncompleteIndex, completeSets };
+    };
+
+    let currentExercise = null;
+    let currentProgress = null;
+    for (const exercise of state.activeExercises) {
+        const progress = getProgress(exercise);
+        if (progress.nextIncompleteIndex !== -1) {
+            currentExercise = exercise;
+            currentProgress = progress;
             break;
         }
     }
-    if (!currentExerciseId && state.activeExercises.length > 0) {
-        currentExerciseId = state.activeExercises[state.activeExercises.length - 1].id;
+    if (!currentExercise) {
+        currentExercise = state.activeExercises[state.activeExercises.length - 1];
+        currentProgress = getProgress(currentExercise);
     }
+    if (!currentExercise || !currentProgress) return;
 
-    const currentExercise = state.activeExercises.find(e => e.id === currentExerciseId);
-    if (!currentExercise) return;
-
-    const exSets = sessionSets.filter((s) => s.exerciseId === currentExerciseId).sort((a, b) => a.setNumber - b.setNumber);
-    const nextSetNumber = exSets.length + 1;
+    const nextSetNumber = currentProgress.nextIncompleteIndex !== -1
+        ? currentProgress.nextIncompleteIndex + 1
+        : currentProgress.totalSets + 1;
 
     widgetExerciseEl.textContent = currentExercise.name;
     widgetSetEl.textContent = `Set ${nextSetNumber}`;
-    
-    // Show/hide rest controls based on timer state
+
     if (state.restTimer.running) {
         widgetRestControls.classList.remove("hidden");
         widgetRestDisplay.textContent = formatTimer(state.restTimer.remainingSeconds);
