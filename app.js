@@ -2212,6 +2212,7 @@ function renderWorkoutExercises() {
         `;
         setsContainer.dataset.previousSetDisplays = JSON.stringify(previousSetDisplays);
         const plannedSetCount = Math.max(1, Number.parseInt(templateItem?.sets, 10) || 1);
+        setsContainer.dataset.plannedSetCount = plannedSetCount;
         const rowCount = Math.max(plannedSetCount, exSets.length || 0);
         const previousSets = getPreviousSetData(ex.id);
         for (let i = 0; i < rowCount; i += 1) {
@@ -2543,20 +2544,23 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                     }
                 }
             } else if (!nextSetRow) {
-                // Create next set if it doesn't exist
+                // Only create next set if we haven't reached planned set count
                 const setRowCount = container.querySelectorAll(".set-row").length;
-                const newSetNumber = setRowCount + 1;
-                const previousDisplay = getPreviousSetDisplays(exercise.id)[newSetNumber - 1] || "";
-                const newSetData = {
-                    weight: updated.weight,
-                    reps: updated.reps,
-                };
-                addSetRow(container, exercise, newSetData, newSetNumber, previousDisplay, supersetMeta);
-                const newRow = container.querySelector(".set-row:last-of-type");
-                const newWeightInput = newRow.querySelector("input[inputmode='decimal']");
-                const newRepsInput = newRow.querySelector("input[inputmode='numeric']");
-                if (newWeightInput && newRepsInput) {
-                    newWeightInput.focus();
+                const plannedSetCount = Number.parseInt(container.dataset.plannedSetCount, 10) || 1;
+                if (setRowCount < plannedSetCount) {
+                    const newSetNumber = setRowCount + 1;
+                    const previousDisplay = getPreviousSetDisplays(exercise.id)[newSetNumber - 1] || "";
+                    const newSetData = {
+                        weight: updated.weight,
+                        reps: updated.reps,
+                    };
+                    addSetRow(container, exercise, newSetData, newSetNumber, previousDisplay, supersetMeta);
+                    const newRow = container.querySelector(".set-row:last-of-type");
+                    const newWeightInput = newRow.querySelector("input[inputmode='decimal']");
+                    const newRepsInput = newRow.querySelector("input[inputmode='numeric']");
+                    if (newWeightInput && newRepsInput) {
+                        newWeightInput.focus();
+                    }
                 }
             }
 
