@@ -122,10 +122,7 @@
                     <h2>Create template</h2>
                     <div class="create-template-row">
                         <input id="template-name" type="text" placeholder="Template name">
-                        <span class="folder-input-wrap">
-                            <input id="template-folder" type="text" placeholder="Folder (optional)" autocomplete="off">
-                            <button type="button" id="clear-template-folder" class="ghost small icon-btn folder-clear" aria-label="Clear folder" title="Clear folder">×</button>
-                        </span>
+                        <select id="template-folder" aria-label="Template folder"></select>
                         <button id="create-template" class="ghost small icon-btn" aria-label="Create template" title="Create template">✓</button>
                     </div>
                 </div>
@@ -266,7 +263,6 @@
             <button data-view="view-settings">Settings</button>
         </nav>
     </div>
-    <datalist id="template-folder-options"></datalist>
 
     <div id="toast" class="toast hidden"></div>
 

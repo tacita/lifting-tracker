@@ -41,7 +41,6 @@ const repCeilingInput = document.getElementById("rep-ceiling");
 const weightIncrementInput = document.getElementById("weight-increment");
 const templateNameInput = document.getElementById("template-name");
 const templateFolderInput = document.getElementById("template-folder");
-const clearTemplateFolderBtn = document.getElementById("clear-template-folder");
 const createTemplateBtn = document.getElementById("create-template");
 const createFolderBtn = document.getElementById("create-folder-btn");
 const templatesListEl = document.getElementById("templates-list");
@@ -49,7 +48,6 @@ const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
 const templateEditorNameInput = document.getElementById("template-editor-name");
 const templateEditorFolderInput = document.getElementById("template-editor-folder");
-const templateFolderOptionsEl = document.getElementById("template-folder-options");
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
@@ -285,6 +283,7 @@ async function sendMagicLink() {
 
 async function signOut() {
     try {
+        await db.forceSyncToCloud();
         await db.signOutCloud();
         showToast("Signed out", "info");
     } catch (err) {
@@ -645,13 +644,67 @@ function getFolderNames() {
 }
 
 function renderFolderSuggestions() {
-    if (!templateFolderOptionsEl) return;
-    templateFolderOptionsEl.innerHTML = "";
-    getFolderNames().forEach((folderName) => {
-        const option = document.createElement("option");
-        option.value = folderName;
-        templateFolderOptionsEl.appendChild(option);
-    });
+    const folderNames = getFolderNames();
+
+    if (templateFolderInput && templateFolderInput.tagName === "SELECT") {
+        const current = String(templateFolderInput.value || "").trim();
+        templateFolderInput.innerHTML = "";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Folder (optional)";
+        templateFolderInput.appendChild(placeholder);
+
+        folderNames.forEach((folderName) => {
+            const option = document.createElement("option");
+            option.value = folderName;
+            option.textContent = folderName;
+            templateFolderInput.appendChild(option);
+        });
+
+        const createOption = document.createElement("option");
+        createOption.value = CREATE_NEW_FOLDER_OPTION;
+        createOption.textContent = "+ Create new folder...";
+        templateFolderInput.appendChild(createOption);
+
+        if (current && current !== CREATE_NEW_FOLDER_OPTION) {
+            const hasCurrent = folderNames.some((name) => name.toLowerCase() === current.toLowerCase());
+            if (!hasCurrent) {
+                const custom = document.createElement("option");
+                custom.value = current;
+                custom.textContent = current;
+                templateFolderInput.appendChild(custom);
+            }
+            templateFolderInput.value = current;
+        } else {
+            templateFolderInput.value = "";
+        }
+    }
+}
+
+async function handleCreateTemplateFolderSelectChange() {
+    if (!templateFolderInput || templateFolderInput.tagName !== "SELECT") return;
+    if (templateFolderInput.value !== CREATE_NEW_FOLDER_OPTION) return;
+
+    const raw = prompt("Folder name:");
+    const name = raw == null ? "" : String(raw).trim();
+    if (!name) {
+        templateFolderInput.value = "";
+        return;
+    }
+    if (name.toLowerCase() === "unfiled" || name.toLowerCase() === "unorganized") {
+        showToast("Use a different folder name", "error");
+        templateFolderInput.value = "";
+        return;
+    }
+
+    const exists = getFolderNames().some((folderName) => folderName.toLowerCase() === name.toLowerCase());
+    if (!exists) {
+        await db.addFolder({ id: uuid(), name });
+        state.folders = await db.getFolders();
+    }
+    renderFolderSuggestions();
+    templateFolderInput.value = name;
 }
 
 function renderTemplateEditorFolderOptions(selectedFolder = "") {
@@ -811,7 +864,8 @@ async function loadDefaultLibrary() {
 
 async function createTemplate() {
     const name = templateNameInput.value.trim();
-    const folder = templateFolderInput.value.trim();
+    const rawFolder = templateFolderInput.value.trim();
+    const folder = rawFolder === CREATE_NEW_FOLDER_OPTION ? "" : rawFolder;
     if (!name) {
         showToast("Enter a template name", "error");
         return;
@@ -2273,6 +2327,11 @@ async function cancelWorkout() {
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
     sessionExercisePickerEl.classList.add("hidden");
+    try {
+        await db.forceSyncToCloud();
+    } catch (err) {
+        console.error(err);
+    }
     showToast("Workout canceled", "info");
     await refreshUI();
 }
@@ -2576,20 +2635,13 @@ function bindEvents() {
     clearExercisesBtn.addEventListener("click", clearExercises);
     createTemplateBtn.addEventListener("click", createTemplate);
     createFolderBtn.addEventListener("click", createTemplateFolder);
-    function syncFolderClearVisibility() {
-        const wrap = templateFolderInput?.closest(".folder-input-wrap");
-        if (wrap) wrap.classList.toggle("has-value", (templateFolderInput.value || "").trim().length > 0);
-    }
-    templateFolderInput?.addEventListener("input", syncFolderClearVisibility);
-    templateFolderInput?.addEventListener("change", syncFolderClearVisibility);
-    clearTemplateFolderBtn?.addEventListener("click", () => {
-        if (templateFolderInput) {
-            templateFolderInput.value = "";
-            templateFolderInput.focus();
-            syncFolderClearVisibility();
-        }
+    templateFolderInput?.addEventListener("change", () => {
+        handleCreateTemplateFolderSelectChange().catch((err) => {
+            console.error(err);
+            showToast("Could not create folder", "error");
+            renderFolderSuggestions();
+        });
     });
-    syncFolderClearVisibility();
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
     templateEditorNameInput.addEventListener("input", markTemplateEditorDirty);
     templateEditorFolderInput.addEventListener("change", handleTemplateEditorFolderChange);

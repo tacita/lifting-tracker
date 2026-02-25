@@ -159,27 +159,6 @@ h2, h3 {
     align-items: center;
 }
 
-.folder-input-wrap {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    min-width: 0;
-}
-
-.folder-input-wrap input {
-    flex: 1;
-    min-width: 0;
-}
-
-.folder-input-wrap .folder-clear {
-    flex-shrink: 0;
-    visibility: hidden;
-}
-
-.folder-input-wrap.has-value .folder-clear {
-    visibility: visible;
-}
-
 @media (max-width: 520px) {
     .create-template-row {
         grid-template-columns: 1fr;
