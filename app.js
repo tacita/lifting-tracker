@@ -53,9 +53,12 @@ const templateFolderOptionsEl = document.getElementById("template-folder-options
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
+const templateCancelChangesBtn = document.getElementById("template-cancel-changes");
+const templateSaveChangesBtn = document.getElementById("template-save-changes");
 const makeSupersetBtn = document.getElementById("make-superset");
 const clearSupersetBtn = document.getElementById("clear-superset");
 const templateExercisePickerEl = document.getElementById("template-exercise-picker");
+const CREATE_NEW_FOLDER_OPTION = "__create_new_folder__";
 
 // History view refs
 const sessionsListEl = document.getElementById("sessions-list");
@@ -101,6 +104,8 @@ const state = {
     activeSession: null,
     activeExercises: [],
     selectedTemplateId: null,
+    templateEditorDraft: null,
+    templateEditorDirty: false,
     selectedTemplateExerciseIds: new Set(),
     supersetDraftMode: false,
     expandedFolders: new Set(),
@@ -649,6 +654,39 @@ function renderFolderSuggestions() {
     });
 }
 
+function renderTemplateEditorFolderOptions(selectedFolder = "") {
+    if (!templateEditorFolderInput) return;
+    const current = String(selectedFolder || "").trim();
+    const folderNames = getFolderNames();
+    templateEditorFolderInput.innerHTML = "";
+
+    const unorganizedOption = document.createElement("option");
+    unorganizedOption.value = "";
+    unorganizedOption.textContent = "Unorganized";
+    templateEditorFolderInput.appendChild(unorganizedOption);
+
+    folderNames.forEach((folderName) => {
+        const option = document.createElement("option");
+        option.value = folderName;
+        option.textContent = folderName;
+        templateEditorFolderInput.appendChild(option);
+    });
+
+    if (current && !folderNames.some((name) => name.toLowerCase() === current.toLowerCase())) {
+        const custom = document.createElement("option");
+        custom.value = current;
+        custom.textContent = current;
+        templateEditorFolderInput.appendChild(custom);
+    }
+
+    const createOption = document.createElement("option");
+    createOption.value = CREATE_NEW_FOLDER_OPTION;
+    createOption.textContent = "+ Create new folder...";
+    templateEditorFolderInput.appendChild(createOption);
+
+    templateEditorFolderInput.value = current;
+}
+
 function getTemplatesGroupedByFolder({ includeEmpty = false } = {}) {
     const groups = new Map();
     if (includeEmpty) {
@@ -799,6 +837,7 @@ async function createTemplate() {
     const created = state.templates.find((t) => t.name.toLowerCase() === name.toLowerCase());
     if (created) {
         state.selectedTemplateId = created.id;
+        resetTemplateDraftFromSelected();
         renderTemplatesList();
         renderTemplateEditor();
     }
@@ -872,6 +911,74 @@ function getSelectedTemplate() {
     return state.templates.find((template) => String(template.id) === String(state.selectedTemplateId)) || null;
 }
 
+function cloneTemplateDraft(template) {
+    if (!template) return null;
+    return applyTemplateItems({ ...template }, getTemplateItems(template));
+}
+
+function ensureTemplateDraft() {
+    const selected = getSelectedTemplate();
+    if (!selected) return null;
+    if (!state.templateEditorDraft || String(state.templateEditorDraft.id) !== String(selected.id)) {
+        state.templateEditorDraft = cloneTemplateDraft(selected);
+        state.templateEditorDirty = false;
+    }
+    return state.templateEditorDraft;
+}
+
+function applyTemplateDraft(nextDraft, { dirty = true } = {}) {
+    state.templateEditorDraft = applyTemplateItems(nextDraft, getTemplateItems(nextDraft));
+    if (dirty) {
+        state.templateEditorDirty = true;
+    }
+    renderTemplateEditor();
+}
+
+function markTemplateEditorDirty() {
+    if (!ensureTemplateDraft()) return;
+    if (!state.templateEditorDirty) {
+        state.templateEditorDirty = true;
+        if (templateSaveChangesBtn) templateSaveChangesBtn.disabled = false;
+        if (templateCancelChangesBtn) templateCancelChangesBtn.disabled = false;
+    }
+}
+
+async function handleTemplateEditorFolderChange() {
+    const draft = ensureTemplateDraft();
+    if (!draft || !templateEditorFolderInput) return;
+
+    const selectedValue = String(templateEditorFolderInput.value || "").trim();
+    if (selectedValue === CREATE_NEW_FOLDER_OPTION) {
+        const raw = prompt("Folder name:");
+        const name = raw == null ? "" : String(raw).trim();
+        if (!name) {
+            renderTemplateEditorFolderOptions(getTemplateFolderName(draft));
+            return;
+        }
+        if (name.toLowerCase() === "unfiled" || name.toLowerCase() === "unorganized") {
+            showToast("Use a different folder name", "error");
+            renderTemplateEditorFolderOptions(getTemplateFolderName(draft));
+            return;
+        }
+        const exists = getFolderNames().some((folderName) => folderName.toLowerCase() === name.toLowerCase());
+        if (!exists) {
+            await db.addFolder({ id: uuid(), name });
+            state.folders = await db.getFolders();
+            renderFolderSuggestions();
+        }
+        applyTemplateDraft({ ...draft, folder: name });
+        return;
+    }
+
+    applyTemplateDraft({ ...draft, folder: selectedValue });
+}
+
+function resetTemplateDraftFromSelected() {
+    const selected = getSelectedTemplate();
+    state.templateEditorDraft = cloneTemplateDraft(selected);
+    state.templateEditorDirty = false;
+}
+
 async function saveTemplate(updatedTemplate, successMessage = "Template updated", { silent = false } = {}) {
     const normalizedTemplate = applyTemplateItems(updatedTemplate, getTemplateItems(updatedTemplate));
     await db.updateTemplate(normalizedTemplate);
@@ -885,7 +992,7 @@ async function saveTemplate(updatedTemplate, successMessage = "Template updated"
 }
 
 async function saveTemplateName() {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     const name = templateEditorNameInput.value.trim();
     const folder = templateEditorFolderInput.value.trim();
@@ -898,7 +1005,7 @@ async function saveTemplateName() {
         showToast("Template name already exists", "error");
         return;
     }
-    await saveTemplate({ ...template, name, folder }, "Template updated");
+    applyTemplateDraft({ ...template, name, folder });
 }
 
 function renderTemplateExerciseOptions(template) {
@@ -906,11 +1013,13 @@ function renderTemplateExerciseOptions(template) {
     const inTemplate = new Set(getTemplateItems(template).map((item) => String(item.exerciseId)));
     const available = state.exercises.filter((exercise) => !inTemplate.has(String(exercise.id)));
 
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Add exercise...";
+    placeholder.selected = true;
+    templateAddExerciseSelect.appendChild(placeholder);
+
     if (available.length === 0) {
-        const option = document.createElement("option");
-        option.value = "";
-        option.textContent = "No more exercises to add";
-        templateAddExerciseSelect.appendChild(option);
         templateAddExerciseSelect.disabled = true;
         addTemplateExerciseBtn.disabled = true;
         return;
@@ -923,11 +1032,11 @@ function renderTemplateExerciseOptions(template) {
         templateAddExerciseSelect.appendChild(option);
     });
     templateAddExerciseSelect.disabled = false;
-    addTemplateExerciseBtn.disabled = false;
+    addTemplateExerciseBtn.disabled = true;
 }
 
 async function addExerciseToTemplate() {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     const selectedId = templateAddExerciseSelect.value;
     if (!selectedId) return;
@@ -942,7 +1051,7 @@ async function addExerciseToTemplate() {
         return;
     }
     const repsDefault = `${exercise.repFloor}-${exercise.repCeiling}`;
-    await saveTemplate(
+    applyTemplateDraft(
         applyTemplateItems(template, [
             ...currentItems,
             {
@@ -953,41 +1062,45 @@ async function addExerciseToTemplate() {
                 supersetId: null,
                 supersetOrder: 0,
             },
-        ]),
-        "Exercise added to template"
+        ])
     );
 }
 
+function handleTemplateExerciseSelectChange() {
+    if (!templateAddExerciseSelect || !addTemplateExerciseBtn) return;
+    addTemplateExerciseBtn.disabled = !templateAddExerciseSelect.value;
+}
+
 async function removeExerciseFromTemplate(exerciseId) {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     state.selectedTemplateExerciseIds.delete(String(exerciseId));
     const nextItems = getTemplateItems(template).filter((item) => String(item.exerciseId) !== String(exerciseId));
-    await saveTemplate(applyTemplateItems(template, nextItems), "Exercise removed from template");
+    applyTemplateDraft(applyTemplateItems(template, nextItems));
 }
 
 async function reorderTemplateExercise(fromIndex, toIndex) {
     if (fromIndex === toIndex) return;
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     const nextItems = [...getTemplateItems(template)];
     const [moved] = nextItems.splice(fromIndex, 1);
     nextItems.splice(toIndex, 0, moved);
-    await saveTemplate(applyTemplateItems(template, nextItems), "Template order updated");
+    applyTemplateDraft(applyTemplateItems(template, nextItems));
 }
 
 async function updateTemplateItemConfig(index, patch) {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     const currentItems = getTemplateItems(template);
     const current = currentItems[index];
     if (!current) return;
     currentItems[index] = { ...current, ...patch };
-    await saveTemplate(applyTemplateItems(template, currentItems), "Template updated", { silent: true });
+    applyTemplateDraft(applyTemplateItems(template, currentItems));
 }
 
 async function createSupersetFromSelection() {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     if (!state.supersetDraftMode) {
         setSupersetDraftMode(true);
@@ -1015,12 +1128,12 @@ async function createSupersetFromSelection() {
     });
 
     clearTemplateSelection();
-    await saveTemplate(applyTemplateItems(template, nextItems), "Superset created");
+    applyTemplateDraft(applyTemplateItems(template, nextItems));
     setSupersetDraftMode(false);
 }
 
 async function clearSupersetFromSelection() {
-    const template = getSelectedTemplate();
+    const template = ensureTemplateDraft();
     if (!template) return;
     const currentItems = getTemplateItems(template);
     const hasSelection = currentItems.some((item) => state.selectedTemplateExerciseIds.has(String(item.exerciseId)));
@@ -1039,25 +1152,34 @@ async function clearSupersetFromSelection() {
     });
 
     clearTemplateSelection();
-    await saveTemplate(applyTemplateItems(template, nextItems), "Superset cleared");
+    applyTemplateDraft(applyTemplateItems(template, nextItems));
     setSupersetDraftMode(false);
 }
 
 function renderTemplateEditor() {
-    const template = getSelectedTemplate();
-    if (!template) {
+    const selectedTemplate = getSelectedTemplate();
+    if (!selectedTemplate) {
         templateEditorPanelEl.classList.add("hidden");
         templateEditorEmptyEl.classList.remove("hidden");
         templateExercisePickerEl.innerHTML = "";
+        state.templateEditorDraft = null;
+        state.templateEditorDirty = false;
         clearTemplateSelection();
         setSupersetDraftMode(false);
         return;
     }
+    const template = ensureTemplateDraft();
 
     templateEditorEmptyEl.classList.add("hidden");
     templateEditorPanelEl.classList.remove("hidden");
     templateEditorNameInput.value = template.name;
-    templateEditorFolderInput.value = getTemplateFolderName(template);
+    renderTemplateEditorFolderOptions(getTemplateFolderName(template));
+    if (templateSaveChangesBtn) {
+        templateSaveChangesBtn.disabled = !state.templateEditorDirty;
+    }
+    if (templateCancelChangesBtn) {
+        templateCancelChangesBtn.disabled = !state.templateEditorDirty;
+    }
     renderTemplateExerciseOptions(template);
 
     const templateItems = getTemplateItems(template);
@@ -1165,6 +1287,46 @@ function renderTemplateEditor() {
     });
 }
 
+async function saveTemplateEditorChanges() {
+    const selected = getSelectedTemplate();
+    const draft = ensureTemplateDraft();
+    if (!selected || !draft) return;
+    const name = templateEditorNameInput.value.trim();
+    const folder = templateEditorFolderInput.value.trim();
+    if (!name) {
+        showToast("Enter a template name", "error");
+        return;
+    }
+    const duplicate = state.templates.find((item) => String(item.id) !== String(selected.id) && item.name.toLowerCase() === name.toLowerCase());
+    if (duplicate) {
+        showToast("Template name already exists", "error");
+        return;
+    }
+    const payload = applyTemplateItems({ ...draft, name, folder }, getTemplateItems(draft));
+    await saveTemplate(payload, "Template updated");
+    resetTemplateDraftFromSelected();
+    renderTemplateEditor();
+}
+
+function cancelTemplateEditorChanges() {
+    if (!state.templateEditorDirty) return;
+    resetTemplateDraftFromSelected();
+    clearTemplateSelection();
+    setSupersetDraftMode(false);
+    renderTemplateEditor();
+    showToast("Template changes discarded", "info");
+}
+
+function focusTemplateEditor() {
+    const target = templateEditorPanelEl?.closest(".card") || templateEditorPanelEl;
+    if (!target) return;
+    requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.classList.add("focus-pulse");
+        setTimeout(() => target.classList.remove("focus-pulse"), 900);
+    });
+}
+
 function renderTemplatesList() {
     templatesListEl.innerHTML = "";
     const groupedList = getTemplatesGroupedByFolder({ includeEmpty: true });
@@ -1263,11 +1425,17 @@ function renderTemplatesList() {
                 card.addEventListener("dragend", () => card.classList.remove("dragging"));
 
                 card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
+                    if (state.templateEditorDirty && String(state.selectedTemplateId) !== String(template.id)) {
+                        const discard = confirm("Discard unsaved template changes?");
+                        if (!discard) return;
+                    }
                     state.selectedTemplateId = template.id;
+                    resetTemplateDraftFromSelected();
                     clearTemplateSelection();
                     setSupersetDraftMode(false);
                     renderTemplatesList();
                     renderTemplateEditor();
+                    focusTemplateEditor();
                 });
 
                 card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
@@ -2419,7 +2587,12 @@ function bindEvents() {
     });
     syncFolderClearVisibility();
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
+    templateEditorNameInput.addEventListener("input", markTemplateEditorDirty);
+    templateEditorFolderInput.addEventListener("change", handleTemplateEditorFolderChange);
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
+    templateAddExerciseSelect.addEventListener("change", handleTemplateExerciseSelectChange);
+    templateSaveChangesBtn.addEventListener("click", saveTemplateEditorChanges);
+    templateCancelChangesBtn.addEventListener("click", cancelTemplateEditorChanges);
     makeSupersetBtn.addEventListener("click", createSupersetFromSelection);
     clearSupersetBtn.addEventListener("click", clearSupersetFromSelection);
     if (manageFoldersBtn) {

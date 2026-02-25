@@ -123,6 +123,19 @@ main {
     box-shadow: var(--shadow);
 }
 
+.card.focus-pulse {
+    animation: card-focus-pulse 0.9s ease;
+}
+
+@keyframes card-focus-pulse {
+    0% {
+        box-shadow: var(--shadow), 0 0 0 0 rgba(110, 231, 183, 0.55);
+    }
+    100% {
+        box-shadow: var(--shadow), 0 0 0 12px rgba(110, 231, 183, 0);
+    }
+}
+
 h2, h3 {
     margin: 0 0 10px;
 }
@@ -663,6 +676,13 @@ button.small {
     display: flex;
     gap: 8px;
     margin-bottom: 8px;
+}
+
+.template-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .picker-item input[type="checkbox"] {
