@@ -2607,7 +2607,7 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
     if (!state.activeSession) return null;
     const weight = parseFloat(weightInput.value);
     const reps = parseInt(repsInput.value, 10);
-    if (!weight || !reps) return null;
+    if (!Number.isFinite(weight) || !Number.isFinite(reps)) return null;
 
     const setNumber = Array.from(container.querySelectorAll(".set-row")).indexOf(row) + 1;
     const existing = row.dataset.setId ? state.sets.find((item) => String(item.id) === row.dataset.setId) : null;
