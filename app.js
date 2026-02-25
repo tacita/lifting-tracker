@@ -2039,14 +2039,31 @@ function renderWorkoutExercises() {
         setsContainer.dataset.previousSetDisplays = JSON.stringify(previousSetDisplays);
         const plannedSetCount = Math.max(1, Number.parseInt(templateItem?.sets, 10) || 1);
         const rowCount = Math.max(plannedSetCount, exSets.length || 0);
+        const previousSets = getPreviousSetData(ex.id);
         for (let i = 0; i < rowCount; i += 1) {
-            addSetRow(setsContainer, ex, exSets[i] || null, i + 1, previousSetDisplays[i] || "", supersetMeta);
+            let setData = exSets[i] || null;
+            // Auto-populate first empty set with previous session data
+            if (!setData && i === 0 && previousSets.length > 0) {
+                setData = {
+                    weight: previousSets[0].weight,
+                    reps: previousSets[0].reps,
+                };
+            }
+            addSetRow(setsContainer, ex, setData, i + 1, previousSetDisplays[i] || "", supersetMeta);
         }
 
         card.querySelector(".add-set").addEventListener("click", () => {
             const nextSetNumber = setsContainer.querySelectorAll(".set-row").length + 1;
             const previousDisplay = previousSetDisplays[nextSetNumber - 1] || "";
-            addSetRow(setsContainer, ex, null, nextSetNumber, previousDisplay, supersetMeta);
+            const previousSets = getPreviousSetData(ex.id);
+            let setData = null;
+            if (previousSets.length >= nextSetNumber) {
+                setData = {
+                    weight: previousSets[nextSetNumber - 1].weight,
+                    reps: previousSets[nextSetNumber - 1].reps,
+                };
+            }
+            addSetRow(setsContainer, ex, setData, nextSetNumber, previousDisplay, supersetMeta);
         });
         workoutExercisesEl.appendChild(card);
     });
@@ -2209,6 +2226,23 @@ function getPreviousSetDisplays(exerciseId) {
             if (set.isSkipped) return "Skipped";
             return `${formatWeight(set.weight)}lbs x ${set.reps}`;
         });
+    }
+    return [];
+}
+
+function getPreviousSetData(exerciseId) {
+    const completedSessions = state.sessions
+        .filter((session) => session.status !== "draft")
+        .slice()
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    for (const session of completedSessions) {
+        const sets = state.sets
+            .filter((set) => String(set.sessionId) === String(session.id) && String(set.exerciseId) === String(exerciseId) && !set.isSkipped)
+            .slice()
+            .sort((a, b) => a.setNumber - b.setNumber);
+        if (!sets.length) continue;
+        return sets;
     }
     return [];
 }
