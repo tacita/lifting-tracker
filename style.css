@@ -680,7 +680,7 @@ button.small {
 
 .set-row-header {
     display: grid;
-    grid-template-columns: 20px minmax(48px, 1fr) 32px 10px 28px 28px;
+    grid-template-columns: 20px minmax(46px, 1fr) 30px 10px 30px 24px;
     gap: 3px;
     align-items: center;
     padding: 0 6px 0;
@@ -695,14 +695,14 @@ button.small {
     grid-column: 3;
     justify-self: stretch;
     text-align: left;
-    padding-left: 12px;
+    padding-left: 6px;
 }
 
 .set-row-header .reps-label {
     grid-column: 5;
     justify-self: stretch;
     text-align: left;
-    padding-left: 12px;
+    padding-left: 6px;
 }
 
 .picker-list {
@@ -878,7 +878,7 @@ button.small {
 
 .set-row-content {
     display: grid;
-    grid-template-columns: 20px minmax(48px, 1fr) 32px 10px 28px 28px;
+    grid-template-columns: 20px minmax(46px, 1fr) 30px 10px 30px 24px;
     gap: 3px;
     align-items: center;
     background: var(--surface);
@@ -906,6 +906,7 @@ button.small {
     opacity: 0.7;
 }
 
+.set-delete-btn,
 .set-row .mark-set {
     min-width: 24px;
     min-height: 24px;
@@ -1211,20 +1212,20 @@ dialog::backdrop {
     }
 
     .set-row-content {
-        grid-template-columns: 24px minmax(48px, 1fr) 58px 12px 54px 36px;
-        gap: 4px;
+        grid-template-columns: 20px minmax(42px, 1fr) 30px 10px 30px 24px;
+        gap: 3px;
         padding: 5px;
     }
 
     .set-row-header {
-        grid-template-columns: 24px minmax(48px, 1fr) 58px 12px 54px 36px;
-        gap: 4px;
+        grid-template-columns: 20px minmax(42px, 1fr) 30px 10px 30px 24px;
+        gap: 3px;
         padding: 0 5px 0;
     }
 
     .set-index {
-        width: 24px;
-        height: 24px;
+        width: 20px;
+        height: 20px;
         font-size: 11px;
     }
 

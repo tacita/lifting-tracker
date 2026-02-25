@@ -2464,7 +2464,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.dataset.setId = existingSet.id;
     }
     row.innerHTML = `
-        <button type="button" class="set-delete-btn ghost" aria-label="Delete set">−</button>
+        <button type="button" class="set-delete-btn ghost small" aria-label="Delete set">✕</button>
         <div class="set-row-content">
             <span class="set-index">${setNumber}</span>
             <span class="previous-set">${previousDisplay || "-"}</span>
