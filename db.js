@@ -651,12 +651,13 @@ async function hydrateLocalFromCloudIfAvailable() {
 async function ensureInitialCloudSeedForUser() {
     if (!useCloudSync()) return;
     const userId = String(authState.user.id);
+    // Only hydrate from cloud on very first setup, not on every reload
+    if (isUserSeeded(userId)) return;
     const hydrated = await hydrateLocalFromCloudIfAvailable();
     if (hydrated.loaded) {
         markUserSeeded(userId);
         return;
     }
-    if (isUserSeeded(userId)) return;
     await pushLocalSnapshotToCloud();
     markUserSeeded(userId);
 }
