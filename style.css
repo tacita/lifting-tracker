@@ -176,9 +176,6 @@ body {
 
 #expand-workout-btn {
     flex-shrink: 0;
-    pointer-events: auto;
-    min-width: 40px;
-    min-height: 40px;
 }
 
 .app-header {

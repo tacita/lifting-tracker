@@ -711,6 +711,11 @@ function updateWorkoutFloatingWidget() {
     } else {
         widgetRestControls.classList.add("hidden");
     }
+
+    if (expandWorkoutBtn) {
+        const onWorkoutView = Boolean(document.querySelector("#view-workout.active"));
+        expandWorkoutBtn.classList.toggle("hidden", onWorkoutView);
+    }
 }
 
 function toggleRestTimer() {
@@ -823,6 +828,7 @@ function getSupersetMetaByExercise(templateItems) {
 function setView(viewId) {
     views.forEach((v) => v.classList.toggle("active", v.id === viewId));
     tabButtons.forEach((b) => b.classList.toggle("active", b.dataset.view === viewId));
+    updateWorkoutFloatingWidget();
     if (viewId === "view-templates") {
         state.expandedFolders.clear();
         renderTemplatesList();
@@ -3160,7 +3166,6 @@ function registerServiceWorker() {
 // Event bindings
 function bindEvents() {
     bindConfirmModal();
-    expandWorkoutBtn.addEventListener("click", () => setView("view-workout"));
     
     // Create exercise modal
     createExerciseSubmitBtn.addEventListener("click", submitCreateExercise);
@@ -3189,6 +3194,7 @@ function bindEvents() {
     widgetRestLessBtn.addEventListener("click", () => adjustRestTimer(-10));
     widgetRestMoreBtn.addEventListener("click", () => adjustRestTimer(10));
     widgetRestEndBtn.addEventListener("click", toggleRestTimer);
+    expandWorkoutBtn?.addEventListener("click", () => setView("view-workout"));
     
     pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
