@@ -37,6 +37,16 @@ const widgetSetEl = document.getElementById("widget-set");
 const widgetRestTimeEl = document.getElementById("widget-rest-time");
 const expandWorkoutBtn = document.getElementById("expand-workout-btn");
 
+// Create exercise modal refs
+const createExerciseModal = document.getElementById("create-exercise-modal");
+const createExerciseNameInput = document.getElementById("create-exercise-name");
+const createExerciseRepFloorInput = document.getElementById("create-exercise-rep-floor");
+const createExerciseRepCeilingInput = document.getElementById("create-exercise-rep-ceiling");
+const createExerciseWeightIncrementInput = document.getElementById("create-exercise-weight-increment");
+const createExerciseSubmitBtn = document.getElementById("create-exercise-submit");
+const createExerciseCancelBtn = document.getElementById("create-exercise-cancel");
+const createExerciseCancelTopBtn = document.getElementById("create-exercise-cancel-top");
+
 // Exercises view refs
 const addExerciseBtn = document.getElementById("add-exercise");
 const loadDefaultLibraryBtn = document.getElementById("load-default-library");
@@ -1976,6 +1986,18 @@ function renderSessionExercisePicker() {
         option.textContent = exercise.name;
         sessionAddExerciseSelect.appendChild(option);
     });
+    
+    // Add separator and "Create new exercise" option
+    const separator = document.createElement("option");
+    separator.disabled = true;
+    separator.textContent = "─────";
+    sessionAddExerciseSelect.appendChild(separator);
+    
+    const createOption = document.createElement("option");
+    createOption.value = "__create_new__";
+    createOption.textContent = "+ Create new exercise";
+    sessionAddExerciseSelect.appendChild(createOption);
+    
     sessionAddExerciseSelect.disabled = false;
     sessionAddExerciseBtn.disabled = true;
 }
@@ -2003,7 +2025,62 @@ async function addExerciseToActiveSession() {
 
 function handleSessionExerciseSelectChange() {
     if (!sessionAddExerciseSelect || !sessionAddExerciseBtn) return;
+    
+    if (sessionAddExerciseSelect.value === "__create_new__") {
+        // Reset to placeholder
+        sessionAddExerciseSelect.value = "";
+        sessionAddExerciseBtn.disabled = true;
+        openCreateExerciseModal();
+        return;
+    }
+    
     sessionAddExerciseBtn.disabled = !sessionAddExerciseSelect.value;
+}
+
+function openCreateExerciseModal() {
+    createExerciseNameInput.value = "";
+    createExerciseRepFloorInput.value = "8";
+    createExerciseRepCeilingInput.value = "12";
+    createExerciseWeightIncrementInput.value = "5";
+    createExerciseNameInput.focus();
+    createExerciseModal.showModal();
+}
+
+async function submitCreateExercise() {
+    const name = createExerciseNameInput.value.trim();
+    const repFloor = parseInt(createExerciseRepFloorInput.value, 10);
+    const repCeiling = parseInt(createExerciseRepCeilingInput.value, 10);
+    const weightIncrement = parseFloat(createExerciseWeightIncrementInput.value);
+
+    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(weightIncrement)) {
+        showToast("Enter valid exercise details", "error");
+        return;
+    }
+
+    const newExercise = { id: uuid(), name, repFloor, repCeiling, weightIncrement };
+    try {
+        await db.addExercise(newExercise);
+        state.exercises.push(newExercise);
+        
+        // Add the new exercise to the active session
+        state.activeExercises.push(newExercise);
+        const updatedSession = {
+            ...state.activeSession,
+            exerciseIds: state.activeExercises.map((item) => item.id),
+            notes: workoutNotesEl.value,
+        };
+        await db.updateSession(updatedSession);
+        state.activeSession = updatedSession;
+        state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
+        
+        createExerciseModal.close();
+        renderSessionExercisePicker();
+        renderWorkoutExercises();
+        showToast(`"${name}" created and added`, "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Could not create exercise", "error");
+    }
 }
 
 function renderWorkoutExercises() {
@@ -2958,6 +3035,15 @@ function registerServiceWorker() {
 function bindEvents() {
     bindConfirmModal();
     expandWorkoutBtn.addEventListener("click", () => setView("view-workout"));
+    
+    // Create exercise modal
+    createExerciseSubmitBtn.addEventListener("click", submitCreateExercise);
+    createExerciseCancelBtn.addEventListener("click", () => createExerciseModal.close());
+    createExerciseCancelTopBtn.addEventListener("click", () => createExerciseModal.close());
+    createExerciseNameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") submitCreateExercise();
+    });
+    
     tabButtons.forEach((btn) =>
         btn.addEventListener("click", () => {
             setView(btn.dataset.view);

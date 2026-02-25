@@ -325,6 +325,37 @@
         </div>
     </dialog>
 
+    <dialog id="create-exercise-modal">
+        <div class="modal-header">
+            <h3>Create new exercise</h3>
+            <button id="create-exercise-cancel-top" class="ghost icon-btn" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-content">
+            <div class="field">
+                <label for="create-exercise-name">Exercise name</label>
+                <input id="create-exercise-name" type="text" placeholder="e.g., Bench Press">
+            </div>
+            <div class="field grid-2">
+                <div>
+                    <label for="create-exercise-rep-floor">Rep floor</label>
+                    <input id="create-exercise-rep-floor" type="number" min="1" value="8" inputmode="numeric">
+                </div>
+                <div>
+                    <label for="create-exercise-rep-ceiling">Rep ceiling</label>
+                    <input id="create-exercise-rep-ceiling" type="number" min="1" value="12" inputmode="numeric">
+                </div>
+            </div>
+            <div class="field">
+                <label for="create-exercise-weight-increment">Weight increment (lbs)</label>
+                <input id="create-exercise-weight-increment" type="number" step="0.5" value="5" inputmode="decimal">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button id="create-exercise-cancel" class="ghost">Cancel</button>
+            <button id="create-exercise-submit" class="primary">Create & Add</button>
+        </div>
+    </dialog>
+
     <script>
         window.__OVERLOAD_SUPABASE_URL = window.__OVERLOAD_SUPABASE_URL || "";
         window.__OVERLOAD_SUPABASE_ANON_KEY = window.__OVERLOAD_SUPABASE_ANON_KEY || "";

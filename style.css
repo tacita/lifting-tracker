@@ -1087,6 +1087,23 @@ dialog::backdrop {
     margin-bottom: 10px;
 }
 
+.modal-header h3 {
+    margin: 0;
+    flex: 1;
+}
+
+.modal-content {
+    margin: 16px 0;
+}
+
+.modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
 .delete-folder-message {
     margin: 0 0 14px;
     color: var(--text);
