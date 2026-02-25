@@ -2468,9 +2468,9 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         <div class="set-row-content">
             <span class="set-index">${setNumber}</span>
             <span class="previous-set">${previousDisplay || "-"}</span>
-            <input type="number" aria-label="Weight" inputmode="decimal" step="0.5" value="${formatWeightInput(existingSet?.weight)}">
+            <input type="number" aria-label="Weight" inputmode="decimal" step="0.5" value="${formatWeightInput(existingSet?.weight || "")}">
             <span class="x">×</span>
-            <input type="number" aria-label="Reps" inputmode="numeric" min="1" value="${existingSet ? existingSet.reps : ""}">
+            <input type="number" aria-label="Reps" inputmode="numeric" min="1" value="${existingSet?.reps || ""}">
             <button class="ghost small mark-set ${existingSet?.isComplete ? "done" : ""}" aria-label="Mark set complete">✓</button>
         </div>
     `;
@@ -2503,12 +2503,16 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         return saveSetRow(container, exercise, row, weightInput, repsInput);
     };
     
-    // Clear input on focus
+    // Clear input on focus, but only for non-auto-populated fields
     weightInput.addEventListener("focus", () => {
-        weightInput.value = "";
+        if (!weightInput.classList.contains("auto-populated")) {
+            weightInput.value = "";
+        }
     });
     repsInput.addEventListener("focus", () => {
-        repsInput.value = "";
+        if (!repsInput.classList.contains("auto-populated")) {
+            repsInput.value = "";
+        }
     });
     
     weightInput.addEventListener("input", () => {
