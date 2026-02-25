@@ -25,10 +25,6 @@ const finishWorkoutBtn = document.getElementById("finish-workout");
 const pauseWorkoutBtn = document.getElementById("pause-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
 const sessionTemplateLabel = document.getElementById("session-template-label");
-const restLessBtn = document.getElementById("rest-less");
-const restMoreBtn = document.getElementById("rest-more");
-const restStopBtn = document.getElementById("rest-stop");
-const restDisplayEl = document.getElementById("rest-display");
 
 // Floating widget refs
 const workoutFloatingWidget = document.getElementById("workout-floating-widget");
@@ -591,7 +587,6 @@ function renderRestTimer() {
         }
     }
     
-    restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
     updateWorkoutFloatingWidget();
 }
 
