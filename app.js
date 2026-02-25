@@ -2217,11 +2217,10 @@ function renderWorkoutExercises() {
         const previousSets = getPreviousSetData(ex.id);
         for (let i = 0; i < rowCount; i += 1) {
             let setData = exSets[i] || null;
-            // Auto-populate first empty set with previous session data
-            if (!setData && i === 0 && previousSets.length > 0) {
+            if (!setData && previousSets.length > i) {
                 setData = {
-                    weight: previousSets[0].weight,
-                    reps: previousSets[0].reps,
+                    weight: previousSets[i].weight,
+                    reps: previousSets[i].reps,
                 };
             }
             addSetRow(setsContainer, ex, setData, i + 1, previousSetDisplays[i] || "", supersetMeta);
@@ -2486,7 +2485,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
 
     const [weightInput, repsInput] = row.querySelectorAll("input");
     
-    // Mark as auto-populated if no id but has values
+    // Mark as auto-populated if this row is a placeholder (no persisted set yet)
     const isAutoPopulated = !existingSet?.id && existingSet?.weight && existingSet?.reps;
     if (isAutoPopulated) {
         weightInput.classList.add("auto-populated");
@@ -2503,25 +2502,19 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         return saveSetRow(container, exercise, row, weightInput, repsInput);
     };
     
-    // Clear input on focus, but only if it already has a value (user is editing existing value)
-    weightInput.addEventListener("focus", () => {
-        if (weightInput.value) {
-            weightInput.value = "";
-        }
-    });
-    repsInput.addEventListener("focus", () => {
-        if (repsInput.value) {
-            repsInput.value = "";
-        }
-    });
-    
     weightInput.addEventListener("input", () => {
         removeAutoPopulatedClass();
-        save();
+        save().then((saved) => {
+            if (!saved) return;
+            propagatePrefillToRemainingSets(container, row, saved.weight, saved.reps);
+        });
     });
     repsInput.addEventListener("input", () => {
         removeAutoPopulatedClass();
-        save();
+        save().then((saved) => {
+            if (!saved) return;
+            propagatePrefillToRemainingSets(container, row, saved.weight, saved.reps);
+        });
     });
 
     row.querySelector(".mark-set").addEventListener("click", async () => {
@@ -2536,6 +2529,20 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                 return;
             }
             setRecord = saved;
+        } else {
+            const inputWeight = parseFloat(weightInput.value);
+            const inputReps = parseInt(repsInput.value, 10);
+            if (Number.isFinite(inputWeight) && Number.isFinite(inputReps)
+                && (setRecord.weight !== inputWeight || setRecord.reps !== inputReps)) {
+                const refreshed = {
+                    ...setRecord,
+                    weight: inputWeight,
+                    reps: inputReps,
+                };
+                await db.updateSet(refreshed);
+                state.sets = state.sets.map((item) => (String(item.id) === String(refreshed.id) ? refreshed : item));
+                setRecord = refreshed;
+            }
         }
 
         const nextComplete = !setRecord.isComplete;
@@ -2554,21 +2561,9 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
             removeAutoPopulatedClass();
         }
         if (nextComplete) {
-            // Auto-populate next set with current set's weight/reps
+            propagatePrefillToRemainingSets(container, row, updated.weight, updated.reps);
             const nextSetRow = row.nextElementSibling;
-            if (nextSetRow && nextSetRow.classList.contains("set-row")) {
-                const nextWeightInput = nextSetRow.querySelector("input[inputmode='decimal']");
-                const nextRepsInput = nextSetRow.querySelector("input[inputmode='numeric']");
-                if (nextWeightInput && nextRepsInput) {
-                    if (!nextWeightInput.value && !nextRepsInput.value) {
-                        nextWeightInput.value = formatWeightInput(updated.weight);
-                        nextRepsInput.value = updated.reps;
-                        nextWeightInput.classList.add("auto-populated");
-                        nextRepsInput.classList.add("auto-populated");
-                        nextWeightInput.focus();
-                    }
-                }
-            } else if (!nextSetRow) {
+            if (!nextSetRow) {
                 // Only create next set if we haven't reached planned set count
                 const setRowCount = container.querySelectorAll(".set-row").length;
                 const plannedSetCount = Number.parseInt(container.dataset.plannedSetCount, 10) || 1;
@@ -2601,6 +2596,24 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
     });
 
     container.appendChild(row);
+}
+
+function propagatePrefillToRemainingSets(container, sourceRow, weight, reps) {
+    if (!Number.isFinite(weight) || !Number.isFinite(reps)) return;
+    const rows = Array.from(container.querySelectorAll(".set-row"));
+    const sourceIndex = rows.indexOf(sourceRow);
+    if (sourceIndex === -1) return;
+    for (let i = sourceIndex + 1; i < rows.length; i += 1) {
+        const row = rows[i];
+        if (row.classList.contains("set-complete")) continue;
+        const nextWeightInput = row.querySelector("input[inputmode='decimal']");
+        const nextRepsInput = row.querySelector("input[inputmode='numeric']");
+        if (!nextWeightInput || !nextRepsInput) continue;
+        nextWeightInput.value = formatWeightInput(weight);
+        nextRepsInput.value = String(reps);
+        nextWeightInput.classList.add("auto-populated");
+        nextRepsInput.classList.add("auto-populated");
+    }
 }
 
 async function saveSetRow(container, exercise, row, weightInput, repsInput) {
