@@ -914,6 +914,9 @@ button.small {
     display: flex;
     align-items: center;
     justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
 }
 
 .set-row .mark-set.done {
