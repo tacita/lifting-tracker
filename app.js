@@ -2302,9 +2302,31 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
     attachSwipeToDelete(row, row.querySelector(".set-row-content"), async () => deleteSetRow(row));
 
     const [weightInput, repsInput] = row.querySelectorAll("input");
-    const save = () => saveSetRow(container, exercise, row, weightInput, repsInput);
-    weightInput.addEventListener("input", save);
-    repsInput.addEventListener("input", save);
+    
+    // Mark as auto-populated if no id but has values
+    const isAutoPopulated = !existingSet?.id && existingSet?.weight && existingSet?.reps;
+    if (isAutoPopulated) {
+        weightInput.classList.add("auto-populated");
+        repsInput.classList.add("auto-populated");
+    }
+    
+    const removeAutoPopulatedClass = () => {
+        weightInput.classList.remove("auto-populated");
+        repsInput.classList.remove("auto-populated");
+    };
+    
+    const save = () => {
+        removeAutoPopulatedClass();
+        return saveSetRow(container, exercise, row, weightInput, repsInput);
+    };
+    weightInput.addEventListener("input", () => {
+        removeAutoPopulatedClass();
+        save();
+    });
+    repsInput.addEventListener("input", () => {
+        removeAutoPopulatedClass();
+        save();
+    });
 
     row.querySelector(".mark-set").addEventListener("click", async () => {
         let setRecord = null;
@@ -2340,6 +2362,8 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                     if (!nextWeightInput.value && !nextRepsInput.value) {
                         nextWeightInput.value = formatWeightInput(updated.weight);
                         nextRepsInput.value = updated.reps;
+                        nextWeightInput.classList.add("auto-populated");
+                        nextRepsInput.classList.add("auto-populated");
                         nextWeightInput.focus();
                     }
                 }
@@ -2348,13 +2372,15 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                 const setRowCount = container.querySelectorAll(".set-row").length;
                 const newSetNumber = setRowCount + 1;
                 const previousDisplay = getPreviousSetDisplays(exercise.id)[newSetNumber - 1] || "";
-                addSetRow(container, exercise, null, newSetNumber, previousDisplay, supersetMeta);
+                const newSetData = {
+                    weight: updated.weight,
+                    reps: updated.reps,
+                };
+                addSetRow(container, exercise, newSetData, newSetNumber, previousDisplay, supersetMeta);
                 const newRow = container.querySelector(".set-row:last-of-type");
                 const newWeightInput = newRow.querySelector("input[inputmode='decimal']");
                 const newRepsInput = newRow.querySelector("input[inputmode='numeric']");
                 if (newWeightInput && newRepsInput) {
-                    newWeightInput.value = formatWeightInput(updated.weight);
-                    newRepsInput.value = updated.reps;
                     newWeightInput.focus();
                 }
             }

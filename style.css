@@ -769,6 +769,11 @@ button.small {
     font-size: 16px;
 }
 
+.set-row-content input.auto-populated {
+    color: var(--muted);
+    opacity: 0.7;
+}
+
 .set-delete-bg {
     position: absolute;
     inset: 0;
