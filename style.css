@@ -864,9 +864,13 @@ button.small {
 .set-delete-btn {
     flex-shrink: 0;
     min-width: 28px;
-    padding: 4px;
+    min-height: 28px;
+    padding: 4px 6px;
     border-radius: 6px;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .set-row-content {
@@ -901,8 +905,12 @@ button.small {
 
 .set-row .mark-set {
     min-width: 28px;
+    min-height: 28px;
     padding: 4px 6px;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .set-row .mark-set.done {
