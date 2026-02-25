@@ -30,6 +30,13 @@ const restMoreBtn = document.getElementById("rest-more");
 const restStopBtn = document.getElementById("rest-stop");
 const restDisplayEl = document.getElementById("rest-display");
 
+// Floating widget refs
+const workoutFloatingWidget = document.getElementById("workout-floating-widget");
+const widgetExerciseEl = document.getElementById("widget-exercise");
+const widgetSetEl = document.getElementById("widget-set");
+const widgetRestTimeEl = document.getElementById("widget-rest-time");
+const expandWorkoutBtn = document.getElementById("expand-workout-btn");
+
 // Exercises view refs
 const addExerciseBtn = document.getElementById("add-exercise");
 const loadDefaultLibraryBtn = document.getElementById("load-default-library");
@@ -570,6 +577,7 @@ function renderRestTimer() {
     restMoreBtn.disabled = !running;
     restStopBtn.disabled = false;
     restStopBtn.textContent = running ? "End" : "Rest";
+    updateWorkoutFloatingWidget();
 }
 
 function stopRestTimer() {
@@ -625,6 +633,46 @@ function adjustRestTimer(deltaSeconds) {
         return;
     }
     renderRestTimer();
+}
+
+function updateWorkoutFloatingWidget() {
+    if (!state.activeSession || !state.activeExercises.length) {
+        workoutFloatingWidget.classList.add("hidden");
+        return;
+    }
+
+    workoutFloatingWidget.classList.remove("hidden");
+    
+    // Find current exercise being logged (first one with incomplete sets, or last one)
+    const sessionId = state.activeSession?.id;
+    const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
+    
+    let currentExerciseId = null;
+    for (const ex of state.activeExercises) {
+        const exSets = sessionSets.filter((s) => s.exerciseId === ex.id);
+        if (!exSets.some(s => s.isComplete)) {
+            currentExerciseId = ex.id;
+            break;
+        }
+    }
+    if (!currentExerciseId && state.activeExercises.length > 0) {
+        currentExerciseId = state.activeExercises[state.activeExercises.length - 1].id;
+    }
+
+    const currentExercise = state.activeExercises.find(e => e.id === currentExerciseId);
+    if (!currentExercise) return;
+
+    const exSets = sessionSets.filter((s) => s.exerciseId === currentExerciseId).sort((a, b) => a.setNumber - b.setNumber);
+    const nextSetNumber = exSets.length + 1;
+
+    widgetExerciseEl.textContent = currentExercise.name;
+    widgetSetEl.textContent = `Set ${nextSetNumber}`;
+    
+    if (state.restTimer.running) {
+        widgetRestTimeEl.textContent = formatTimer(state.restTimer.remainingSeconds);
+    } else {
+        widgetRestTimeEl.textContent = "—";
+    }
 }
 
 function toggleRestTimer() {
@@ -2087,6 +2135,7 @@ function renderWorkoutExercises() {
         });
         workoutExercisesEl.appendChild(card);
     });
+    updateWorkoutFloatingWidget();
 }
 
 function attachSwipeToDelete(row, content, onDelete) {
@@ -2902,6 +2951,7 @@ function registerServiceWorker() {
 // Event bindings
 function bindEvents() {
     bindConfirmModal();
+    expandWorkoutBtn.addEventListener("click", () => setView("view-workout"));
     tabButtons.forEach((btn) =>
         btn.addEventListener("click", () => {
             setView(btn.dataset.view);
