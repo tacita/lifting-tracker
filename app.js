@@ -2025,6 +2025,9 @@ function renderWorkoutExercises() {
     state.activeExercises.forEach((ex) => {
         const exSets = sessionSets.filter((s) => s.exerciseId === ex.id).sort((a, b) => a.setNumber - b.setNumber);
         const previousSetDisplays = getPreviousSetDisplays(ex.id);
+        const templateItem = itemByExerciseId.get(String(ex.id));
+        const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
+        
         const card = document.createElement("div");
         card.className = "exercise-card";
         card.draggable = true;
@@ -2032,9 +2035,6 @@ function renderWorkoutExercises() {
         if (supersetMeta?.supersetId) {
             card.dataset.supersetId = supersetMeta.supersetId;
         }
-
-        const templateItem = itemByExerciseId.get(String(ex.id));
-        const supersetMeta = supersetMetaByExerciseId.get(String(ex.id));
         const planText = templateItem
             ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
             : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
