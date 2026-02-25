@@ -2503,16 +2503,12 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         return saveSetRow(container, exercise, row, weightInput, repsInput);
     };
     
-    // Clear input on focus, but only for non-auto-populated fields
+    // Clear input on focus
     weightInput.addEventListener("focus", () => {
-        if (!weightInput.classList.contains("auto-populated")) {
-            weightInput.value = "";
-        }
+        weightInput.value = "";
     });
     repsInput.addEventListener("focus", () => {
-        if (!repsInput.classList.contains("auto-populated")) {
-            repsInput.value = "";
-        }
+        repsInput.value = "";
     });
     
     weightInput.addEventListener("input", () => {
