@@ -1513,11 +1513,14 @@ function renderSessionExercisePicker() {
     const inSession = new Set(state.activeExercises.map((exercise) => String(exercise.id)));
     const available = state.exercises.filter((exercise) => !inSession.has(String(exercise.id)));
     sessionAddExerciseSelect.innerHTML = "";
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Add exercise...";
+    placeholder.selected = true;
+    sessionAddExerciseSelect.appendChild(placeholder);
+
     if (available.length === 0) {
-        const option = document.createElement("option");
-        option.value = "";
-        option.textContent = "No more exercises";
-        sessionAddExerciseSelect.appendChild(option);
         sessionAddExerciseSelect.disabled = true;
         sessionAddExerciseBtn.disabled = true;
         return;
@@ -1529,7 +1532,7 @@ function renderSessionExercisePicker() {
         sessionAddExerciseSelect.appendChild(option);
     });
     sessionAddExerciseSelect.disabled = false;
-    sessionAddExerciseBtn.disabled = false;
+    sessionAddExerciseBtn.disabled = true;
 }
 
 async function addExerciseToActiveSession() {
@@ -1551,6 +1554,11 @@ async function addExerciseToActiveSession() {
     state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
     renderSessionExercisePicker();
     renderWorkoutExercises();
+}
+
+function handleSessionExerciseSelectChange() {
+    if (!sessionAddExerciseSelect || !sessionAddExerciseBtn) return;
+    sessionAddExerciseBtn.disabled = !sessionAddExerciseSelect.value;
 }
 
 function renderWorkoutExercises() {
@@ -2387,6 +2395,7 @@ function bindEvents() {
     );
     startEmptyWorkoutBtn.addEventListener("click", () => startWorkout(null));
     sessionAddExerciseBtn.addEventListener("click", addExerciseToActiveSession);
+    sessionAddExerciseSelect.addEventListener("change", handleSessionExerciseSelectChange);
     pauseWorkoutBtn.addEventListener("click", pauseOrResumeWorkout);
     finishWorkoutBtn.addEventListener("click", finishWorkout);
     cancelWorkoutBtn.addEventListener("click", cancelWorkout);
