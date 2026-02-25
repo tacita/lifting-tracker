@@ -2526,12 +2526,38 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
             setRecord = state.sets.find((item) => String(item.id) === row.dataset.setId) || null;
         }
         if (!setRecord) {
-            const saved = await saveSetRow(container, exercise, row, weightInput, repsInput);
-            if (!saved) {
-                showToast("Enter weight and reps before marking done", "error");
-                return;
+            // Check if inputs are auto-populated (have values even if not clicked)
+            const isAutoPopulated = weightInput.classList.contains("auto-populated") && repsInput.classList.contains("auto-populated");
+            
+            if (isAutoPopulated) {
+                // Allow marking complete with auto-populated values without user interaction
+                const weight = parseFloat(weightInput.value);
+                const reps = parseInt(repsInput.value, 10);
+                if (!weight || !reps) {
+                    showToast("Enter weight and reps before marking done", "error");
+                    return;
+                }
+                const setNumber = Array.from(container.querySelectorAll(".set-row")).indexOf(row) + 1;
+                const payload = {
+                    id: uuid(),
+                    sessionId: state.activeSession.id,
+                    exerciseId: exercise.id,
+                    setNumber,
+                    weight,
+                    reps,
+                };
+                await db.addSet(payload);
+                row.dataset.setId = payload.id;
+                state.sets.push(payload);
+                setRecord = payload;
+            } else {
+                const saved = await saveSetRow(container, exercise, row, weightInput, repsInput);
+                if (!saved) {
+                    showToast("Enter weight and reps before marking done", "error");
+                    return;
+                }
+                setRecord = saved;
             }
-            setRecord = saved;
         }
 
         const nextComplete = !setRecord.isComplete;
@@ -2544,6 +2570,11 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
         row.classList.toggle("set-complete", nextComplete);
         row.querySelector(".mark-set").classList.toggle("done", nextComplete);
+        
+        // Remove auto-populated styling when marking complete
+        if (nextComplete) {
+            removeAutoPopulatedClass();
+        }
         if (nextComplete) {
             // Auto-populate next set with current set's weight/reps
             const nextSetRow = row.nextElementSibling;
