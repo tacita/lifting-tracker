@@ -130,6 +130,8 @@ const state = {
         running: false,
         intervalId: null,
         lastDurationSeconds: 90,
+        startTimeMs: null,
+        targetEndTimeMs: null,
     },
 };
 
@@ -551,6 +553,17 @@ async function pauseOrResumeWorkout() {
 }
 
 function renderRestTimer() {
+    // Calculate remaining time from wall-clock time if running
+    if (state.restTimer.running && state.restTimer.targetEndTimeMs) {
+        const nowMs = Date.now();
+        state.restTimer.remainingSeconds = Math.max(0, Math.ceil((state.restTimer.targetEndTimeMs - nowMs) / 1000));
+        if (state.restTimer.remainingSeconds <= 0) {
+            stopRestTimer();
+            notifyRestComplete();
+            return;
+        }
+    }
+    
     restDisplayEl.textContent = formatTimer(state.restTimer.remainingSeconds);
     const running = state.restTimer.running;
     restLessBtn.disabled = !running;
@@ -565,41 +578,48 @@ function stopRestTimer() {
     }
     state.restTimer.intervalId = null;
     state.restTimer.running = false;
+    state.restTimer.startTimeMs = null;
+    state.restTimer.targetEndTimeMs = null;
     renderRestTimer();
 }
 
 function stopAndResetRestTimer() {
     stopRestTimer();
     state.restTimer.remainingSeconds = 0;
+    state.restTimer.startTimeMs = null;
+    state.restTimer.targetEndTimeMs = null;
     renderRestTimer();
 }
 
 function startRestTimer(seconds) {
     stopRestTimer();
-    state.restTimer.remainingSeconds = Math.max(0, Number.parseInt(seconds, 10) || 0);
-    if (state.restTimer.remainingSeconds <= 0) {
+    const totalSeconds = Math.max(0, Number.parseInt(seconds, 10) || 0);
+    if (totalSeconds <= 0) {
+        state.restTimer.remainingSeconds = 0;
         renderRestTimer();
         return;
     }
-    state.restTimer.lastDurationSeconds = state.restTimer.remainingSeconds;
+    
+    const nowMs = Date.now();
+    state.restTimer.startTimeMs = nowMs;
+    state.restTimer.targetEndTimeMs = nowMs + (totalSeconds * 1000);
+    state.restTimer.remainingSeconds = totalSeconds;
+    state.restTimer.lastDurationSeconds = totalSeconds;
     state.restTimer.running = true;
     renderRestTimer();
+    
+    // Update display every 100ms to catch quick changes and ensure accuracy
     state.restTimer.intervalId = setInterval(() => {
-        state.restTimer.remainingSeconds -= 1;
-        if (state.restTimer.remainingSeconds <= 0) {
-            state.restTimer.remainingSeconds = 0;
-            stopRestTimer();
-            notifyRestComplete();
-            return;
-        }
         renderRestTimer();
-    }, 1000);
+    }, 100);
 }
 
 function adjustRestTimer(deltaSeconds) {
-    if (!state.restTimer.running) return;
-    state.restTimer.remainingSeconds = Math.max(0, state.restTimer.remainingSeconds + deltaSeconds);
-    if (state.restTimer.remainingSeconds === 0) {
+    if (!state.restTimer.running || !state.restTimer.targetEndTimeMs) return;
+    state.restTimer.targetEndTimeMs += deltaSeconds * 1000;
+    const nowMs = Date.now();
+    if (state.restTimer.targetEndTimeMs <= nowMs) {
+        state.restTimer.targetEndTimeMs = nowMs;
         stopRestTimer();
         notifyRestComplete();
         return;
