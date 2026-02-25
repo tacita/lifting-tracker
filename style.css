@@ -561,7 +561,7 @@ button.small {
 .sets-container {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
 
 .set-row-header {
@@ -569,7 +569,7 @@ button.small {
     grid-template-columns: 28px minmax(56px, 1fr) 56px 14px 52px 38px;
     gap: 6px;
     align-items: center;
-    padding: 0 6px 2px;
+    padding: 0 6px 0;
     color: var(--muted);
     font-size: 11px;
     font-weight: 700;
@@ -1021,7 +1021,7 @@ dialog::backdrop {
     .set-row-header {
         grid-template-columns: 24px minmax(48px, 1fr) 58px 12px 54px 36px;
         gap: 4px;
-        padding: 0 5px 2px;
+        padding: 0 5px 0;
     }
 
     .set-index {
