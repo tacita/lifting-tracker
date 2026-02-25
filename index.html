@@ -224,6 +224,7 @@
                         <div>
                             <p class="label">Cloud sync</p>
                             <p class="sub">Sync local data to signed-in account</p>
+                            <p id="sync-status" class="sub small">Sign in to sync</p>
                         </div>
                         <button id="sync-now" class="ghost">Sync now</button>
                     </div>
@@ -294,6 +295,18 @@
         <div class="delete-folder-actions">
             <button id="delete-folder-move-btn" class="ghost">Move to Unorganized</button>
             <button id="delete-folder-delete-all-btn" class="danger ghost">Delete all contents</button>
+        </div>
+    </dialog>
+
+    <dialog id="confirm-modal">
+        <div class="modal-header">
+            <h3 id="confirm-modal-title">Confirm action</h3>
+            <button id="confirm-modal-cancel-top" class="ghost">Cancel</button>
+        </div>
+        <p id="confirm-modal-message" class="delete-folder-message"></p>
+        <div class="delete-folder-actions">
+            <button id="confirm-modal-cancel" class="ghost">Cancel</button>
+            <button id="confirm-modal-confirm" class="danger ghost">Confirm</button>
         </div>
     </dialog>
 

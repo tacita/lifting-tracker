@@ -12,6 +12,12 @@ let authListeners = [];
 let authSubscription = null;
 let syncTimer = null;
 let syncInFlight = false;
+let syncListeners = [];
+let syncState = {
+    status: "idle",
+    error: "",
+    lastSyncedAt: "",
+};
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
 const SUPABASE_ANON_KEY = "overload-supabase-anon-key";
@@ -379,6 +385,9 @@ export async function initAuth() {
                 user: session?.user || null,
                 loading: false,
             };
+            if (!session?.user) {
+                setSyncState({ status: "idle", error: "", lastSyncedAt: "" });
+            }
             notifyAuthListeners();
             if (session?.user) {
                 try {
@@ -468,11 +477,37 @@ export async function signOutCloud() {
 }
 
 export async function forceSyncToCloud() {
-    await pushLocalSnapshotToCloud();
+    return pushLocalSnapshotToCloud();
 }
 
 function notifyAuthListeners() {
     authListeners.forEach((listener) => listener({ ...authState }));
+}
+
+function notifySyncListeners() {
+    const snapshot = { ...syncState };
+    syncListeners.forEach((listener) => listener(snapshot));
+}
+
+function setSyncState(next) {
+    syncState = {
+        ...syncState,
+        ...next,
+    };
+    notifySyncListeners();
+}
+
+export function getSyncState() {
+    return { ...syncState };
+}
+
+export function onSyncStateChange(listener) {
+    if (typeof listener !== "function") return () => {};
+    syncListeners.push(listener);
+    listener({ ...syncState });
+    return () => {
+        syncListeners = syncListeners.filter((item) => item !== listener);
+    };
 }
 
 function parseSupabaseError(error, fallback) {
@@ -549,8 +584,9 @@ async function localImportData(data) {
 }
 
 async function pushLocalSnapshotToCloud() {
-    if (!useCloudSync() || syncInFlight) return;
+    if (!useCloudSync() || syncInFlight) return false;
     syncInFlight = true;
+    setSyncState({ status: "syncing", error: "" });
     try {
         const payload = await localExportData();
         const userId = authState.user.id;
@@ -567,6 +603,18 @@ async function pushLocalSnapshotToCloud() {
         if (error) {
             throw new Error(parseSupabaseError(error, "Failed to sync to cloud"));
         }
+        setSyncState({
+            status: "idle",
+            error: "",
+            lastSyncedAt: new Date().toISOString(),
+        });
+        return true;
+    } catch (err) {
+        setSyncState({
+            status: "failed",
+            error: parseSupabaseError(err, "Failed to sync to cloud"),
+        });
+        throw err;
     } finally {
         syncInFlight = false;
     }

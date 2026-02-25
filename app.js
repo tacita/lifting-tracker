@@ -78,6 +78,12 @@ const deleteFolderMessageEl = document.getElementById("delete-folder-message");
 const closeDeleteFolderModalBtn = document.getElementById("close-delete-folder-modal");
 const deleteFolderMoveBtn = document.getElementById("delete-folder-move-btn");
 const deleteFolderDeleteAllBtn = document.getElementById("delete-folder-delete-all-btn");
+const confirmModal = document.getElementById("confirm-modal");
+const confirmModalTitleEl = document.getElementById("confirm-modal-title");
+const confirmModalMessageEl = document.getElementById("confirm-modal-message");
+const confirmModalCancelTopBtn = document.getElementById("confirm-modal-cancel-top");
+const confirmModalCancelBtn = document.getElementById("confirm-modal-cancel");
+const confirmModalConfirmBtn = document.getElementById("confirm-modal-confirm");
 
 // Settings refs
 const exportBtn = document.getElementById("export-data");
@@ -90,6 +96,7 @@ const sendMagicLinkBtn = document.getElementById("send-magic-link");
 const signOutBtn = document.getElementById("sign-out");
 const authStatusEl = document.getElementById("auth-status");
 const syncNowBtn = document.getElementById("sync-now");
+const syncStatusEl = document.getElementById("sync-status");
 const themeModeSelect = document.getElementById("theme-mode");
 const THEME_MODE_KEY = "overload-theme-mode";
 
@@ -112,6 +119,12 @@ const state = {
     workoutTimer: {
         intervalId: null,
     },
+    sync: {
+        status: "idle",
+        error: "",
+        lastSyncedAt: "",
+    },
+    hasShownSyncFailureToast: false,
     restTimer: {
         remainingSeconds: 0,
         running: false,
@@ -126,6 +139,50 @@ function showToast(message, type = "info") {
     toastEl.className = `toast ${type}`;
     toastEl.classList.remove("hidden");
     setTimeout(() => toastEl.classList.add("hidden"), 2200);
+}
+
+function formatClockTime(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+let confirmResolver = null;
+function bindConfirmModal() {
+    if (!confirmModal) return;
+    const onCancel = () => confirmModal.close();
+    const onConfirm = () => {
+        confirmModal.dataset.confirmed = "1";
+        confirmModal.close();
+    };
+    confirmModalCancelTopBtn?.addEventListener("click", onCancel);
+    confirmModalCancelBtn?.addEventListener("click", onCancel);
+    confirmModalConfirmBtn?.addEventListener("click", onConfirm);
+    confirmModal.addEventListener("close", () => {
+        const confirmed = confirmModal.dataset.confirmed === "1";
+        confirmModal.dataset.confirmed = "";
+        if (confirmResolver) {
+            confirmResolver(confirmed);
+            confirmResolver = null;
+        }
+    });
+}
+
+async function confirmAction({ title = "Confirm action", message = "Are you sure?", confirmLabel = "Confirm", danger = false } = {}) {
+    if (!confirmModal || !confirmModalTitleEl || !confirmModalMessageEl || !confirmModalConfirmBtn) {
+        return window.confirm(message);
+    }
+    if (confirmModal.open) confirmModal.close();
+    confirmModal.dataset.confirmed = "";
+    confirmModalTitleEl.textContent = title;
+    confirmModalMessageEl.textContent = message;
+    confirmModalConfirmBtn.textContent = confirmLabel;
+    confirmModalConfirmBtn.classList.toggle("danger", Boolean(danger));
+    confirmModal.showModal();
+    return new Promise((resolve) => {
+        confirmResolver = resolve;
+    });
 }
 
 function formatDate(iso) {
@@ -226,7 +283,7 @@ function renderAuthState(auth) {
         sendMagicLinkBtn.classList.remove("hidden");
         authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
-        syncNowBtn.disabled = true;
+        renderSyncState(state.sync);
         return;
     }
     if (auth.loading) {
@@ -235,7 +292,7 @@ function renderAuthState(auth) {
         sendMagicLinkBtn.classList.remove("hidden");
         authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
-        syncNowBtn.disabled = true;
+        renderSyncState(state.sync);
         return;
     }
     if (!auth.user) {
@@ -244,7 +301,7 @@ function renderAuthState(auth) {
         sendMagicLinkBtn.classList.remove("hidden");
         authEmailInput.closest(".field")?.classList.remove("hidden");
         signOutBtn.disabled = true;
-        syncNowBtn.disabled = true;
+        renderSyncState(state.sync);
         return;
     }
     authStatusEl.textContent = auth.user.email || auth.user.id;
@@ -252,7 +309,70 @@ function renderAuthState(auth) {
     sendMagicLinkBtn.classList.add("hidden");
     authEmailInput.closest(".field")?.classList.add("hidden");
     signOutBtn.disabled = false;
+    renderSyncState(state.sync);
+}
+
+function renderSyncState(syncState) {
+    if (!syncNowBtn || !syncStatusEl) return;
+    const auth = db.getAuthState();
+    if (!auth?.configured) {
+        syncStatusEl.textContent = "Sign-in unavailable.";
+        syncNowBtn.textContent = "Sync now";
+        syncNowBtn.disabled = true;
+        return;
+    }
+    if (auth.loading) {
+        syncStatusEl.textContent = "Checking account...";
+        syncNowBtn.textContent = "Sync now";
+        syncNowBtn.disabled = true;
+        return;
+    }
+    if (!auth?.user) {
+        syncStatusEl.textContent = "Sign in to sync.";
+        syncNowBtn.textContent = "Sync now";
+        syncNowBtn.disabled = true;
+        return;
+    }
+
+    const sync = syncState || state.sync;
+    if (sync.status === "syncing") {
+        syncStatusEl.textContent = "Syncing...";
+        syncNowBtn.textContent = "Syncing...";
+        syncNowBtn.disabled = true;
+        return;
+    }
+    if (sync.status === "failed") {
+        syncStatusEl.textContent = sync.error || "Sync failed.";
+        syncNowBtn.textContent = "Retry sync";
+        syncNowBtn.disabled = false;
+        return;
+    }
+
+    if (sync.lastSyncedAt) {
+        syncStatusEl.textContent = `Last synced ${formatClockTime(sync.lastSyncedAt)}`;
+    } else {
+        syncStatusEl.textContent = "Ready to sync.";
+    }
+    syncNowBtn.textContent = "Sync now";
     syncNowBtn.disabled = false;
+}
+
+function handleSyncStateChange(nextSyncState) {
+    const prevStatus = state.sync.status;
+    state.sync = {
+        status: String(nextSyncState?.status || "idle"),
+        error: String(nextSyncState?.error || ""),
+        lastSyncedAt: String(nextSyncState?.lastSyncedAt || ""),
+    };
+    renderSyncState(state.sync);
+    if (state.sync.status === "failed") {
+        if (!state.hasShownSyncFailureToast || prevStatus !== "failed") {
+            state.hasShownSyncFailureToast = true;
+            showToast(state.sync.error || "Cloud sync failed", "error");
+        }
+    } else {
+        state.hasShownSyncFailureToast = false;
+    }
 }
 
 async function signInWithGoogle() {
@@ -298,7 +418,6 @@ async function syncNow() {
         showToast("Cloud sync complete", "success");
     } catch (err) {
         console.error(err);
-        showToast(err?.message || "Cloud sync failed", "error");
     }
 }
 
@@ -838,7 +957,13 @@ async function addExercise() {
 }
 
 async function clearExercises() {
-    if (!confirm("Delete all exercises? This also removes related sets.")) return;
+    const approved = await confirmAction({
+        title: "Delete all exercises",
+        message: "Delete all exercises? This also removes related sets.",
+        confirmLabel: "Delete all",
+        danger: true,
+    });
+    if (!approved) return;
     const ids = state.exercises.map((e) => e.id);
     for (const id of ids) {
         await db.deleteExercise(id);
@@ -938,7 +1063,13 @@ function renderExercises() {
             </div>
         `;
         card.querySelector('[data-action="delete"]').addEventListener("click", async () => {
-            if (!confirm(`Delete ${ex.name}?`)) return;
+            const approved = await confirmAction({
+                title: "Delete exercise",
+                message: `Delete ${ex.name}?`,
+                confirmLabel: "Delete",
+                danger: true,
+            });
+            if (!approved) return;
             await db.deleteExercise(ex.id);
             await refreshUI();
             showToast("Exercise deleted", "success");
@@ -1482,9 +1613,14 @@ function renderTemplatesList() {
                 });
                 card.addEventListener("dragend", () => card.classList.remove("dragging"));
 
-                card.querySelector('[data-action="edit-template"]').addEventListener("click", () => {
+                card.querySelector('[data-action="edit-template"]').addEventListener("click", async () => {
                     if (state.templateEditorDirty && String(state.selectedTemplateId) !== String(template.id)) {
-                        const discard = confirm("Discard unsaved template changes?");
+                        const discard = await confirmAction({
+                            title: "Discard changes",
+                            message: "Discard unsaved template changes?",
+                            confirmLabel: "Discard",
+                            danger: true,
+                        });
                         if (!discard) return;
                     }
                     state.selectedTemplateId = template.id;
@@ -1497,7 +1633,13 @@ function renderTemplatesList() {
                 });
 
                 card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
-                    if (!confirm(`Delete template "${template.name}"?`)) return;
+                    const approved = await confirmAction({
+                        title: "Delete template",
+                        message: `Delete template "${template.name}"?`,
+                        confirmLabel: "Delete",
+                        danger: true,
+                    });
+                    if (!approved) return;
                     await db.deleteTemplate(template.id);
                     if (String(state.selectedTemplateId) === String(template.id)) {
                         state.selectedTemplateId = null;
@@ -1578,7 +1720,13 @@ function openManageFoldersModal() {
                     String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
                 );
                 if (templatesInFolder.length === 0) {
-                    if (!confirm(`Delete folder "${folder.name}"?`)) return;
+                    const approved = await confirmAction({
+                        title: "Delete folder",
+                        message: `Delete folder "${folder.name}"?`,
+                        confirmLabel: "Delete",
+                        danger: true,
+                    });
+                    if (!approved) return;
                     await db.deleteFolder(folder.id);
                     await refreshUI();
                     openManageFoldersModal();
@@ -2210,7 +2358,12 @@ async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
         return null;
     }
 
-    if (!confirm("Save this empty workout as a new template?")) {
+    const shouldSaveTemplate = await confirmAction({
+        title: "Save as template",
+        message: "Save this empty workout as a new template?",
+        confirmLabel: "Save template",
+    });
+    if (!shouldSaveTemplate) {
         return null;
     }
 
@@ -2313,7 +2466,13 @@ async function finishWorkout() {
 
 async function cancelWorkout() {
     if (!state.activeSession) return;
-    if (!confirm("Cancel current workout? This removes draft sets.")) return;
+    const approved = await confirmAction({
+        title: "Cancel workout",
+        message: "Cancel current workout? This removes draft sets.",
+        confirmLabel: "Cancel workout",
+        danger: true,
+    });
+    if (!approved) return;
     await db.deleteSession(state.activeSession.id);
     state.sessions = state.sessions.filter((s) => s.id !== state.activeSession.id);
     state.sets = state.sets.filter((s) => s.sessionId !== state.activeSession.id);
@@ -2374,7 +2533,13 @@ function renderSessionsList() {
         `;
         card.querySelector('[data-action="view"]').addEventListener("click", () => openSessionModal(session));
         card.querySelector('[data-action="delete"]').addEventListener("click", async () => {
-            if (!confirm("Delete this session?")) return;
+            const approved = await confirmAction({
+                title: "Delete session",
+                message: "Delete this session?",
+                confirmLabel: "Delete",
+                danger: true,
+            });
+            if (!approved) return;
             await db.deleteSession(session.id);
             await refreshUI();
             showToast("Session deleted", "success");
@@ -2580,7 +2745,13 @@ async function handleImport(event) {
     const text = await file.text();
     try {
         const parsed = JSON.parse(text);
-        if (!confirm("Import data and overwrite current records?")) return;
+        const approved = await confirmAction({
+            title: "Import data",
+            message: "Import data and overwrite current records?",
+            confirmLabel: "Import",
+            danger: true,
+        });
+        if (!approved) return;
         await db.importData(parsed);
         await refreshUI();
         showToast("Data imported", "success");
@@ -2593,7 +2764,13 @@ async function handleImport(event) {
 }
 
 async function clearData() {
-    if (!confirm("Clear all data? This cannot be undone.")) return;
+    const approved = await confirmAction({
+        title: "Clear all data",
+        message: "Clear all data? This cannot be undone.",
+        confirmLabel: "Clear data",
+        danger: true,
+    });
+    if (!approved) return;
     await db.clearAll();
     state.activeSession = null;
     state.activeExercises = [];
@@ -2616,6 +2793,7 @@ function registerServiceWorker() {
 
 // Event bindings
 function bindEvents() {
+    bindConfirmModal();
     tabButtons.forEach((btn) =>
         btn.addEventListener("click", () => {
             setView(btn.dataset.view);
@@ -2685,6 +2863,9 @@ async function init() {
         if (auth?.user && !auth.loading) {
             await refreshUI();
         }
+    });
+    db.onSyncStateChange((nextSyncState) => {
+        handleSyncStateChange(nextSyncState);
     });
     try {
         await db.initAuth();
