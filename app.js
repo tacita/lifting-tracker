@@ -1289,20 +1289,7 @@ async function saveTemplate(updatedTemplate, successMessage = "Template updated"
 }
 
 async function saveTemplateName() {
-    const template = ensureTemplateDraft();
-    if (!template) return;
-    const name = templateEditorNameInput.value.trim();
-    const folder = templateEditorFolderInput.value.trim();
-    if (!name) {
-        showToast("Enter a template name", "error");
-        return;
-    }
-    const duplicate = state.templates.find((item) => String(item.id) !== String(template.id) && item.name.toLowerCase() === name.toLowerCase());
-    if (duplicate) {
-        showToast("Template name already exists", "error");
-        return;
-    }
-    applyTemplateDraft({ ...template, name, folder });
+    await saveTemplateEditorChanges();
 }
 
 function renderTemplateExerciseOptions(template) {
