@@ -2464,7 +2464,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.dataset.setId = existingSet.id;
     }
     row.innerHTML = `
-        <div class="set-delete-bg"><button type="button" class="set-delete-action">Delete</button></div>
+        <button type="button" class="set-delete-btn ghost icon-btn" aria-label="Delete set">−</button>
         <div class="set-row-content">
             <span class="set-index">${setNumber}</span>
             <span class="previous-set">${previousDisplay || "-"}</span>
@@ -2475,7 +2475,14 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         </div>
     `;
     row.classList.toggle("set-complete", Boolean(existingSet?.isComplete));
-    attachSwipeToDelete(row, row.querySelector(".set-row-content"), async () => deleteSetRow(row));
+    
+    // Wire up delete button
+    const deleteBtn = row.querySelector(".set-delete-btn");
+    deleteBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await deleteSetRow(row);
+    });
 
     const [weightInput, repsInput] = row.querySelectorAll("input");
     
