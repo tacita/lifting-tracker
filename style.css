@@ -668,6 +668,9 @@ button.small {
     color: var(--muted);
     text-align: right;
     white-space: nowrap;
+    width: 120px;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
 .sets-container {
