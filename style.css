@@ -872,7 +872,7 @@ button.small {
     align-items: center;
     justify-content: center;
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(148, 163, 184, 0.4);
     color: var(--text);
 }
 
@@ -915,7 +915,7 @@ button.small {
     align-items: center;
     justify-content: center;
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(148, 163, 184, 0.4);
     color: var(--text);
 }
 
