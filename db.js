@@ -653,25 +653,23 @@ async function ensureInitialCloudSeedForUser() {
     const userId = String(authState.user.id);
     if (isUserSeeded(userId)) return;
     
-    // Check if local data exists before hydrating from cloud
-    // If we already have templates/exercises locally, don't overwrite with cloud
-    const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
-    if (Array.isArray(localTemplates) && localTemplates.length > 0) {
-        // Local data looks healthy, just push it to cloud
-        markUserSeeded(userId);
-        await pushLocalSnapshotToCloud();
-        return;
-    }
-    
-    // No local data, try to hydrate from cloud
+    // Always try to hydrate from cloud first (recover lost data on fresh login)
     const hydrated = await hydrateLocalFromCloudIfAvailable();
     if (hydrated.loaded) {
         markUserSeeded(userId);
         return;
     }
     
-    // No cloud data either, mark as seeded to avoid repeated attempts
-    await pushLocalSnapshotToCloud();
+    // No cloud data, check if we have local data to preserve
+    const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+    if (Array.isArray(localTemplates) && localTemplates.length > 0) {
+        // Local data exists, push it to cloud
+        markUserSeeded(userId);
+        await pushLocalSnapshotToCloud();
+        return;
+    }
+    
+    // Empty everywhere — mark as seeded to avoid repeated cloud attempts
     markUserSeeded(userId);
 }
 
