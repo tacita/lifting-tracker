@@ -48,7 +48,7 @@ const createExerciseModal = document.getElementById("create-exercise-modal");
 const createExerciseNameInput = document.getElementById("create-exercise-name");
 const createExerciseRepFloorInput = document.getElementById("create-exercise-rep-floor");
 const createExerciseRepCeilingInput = document.getElementById("create-exercise-rep-ceiling");
-const createExerciseWeightIncrementInput = document.getElementById("create-exercise-weight-increment");
+const createExerciseRestSecondsInput = document.getElementById("create-exercise-rest-seconds");
 const createExerciseSubmitBtn = document.getElementById("create-exercise-submit");
 const createExerciseCancelBtn = document.getElementById("create-exercise-cancel");
 const createExerciseCancelTopBtn = document.getElementById("create-exercise-cancel-top");
@@ -465,6 +465,22 @@ function playTimerDing() {
         oscillator.onended = () => ctx.close();
     } catch (err) {
         console.error(err);
+    }
+}
+
+function celebrateWithConfetti() {
+    const confettiEmojis = ["🎉", "🎊", "⭐", "✨", "🌟"];
+    const count = 40;
+    
+    for (let i = 0; i < count; i++) {
+        const confetti = document.createElement("div");
+        confetti.className = "confetti";
+        confetti.textContent = confettiEmojis[Math.floor(Math.random() * confettiEmojis.length)];
+        confetti.style.left = Math.random() * 100 + "%";
+        confetti.style.delay = Math.random() * 0.2 + "s";
+        document.body.appendChild(confetti);
+        
+        setTimeout(() => confetti.remove(), 1600);
     }
 }
 
@@ -1044,10 +1060,19 @@ function renderWorkoutLauncher() {
 }
 
 function getTemplateRestSecondsForExercise(exerciseId) {
-    if (!state.activeSession?.templateId) return 90;
-    const activeTemplate = state.templates.find((template) => String(template.id) === String(state.activeSession.templateId));
-    const item = getTemplateItems(activeTemplate).find((entry) => String(entry.exerciseId) === String(exerciseId));
-    return item?.restSeconds ?? 90;
+    // Try template first
+    if (state.activeSession?.templateId) {
+        const activeTemplate = state.templates.find((template) => String(template.id) === String(state.activeSession.templateId));
+        const item = getTemplateItems(activeTemplate).find((entry) => String(entry.exerciseId) === String(exerciseId));
+        if (item?.restSeconds) return item.restSeconds;
+    }
+    
+    // Fall back to exercise's rest seconds
+    const exercise = state.exercises.find((ex) => String(ex.id) === String(exerciseId));
+    if (exercise?.restSeconds) return exercise.restSeconds;
+    
+    // Final fallback
+    return 90;
 }
 
 // Exercises
@@ -2090,14 +2115,14 @@ async function submitCreateExercise() {
     const name = createExerciseNameInput.value.trim();
     const repFloor = parseInt(createExerciseRepFloorInput.value, 10);
     const repCeiling = parseInt(createExerciseRepCeilingInput.value, 10);
-    const weightIncrement = parseFloat(createExerciseWeightIncrementInput.value);
+    const restSeconds = parseInt(createExerciseRestSecondsInput.value, 10);
 
-    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(weightIncrement)) {
+    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
         return;
     }
 
-    const newExercise = { id: uuid(), name, repFloor, repCeiling, weightIncrement };
+    const newExercise = { id: uuid(), name, repFloor, repCeiling, restSeconds };
     try {
         await db.addExercise(newExercise);
         state.exercises.push(newExercise);
@@ -2174,7 +2199,12 @@ function renderWorkoutExercises() {
         `;
 
         card.addEventListener("dragstart", (e) => {
-            if (!e.target.classList.contains("exercise-drag-handle") && !e.target.closest(".exercise-drag-handle")) {
+            // Allow drag from exercise header, but not from buttons
+            if (!e.target.closest(".exercise-header")) {
+                e.preventDefault();
+                return;
+            }
+            if (e.target.closest("button")) {
                 e.preventDefault();
                 return;
             }
@@ -2820,6 +2850,7 @@ async function finishWorkout() {
         createdTemplateName ? `Workout saved • Template "${createdTemplateName}" created` : "Workout saved",
         "success"
     );
+    celebrateWithConfetti();
     await refreshUI();
 }
 

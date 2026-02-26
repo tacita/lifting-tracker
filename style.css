@@ -1239,3 +1239,23 @@ dialog::backdrop {
         min-width: 44px;
     }
 }
+
+@keyframes confetti-fall {
+    0% {
+        opacity: 1;
+        transform: translateY(-100px) rotate(0deg);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(100vh) rotate(360deg);
+    }
+}
+
+.confetti {
+    position: fixed;
+    pointer-events: none;
+    font-size: 24px;
+    line-height: 1;
+    animation: confetti-fall 1.5s ease-in forwards;
+    z-index: 999;
+}
