@@ -3368,6 +3368,12 @@ async function init() {
         renderAuthState(auth);
         if (auth?.user && !auth.loading) {
             await refreshUI();
+            // Install defaults AFTER hydration is complete
+            try {
+                await db.installDefaultLibrary({ onlyIfEmpty: true });
+            } catch (err) {
+                console.error(err);
+            }
         }
     });
     db.onSyncStateChange((nextSyncState) => {
@@ -3379,11 +3385,7 @@ async function init() {
         console.error(err);
         showToast(err?.message || "Auth init failed", "error");
     }
-    try {
-        await db.installDefaultLibrary({ onlyIfEmpty: true });
-    } catch (err) {
-        console.error(err);
-    }
+    
     await refreshUI();
     // Default to workout view
     setView("view-workout");
