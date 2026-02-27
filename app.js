@@ -2256,7 +2256,7 @@ function renderWorkoutExercises() {
 
         // Touch drag and drop (for mobile)
         let touchStartY = 0;
-        let draggingCard = null;
+        let isTouchDragging = false;
 
         card.addEventListener("touchstart", (e) => {
             // Only drag from header, not buttons
@@ -2264,70 +2264,60 @@ function renderWorkoutExercises() {
             if (e.target.closest("button")) return;
             
             touchStartY = e.touches[0].clientY;
-            draggingCard = card;
+            isTouchDragging = true;
             card.classList.add("exercise-card-dragging");
-            card.style.opacity = "0.7";
-        });
+            card.style.opacity = "0.6";
+        }, { passive: true });
 
         card.addEventListener("touchmove", (e) => {
-            if (draggingCard !== card) return;
+            if (!isTouchDragging || String(card.dataset.exerciseId) !== String(ex.id)) return;
             
             const currentY = e.touches[0].clientY;
-            const allCards = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card"));
-            const draggedIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(card.dataset.exerciseId));
+            const deltaY = currentY - touchStartY;
             
-            // Find which card we're over
-            for (let i = 0; i < allCards.length; i++) {
-                const rect = allCards[i].getBoundingClientRect();
-                const midpoint = rect.top + rect.height / 2;
-                
-                if (currentY < midpoint && i < draggedIndex) {
-                    // Moving up
-                    allCards[i].classList.add("exercise-card-drag-over");
-                } else if (currentY > midpoint && i > draggedIndex) {
-                    // Moving down
-                    allCards[i].classList.add("exercise-card-drag-over");
-                } else {
-                    allCards[i].classList.remove("exercise-card-drag-over");
-                }
+            // Show visual feedback while dragging
+            if (Math.abs(deltaY) > 10) {
+                // User is dragging significantly
+                card.style.transform = `translateY(${deltaY}px)`;
             }
-        });
+        }, { passive: true });
 
         card.addEventListener("touchend", async (e) => {
-            if (draggingCard !== card) return;
-            
-            const currentY = e.changedTouches[0].clientY;
-            const allCards = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card"));
-            const draggedIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(card.dataset.exerciseId));
-            
-            let targetIndex = draggedIndex;
-            
-            // Find target position
-            for (let i = 0; i < allCards.length; i++) {
-                const rect = allCards[i].getBoundingClientRect();
-                const midpoint = rect.top + rect.height / 2;
-                
-                if (currentY < midpoint) {
-                    targetIndex = i;
-                    break;
-                } else {
-                    targetIndex = i + 1;
-                }
+            if (!isTouchDragging || String(card.dataset.exerciseId) !== String(ex.id)) {
+                isTouchDragging = false;
+                return;
             }
             
-            targetIndex = Math.max(0, Math.min(targetIndex, allCards.length - 1));
+            const currentY = e.changedTouches[0].clientY;
+            const deltaY = currentY - touchStartY;
+            
+            const allCards = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card"));
+            const draggedIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(card.dataset.exerciseId));
+            let targetIndex = draggedIndex;
+            
+            // Determine new position based on swipe distance
+            const cardHeight = card.getBoundingClientRect().height;
+            
+            if (deltaY < -cardHeight / 2 && draggedIndex > 0) {
+                // Swiped up significantly
+                targetIndex = draggedIndex - 1;
+            } else if (deltaY > cardHeight / 2 && draggedIndex < allCards.length - 1) {
+                // Swiped down significantly
+                targetIndex = draggedIndex + 1;
+            }
             
             // Cleanup
             card.classList.remove("exercise-card-dragging");
             card.style.opacity = "1";
+            card.style.transform = "";
             allCards.forEach((c) => c.classList.remove("exercise-card-drag-over"));
-            draggingCard = null;
+            isTouchDragging = false;
             
             // Reorder if moved
             if (targetIndex !== draggedIndex) {
                 await reorderExercises(draggedIndex, targetIndex);
             }
-        });
+        }, { passive: true });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
 
