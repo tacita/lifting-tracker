@@ -61,7 +61,7 @@ const exercisesListEl = document.getElementById("exercises-list");
 const exerciseNameInput = document.getElementById("exercise-name");
 const repFloorInput = document.getElementById("rep-floor");
 const repCeilingInput = document.getElementById("rep-ceiling");
-const weightIncrementInput = document.getElementById("weight-increment");
+const restSecondsInput = document.getElementById("rest-seconds");
 const templateNameInput = document.getElementById("template-name");
 const templateFolderInput = document.getElementById("template-folder");
 const createTemplateBtn = document.getElementById("create-template");
@@ -1080,14 +1080,14 @@ async function addExercise() {
     const name = exerciseNameInput.value.trim();
     const repFloor = parseInt(repFloorInput.value, 10);
     const repCeiling = parseInt(repCeilingInput.value, 10);
-    const weightIncrement = parseFloat(weightIncrementInput.value);
+    const restSeconds = parseInt(restSecondsInput.value, 10);
 
-    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(weightIncrement)) {
+    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
         return;
     }
 
-    await db.addExercise({ id: uuid(), name, repFloor, repCeiling, weightIncrement });
+    await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds });
     exerciseNameInput.value = "";
     showToast("Exercise added", "success");
     await refreshUI();
