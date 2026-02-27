@@ -1103,11 +1103,10 @@ async function ensureInitialCloudSeedForUser() {
     const hasLocalData = (localExercises?.length || 0) > 0 || (localSessions?.length || 0) > 0 || (localTemplates?.length || 0) > 0;
     
     // If user is seeded but has NO local data, they probably cleared site data
-    // Force re-hydration from cloud
+    // Force re-hydration from cloud, but DON'T clear migration flag (only run once)
     if (isUserSeeded(userId) && !hasLocalData) {
         console.log("User marked seeded but local data is empty — force re-hydration");
-        localStorage.removeItem(MIGRATION_FLAG);
-        localStorage.removeItem(SEEDED_USERS_KEY);
+        localStorage.removeItem(SEEDED_USERS_KEY); // Only clear this, not MIGRATION_FLAG
     }
     
     if (isUserSeeded(userId)) {
