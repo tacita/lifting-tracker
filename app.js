@@ -2868,33 +2868,45 @@ async function finishWorkout() {
 
 async function cancelWorkout() {
     if (!state.activeSession) return;
+    
     const approved = await confirmAction({
         title: "Cancel workout",
         message: "Cancel current workout? This removes draft sets.",
         confirmLabel: "Cancel workout",
         danger: true,
     });
+    
     if (!approved) return;
-    await db.deleteSession(state.activeSession.id);
-    state.sessions = state.sessions.filter((s) => s.id !== state.activeSession.id);
-    state.sets = state.sets.filter((s) => s.sessionId !== state.activeSession.id);
-    state.activeSession = null;
-    state.activeExercises = [];
-    stopWorkoutElapsedTimer();
-    stopRestTimer();
-    state.restTimer.remainingSeconds = 0;
-    state.restTimer.lastDurationSeconds = 90;
-    renderRestTimer();
-    workoutNotesEl.value = "";
-    workoutSection.classList.add("hidden");
-    sessionExercisePickerEl.classList.add("hidden");
+    
     try {
-        await db.forceSyncToCloud();
-    } catch (err) {
-        console.error(err);
+        // Disable button to prevent multiple clicks
+        cancelWorkoutBtn.disabled = true;
+        
+        await db.deleteSession(state.activeSession.id);
+        state.sessions = state.sessions.filter((s) => s.id !== state.activeSession.id);
+        state.sets = state.sets.filter((s) => s.sessionId !== state.activeSession.id);
+        state.activeSession = null;
+        state.activeExercises = [];
+        stopWorkoutElapsedTimer();
+        stopRestTimer();
+        state.restTimer.remainingSeconds = 0;
+        state.restTimer.lastDurationSeconds = 90;
+        renderRestTimer();
+        workoutNotesEl.value = "";
+        workoutSection.classList.add("hidden");
+        sessionExercisePickerEl.classList.add("hidden");
+        
+        try {
+            await db.forceSyncToCloud();
+        } catch (err) {
+            console.error(err);
+        }
+        
+        showToast("Workout canceled", "info");
+        await refreshUI();
+    } finally {
+        cancelWorkoutBtn.disabled = false;
     }
-    showToast("Workout canceled", "info");
-    await refreshUI();
 }
 
 // History
