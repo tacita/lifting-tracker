@@ -856,6 +856,9 @@ function markMigrated() {
 
 // One-time migration from blob to normalized tables
 async function migrateToNormalizedSchema() {
+    // TEMPORARY: Force re-run to fix template items migration
+    localStorage.removeItem(MIGRATION_FLAG);
+    
     if (hasMigrated()) {
         console.log("Already migrated to normalized schema");
         return true;
@@ -965,24 +968,34 @@ async function migrateToNormalizedSchema() {
             console.log("✓ Migrated templates");
         }
         
-        if (payload.templateItems?.length > 0) {
-            const rows = payload.templateItems.map(item => ({
-                id: item.id,
-                user_id: userId,
-                template_id: item.templateId,
-                exercise_id: item.exerciseId,
-                sets: item.sets,
-                reps: item.reps,
-                rest_seconds: item.restSeconds,
-                superset_id: item.supersetId || null,
-                superset_order: item.supersetOrder || null,
-            }));
-            
+        // Extract template items from templates.items (embedded format)
+        const allTemplateItems = [];
+        if (payload.templates?.length > 0) {
+            payload.templates.forEach(template => {
+                if (Array.isArray(template.items)) {
+                    template.items.forEach(item => {
+                        allTemplateItems.push({
+                            id: item.id,
+                            user_id: userId,
+                            template_id: template.id,
+                            exercise_id: item.exerciseId,
+                            sets: item.sets,
+                            reps: item.reps,
+                            rest_seconds: item.restSeconds,
+                            superset_id: item.supersetId || null,
+                            superset_order: item.supersetOrder || null,
+                        });
+                    });
+                }
+            });
+        }
+        
+        if (allTemplateItems.length > 0) {
             const { error: e } = await supabaseClient
                 .from("template_items")
-                .upsert(rows, { onConflict: "id" });
+                .upsert(allTemplateItems, { onConflict: "id" });
             if (e) throw e;
-            console.log("✓ Migrated template items");
+            console.log(`✓ Migrated ${allTemplateItems.length} template items`);
         }
         
         markMigrated();
