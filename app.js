@@ -2106,7 +2106,7 @@ function openCreateExerciseModal() {
     createExerciseNameInput.value = "";
     createExerciseRepFloorInput.value = "8";
     createExerciseRepCeilingInput.value = "12";
-    createExerciseWeightIncrementInput.value = "5";
+    createExerciseRestSecondsInput.value = "90";
     createExerciseNameInput.focus();
     createExerciseModal.showModal();
 }
