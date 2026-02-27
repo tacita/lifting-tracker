@@ -2836,6 +2836,13 @@ async function finishWorkout() {
     };
     await db.updateSession(updated);
     state.sessions = state.sessions.map((s) => (s.id === updated.id ? updated : s));
+    
+    // Ensure workout is synced to cloud before clearing local state
+    const syncSuccess = await db.ensureCloudSyncComplete();
+    if (!syncSuccess) {
+        showToast("⚠️ Sync to cloud failed. Your data is saved locally.", "warning");
+    }
+    
     state.activeSession = null;
     state.activeExercises = [];
     stopWorkoutElapsedTimer();

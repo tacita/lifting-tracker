@@ -590,6 +590,14 @@ async function pushLocalSnapshotToCloud() {
     try {
         const payload = await localExportData();
         const userId = authState.user.id;
+        
+        console.log("Syncing to cloud:", {
+            exercises: payload.exercises?.length || 0,
+            sessions: payload.sessions?.length || 0,
+            sets: payload.sets?.length || 0,
+            templates: payload.templates?.length || 0,
+        });
+        
         const { error } = await supabaseClient
             .from(SNAPSHOT_TABLE)
             .upsert(
@@ -603,6 +611,8 @@ async function pushLocalSnapshotToCloud() {
         if (error) {
             throw new Error(parseSupabaseError(error, "Failed to sync to cloud"));
         }
+        
+        console.log("✓ Cloud sync successful");
         setSyncState({
             status: "idle",
             error: "",
@@ -610,6 +620,7 @@ async function pushLocalSnapshotToCloud() {
         });
         return true;
     } catch (err) {
+        console.error("✗ Cloud sync failed:", err);
         setSyncState({
             status: "failed",
             error: parseSupabaseError(err, "Failed to sync to cloud"),
@@ -626,50 +637,122 @@ function scheduleCloudSync() {
         clearTimeout(syncTimer);
     }
     syncTimer = setTimeout(() => {
-        pushLocalSnapshotToCloud().catch((err) => console.error(err));
+        pushLocalSnapshotToCloud().catch((err) => console.error("Background sync failed:", err));
     }, 500);
+}
+
+// For critical operations that must complete before app state changes
+export async function ensureCloudSyncComplete() {
+    if (!useCloudSync()) return true;
+    
+    // Cancel pending debounced sync
+    if (syncTimer) {
+        clearTimeout(syncTimer);
+        syncTimer = null;
+    }
+    
+    // Sync immediately and await
+    try {
+        await pushLocalSnapshotToCloud();
+        return true;
+    } catch (err) {
+        console.error("Critical sync failed:", err);
+        // Still return true but log — don't block the operation
+        // The sync will retry on next operation
+        return false;
+    }
 }
 
 async function hydrateLocalFromCloudIfAvailable() {
     if (!useCloudSync()) return { loaded: false };
     const userId = authState.user.id;
-    const { data, error } = await supabaseClient
-        .from(SNAPSHOT_TABLE)
-        .select("payload")
-        .eq("user_id", userId)
-        .maybeSingle();
-    if (error) {
-        throw new Error(parseSupabaseError(error, "Failed to load cloud data"));
-    }
-    if (!data || !data.payload) {
+    try {
+        const { data, error } = await supabaseClient
+            .from(SNAPSHOT_TABLE)
+            .select("payload, updated_at")
+            .eq("user_id", userId)
+            .maybeSingle();
+        
+        if (error) {
+            console.warn("Failed to fetch cloud snapshot:", error);
+            return { loaded: false };
+        }
+        
+        if (!data || !data.payload) {
+            console.log("No cloud snapshot found for user");
+            return { loaded: false };
+        }
+        
+        // Validate payload has expected structure
+        const payload = data.payload;
+        if (!payload.exercises || !payload.sessions || !payload.sets) {
+            console.warn("Cloud snapshot missing expected data");
+            return { loaded: false };
+        }
+        
+        console.log(`Loading cloud snapshot from ${data.updated_at}:`, {
+            exercises: payload.exercises?.length || 0,
+            sessions: payload.sessions?.length || 0,
+            sets: payload.sets?.length || 0,
+            templates: payload.templates?.length || 0,
+        });
+        
+        await localImportData(payload);
+        return { loaded: true };
+    } catch (err) {
+        console.error("Hydration error:", err);
         return { loaded: false };
     }
-    await localImportData(data.payload);
-    return { loaded: true };
 }
 
 async function ensureInitialCloudSeedForUser() {
     if (!useCloudSync()) return;
     const userId = String(authState.user.id);
-    if (isUserSeeded(userId)) return;
+    
+    if (isUserSeeded(userId)) {
+        console.log("User already seeded, skipping hydration");
+        return;
+    }
+    
+    console.log("=== Starting cloud hydration for user ===");
     
     // Always try to hydrate from cloud first (recover lost data on fresh login)
+    console.log("Attempting to load from cloud...");
     const hydrated = await hydrateLocalFromCloudIfAvailable();
     if (hydrated.loaded) {
+        console.log("✓ Hydration successful");
         markUserSeeded(userId);
         return;
     }
     
+    console.log("No cloud data found");
+    
     // No cloud data, check if we have local data to preserve
     const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+    const localExercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
+    const localSessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
+    
+    console.log("Local data check:", {
+        templates: localTemplates?.length || 0,
+        exercises: localExercises?.length || 0,
+        sessions: localSessions?.length || 0,
+    });
+    
     if (Array.isArray(localTemplates) && localTemplates.length > 0) {
         // Local data exists, push it to cloud
+        console.log("Local data found, pushing to cloud...");
         markUserSeeded(userId);
-        await pushLocalSnapshotToCloud();
+        try {
+            await pushLocalSnapshotToCloud();
+            console.log("✓ Pushed local data to cloud");
+        } catch (err) {
+            console.error("Failed to push local data to cloud:", err);
+        }
         return;
     }
     
     // Empty everywhere — mark as seeded to avoid repeated cloud attempts
+    console.log("No data anywhere, marking as seeded");
     markUserSeeded(userId);
 }
 
