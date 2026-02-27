@@ -627,6 +627,9 @@ async function syncTableToCloud(tableName, data, userId) {
             row.rest_seconds = item.restSeconds;
             row.superset_id = item.supersetId || null;
             row.superset_order = item.supersetOrder || null;
+        } else if (tableName === "folders") {
+            row.id = item.id;
+            row.name = item.name;
         }
         
         return row;
@@ -653,12 +656,14 @@ async function pushLocalSnapshotToCloud() {
         const sessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
         const sets = await tx(["sets"], "readonly", (store) => requestToPromise(store.getAll()));
         const templates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+        const folders = await tx(["folders"], "readonly", (store) => requestToPromise(store.getAll()));
         
         console.log("Syncing to cloud:", {
             exercises: exercises?.length || 0,
             sessions: sessions?.length || 0,
             sets: sets?.length || 0,
             templates: templates?.length || 0,
+            folders: folders?.length || 0,
         });
         
         // Build template items from templates.items
@@ -676,6 +681,7 @@ async function pushLocalSnapshotToCloud() {
             syncTableToCloud("sets", sets || [], userId),
             syncTableToCloud("templates", templates || [], userId),
             syncTableToCloud("template_items", templateItems, userId),
+            syncTableToCloud("folders", folders || [], userId),
         ]);
         
         console.log("✓ Cloud sync successful");
@@ -736,15 +742,16 @@ async function hydrateLocalFromCloudIfAvailable() {
     try {
         console.log("Loading data from normalized cloud tables...");
         
-        const [exercisesData, sessionsData, setsData, templatesData, itemsData] = await Promise.all([
+        const [exercisesData, sessionsData, setsData, templatesData, itemsData, foldersData] = await Promise.all([
             supabaseClient.from("exercises").select("*").eq("user_id", userId),
             supabaseClient.from("sessions").select("*").eq("user_id", userId),
             supabaseClient.from("sets").select("*").eq("user_id", userId),
             supabaseClient.from("templates").select("*").eq("user_id", userId),
             supabaseClient.from("template_items").select("*").eq("user_id", userId),
+            supabaseClient.from("folders").select("*").eq("user_id", userId).catch(() => ({ data: [], error: null })),
         ]);
         
-        // Check for errors
+        // Check for errors (folders table might not exist yet, so we don't throw if it errors)
         if (exercisesData.error) throw exercisesData.error;
         if (sessionsData.error) throw sessionsData.error;
         if (setsData.error) throw setsData.error;
@@ -766,14 +773,15 @@ async function hydrateLocalFromCloudIfAvailable() {
             sets: setsData.data?.length || 0,
             templates: templatesData.data?.length || 0,
             items: itemsData.data?.length || 0,
+            folders: foldersData.data?.length || 0,
         });
         
         // Import to local IndexedDB
         // Note: templateItems store doesn't exist yet in local IndexedDB, storing as template.items for now
         await tx(
-            ["exercises", "sessions", "sets", "templates"],
+            ["exercises", "sessions", "sets", "templates", "folders"],
             "readwrite",
-            (exStore, sessStore, setStore, tmplStore) => {
+            (exStore, sessStore, setStore, tmplStore, folderStore) => {
                 // Convert snake_case to camelCase
                 exercisesData.data?.forEach(row => {
                     exStore.put({
@@ -827,6 +835,13 @@ async function hydrateLocalFromCloudIfAvailable() {
                             supersetId: item.superset_id,
                             supersetOrder: item.superset_order,
                         })) || [],
+                    });
+                });
+                
+                foldersData.data?.forEach(row => {
+                    folderStore.put({
+                        id: row.id,
+                        name: row.name,
                     });
                 });
             }
@@ -1013,6 +1028,23 @@ async function migrateToNormalizedSchema() {
                 .upsert(allTemplateItems, { onConflict: "id" });
             if (e) throw e;
             console.log(`✓ Migrated ${allTemplateItems.length} template items`);
+        }
+        
+        // Migrate folders
+        if (payload.folders?.length > 0) {
+            const rows = payload.folders.map(f => ({
+                id: f.id,
+                user_id: userId,
+                name: f.name,
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("folders")
+                .upsert(rows, { onConflict: "id" })
+                .catch(() => ({ error: null })); // Ignore if table doesn't exist yet
+            
+            if (e) throw e;
+            console.log(`✓ Migrated ${rows.length} folders`);
         }
         
         markMigrated();
