@@ -2611,6 +2611,11 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         row.classList.toggle("set-complete", nextComplete);
         row.querySelector(".mark-set").classList.toggle("done", nextComplete);
         
+        // Sync immediately when marking set complete (don't wait for debounce)
+        if (nextComplete) {
+            db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set completion:", err));
+        }
+        
         // Remove auto-populated styling when marking complete
         if (nextComplete) {
             removeAutoPopulatedClass();
