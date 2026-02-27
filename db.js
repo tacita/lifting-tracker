@@ -973,7 +973,13 @@ async function migrateToNormalizedSchema() {
         if (payload.templates?.length > 0) {
             payload.templates.forEach(template => {
                 if (Array.isArray(template.items)) {
-                    template.items.forEach(item => {
+                    template.items.forEach((item, idx) => {
+                        // Skip items without exerciseId
+                        if (!item.exerciseId) {
+                            console.log("Skipping template item without exerciseId");
+                            return;
+                        }
+                        
                         // Parse ranges like "6-8" to integers (take first number)
                         const parseSets = (val) => {
                             if (typeof val === "number") return val;
@@ -994,7 +1000,7 @@ async function migrateToNormalizedSchema() {
                         };
                         
                         allTemplateItems.push({
-                            id: item.id,
+                            id: item.id || `${template.id}-${item.exerciseId}-${idx}`,
                             user_id: userId,
                             template_id: template.id,
                             exercise_id: item.exerciseId,
