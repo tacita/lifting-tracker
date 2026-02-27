@@ -698,16 +698,11 @@ async function pushLocalSnapshotToCloud() {
 }
 
 function scheduleCloudSync() {
-    if (!useCloudSync()) {
-        console.log("Cloud sync disabled");
-        return;
-    }
-    console.log("Scheduling cloud sync in 500ms...");
+    if (!useCloudSync()) return;
     if (syncTimer) {
         clearTimeout(syncTimer);
     }
     syncTimer = setTimeout(() => {
-        console.log("Executing scheduled sync...");
         pushLocalSnapshotToCloud().catch((err) => console.error("Background sync failed:", err));
     }, 500);
 }
@@ -856,9 +851,6 @@ function markMigrated() {
 
 // One-time migration from blob to normalized tables
 async function migrateToNormalizedSchema() {
-    // TEMPORARY: Force re-run to fix template items migration
-    localStorage.removeItem(MIGRATION_FLAG);
-    
     if (hasMigrated()) {
         console.log("Already migrated to normalized schema");
         return true;
