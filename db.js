@@ -974,14 +974,33 @@ async function migrateToNormalizedSchema() {
             payload.templates.forEach(template => {
                 if (Array.isArray(template.items)) {
                     template.items.forEach(item => {
+                        // Parse ranges like "6-8" to integers (take first number)
+                        const parseSets = (val) => {
+                            if (typeof val === "number") return val;
+                            if (typeof val === "string") {
+                                const match = val.match(/(\d+)/);
+                                return match ? parseInt(match[1], 10) : 6;
+                            }
+                            return 6;
+                        };
+                        
+                        const parseReps = (val) => {
+                            if (typeof val === "number") return val;
+                            if (typeof val === "string") {
+                                const match = val.match(/(\d+)/);
+                                return match ? parseInt(match[1], 10) : 8;
+                            }
+                            return 8;
+                        };
+                        
                         allTemplateItems.push({
                             id: item.id,
                             user_id: userId,
                             template_id: template.id,
                             exercise_id: item.exerciseId,
-                            sets: item.sets,
-                            reps: item.reps,
-                            rest_seconds: item.restSeconds,
+                            sets: parseSets(item.sets),
+                            reps: parseReps(item.reps),
+                            rest_seconds: item.restSeconds || 90,
                             superset_id: item.supersetId || null,
                             superset_order: item.supersetOrder || null,
                         });
