@@ -742,14 +742,21 @@ async function hydrateLocalFromCloudIfAvailable() {
     try {
         console.log("Loading data from normalized cloud tables...");
         
-        const [exercisesData, sessionsData, setsData, templatesData, itemsData, foldersData] = await Promise.all([
+        const [exercisesData, sessionsData, setsData, templatesData, itemsData] = await Promise.all([
             supabaseClient.from("exercises").select("*").eq("user_id", userId),
             supabaseClient.from("sessions").select("*").eq("user_id", userId),
             supabaseClient.from("sets").select("*").eq("user_id", userId),
             supabaseClient.from("templates").select("*").eq("user_id", userId),
             supabaseClient.from("template_items").select("*").eq("user_id", userId),
-            supabaseClient.from("folders").select("*").eq("user_id", userId).catch(() => ({ data: [], error: null })),
         ]);
+        
+        // Folders table might not exist yet (optional)
+        let foldersData = { data: null, error: null };
+        try {
+            foldersData = await supabaseClient.from("folders").select("*").eq("user_id", userId);
+        } catch (err) {
+            console.log("Folders table not available");
+        }
         
         // Check for errors (folders table might not exist yet, so we don't throw if it errors)
         if (exercisesData.error) throw exercisesData.error;
