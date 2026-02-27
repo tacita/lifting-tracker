@@ -653,14 +653,20 @@ async function pushLocalSnapshotToCloud() {
         const sessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
         const sets = await tx(["sets"], "readonly", (store) => requestToPromise(store.getAll()));
         const templates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
-        const templateItems = await tx(["templateItems"], "readonly", (store) => requestToPromise(store.getAll()));
         
         console.log("Syncing to cloud:", {
             exercises: exercises?.length || 0,
             sessions: sessions?.length || 0,
             sets: sets?.length || 0,
             templates: templates?.length || 0,
-            templateItems: templateItems?.length || 0,
+        });
+        
+        // Build template items from templates.items
+        const templateItems = [];
+        templates?.forEach(t => {
+            if (Array.isArray(t.items)) {
+                templateItems.push(...t.items);
+            }
         });
         
         // Sync each table
@@ -669,7 +675,7 @@ async function pushLocalSnapshotToCloud() {
             syncTableToCloud("sessions", sessions || [], userId),
             syncTableToCloud("sets", sets || [], userId),
             syncTableToCloud("templates", templates || [], userId),
-            syncTableToCloud("template_items", templateItems || [], userId),
+            syncTableToCloud("template_items", templateItems, userId),
         ]);
         
         console.log("✓ Cloud sync successful");
@@ -768,10 +774,11 @@ async function hydrateLocalFromCloudIfAvailable() {
         });
         
         // Import to local IndexedDB
+        // Note: templateItems store doesn't exist yet in local IndexedDB, storing as template.items for now
         await tx(
-            ["exercises", "sessions", "sets", "templates", "templateItems"],
+            ["exercises", "sessions", "sets", "templates"],
             "readwrite",
-            (exStore, sessStore, setStore, tmplStore, itemStore) => {
+            (exStore, sessStore, setStore, tmplStore) => {
                 // Convert snake_case to camelCase
                 exercisesData.data?.forEach(row => {
                     exStore.put({
@@ -815,19 +822,16 @@ async function hydrateLocalFromCloudIfAvailable() {
                     tmplStore.put({
                         id: row.id,
                         name: row.name,
-                    });
-                });
-                
-                itemsData.data?.forEach(row => {
-                    itemStore.put({
-                        id: row.id,
-                        templateId: row.template_id,
-                        exerciseId: row.exercise_id,
-                        sets: row.sets,
-                        reps: row.reps,
-                        restSeconds: row.rest_seconds,
-                        supersetId: row.superset_id,
-                        supersetOrder: row.superset_order,
+                        items: itemsData.data?.filter(item => String(item.template_id) === String(row.id)).map(item => ({
+                            id: item.id,
+                            templateId: item.template_id,
+                            exerciseId: item.exercise_id,
+                            sets: item.sets,
+                            reps: item.reps,
+                            restSeconds: item.rest_seconds,
+                            supersetId: item.superset_id,
+                            supersetOrder: item.superset_order,
+                        })) || [],
                     });
                 });
             }
