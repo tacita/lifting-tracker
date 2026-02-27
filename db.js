@@ -692,11 +692,16 @@ async function pushLocalSnapshotToCloud() {
 }
 
 function scheduleCloudSync() {
-    if (!useCloudSync()) return;
+    if (!useCloudSync()) {
+        console.log("Cloud sync disabled");
+        return;
+    }
+    console.log("Scheduling cloud sync in 500ms...");
     if (syncTimer) {
         clearTimeout(syncTimer);
     }
     syncTimer = setTimeout(() => {
+        console.log("Executing scheduled sync...");
         pushLocalSnapshotToCloud().catch((err) => console.error("Background sync failed:", err));
     }, 500);
 }
