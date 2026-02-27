@@ -2198,6 +2198,25 @@ function renderWorkoutExercises() {
             <button class="ghost add-set">+ Add set</button>
         `;
 
+        // Helper to reorder exercises
+        async function reorderExercises(fromIndex, toIndex) {
+            if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+            const reordered = [...state.activeExercises];
+            const [removed] = reordered.splice(fromIndex, 1);
+            reordered.splice(toIndex, 0, removed);
+            state.activeExercises = reordered;
+            const updatedSession = {
+                ...state.activeSession,
+                exerciseIds: reordered.map((ex) => ex.id),
+                notes: workoutNotesEl.value,
+            };
+            await db.updateSession(updatedSession);
+            state.activeSession = updatedSession;
+            state.sessions = state.sessions.map((s) => (String(s.id) === String(updatedSession.id) ? updatedSession : s));
+            renderWorkoutExercises();
+        }
+
+        // Desktop drag and drop
         card.addEventListener("dragstart", (e) => {
             // Allow drag from exercise header, but not from buttons
             if (!e.target.closest(".exercise-header")) {
@@ -2232,20 +2251,82 @@ function renderWorkoutExercises() {
             if (!draggedId || draggedId === card.dataset.exerciseId) return;
             const fromIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(draggedId));
             const toIndex = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card")).indexOf(card);
-            if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
-            const reordered = [...state.activeExercises];
-            const [removed] = reordered.splice(fromIndex, 1);
-            reordered.splice(toIndex, 0, removed);
-            state.activeExercises = reordered;
-            const updatedSession = {
-                ...state.activeSession,
-                exerciseIds: reordered.map((ex) => ex.id),
-                notes: workoutNotesEl.value,
-            };
-            await db.updateSession(updatedSession);
-            state.activeSession = updatedSession;
-            state.sessions = state.sessions.map((s) => (String(s.id) === String(updatedSession.id) ? updatedSession : s));
-            renderWorkoutExercises();
+            await reorderExercises(fromIndex, toIndex);
+        });
+
+        // Touch drag and drop (for mobile)
+        let touchStartY = 0;
+        let draggingCard = null;
+
+        card.addEventListener("touchstart", (e) => {
+            // Only drag from header, not buttons
+            if (!e.target.closest(".exercise-header")) return;
+            if (e.target.closest("button")) return;
+            
+            touchStartY = e.touches[0].clientY;
+            draggingCard = card;
+            card.classList.add("exercise-card-dragging");
+            card.style.opacity = "0.7";
+        });
+
+        card.addEventListener("touchmove", (e) => {
+            if (draggingCard !== card) return;
+            
+            const currentY = e.touches[0].clientY;
+            const allCards = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card"));
+            const draggedIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(card.dataset.exerciseId));
+            
+            // Find which card we're over
+            for (let i = 0; i < allCards.length; i++) {
+                const rect = allCards[i].getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                if (currentY < midpoint && i < draggedIndex) {
+                    // Moving up
+                    allCards[i].classList.add("exercise-card-drag-over");
+                } else if (currentY > midpoint && i > draggedIndex) {
+                    // Moving down
+                    allCards[i].classList.add("exercise-card-drag-over");
+                } else {
+                    allCards[i].classList.remove("exercise-card-drag-over");
+                }
+            }
+        });
+
+        card.addEventListener("touchend", async (e) => {
+            if (draggingCard !== card) return;
+            
+            const currentY = e.changedTouches[0].clientY;
+            const allCards = Array.from(workoutExercisesEl.querySelectorAll(".exercise-card"));
+            const draggedIndex = state.activeExercises.findIndex((ex) => String(ex.id) === String(card.dataset.exerciseId));
+            
+            let targetIndex = draggedIndex;
+            
+            // Find target position
+            for (let i = 0; i < allCards.length; i++) {
+                const rect = allCards[i].getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                if (currentY < midpoint) {
+                    targetIndex = i;
+                    break;
+                } else {
+                    targetIndex = i + 1;
+                }
+            }
+            
+            targetIndex = Math.max(0, Math.min(targetIndex, allCards.length - 1));
+            
+            // Cleanup
+            card.classList.remove("exercise-card-dragging");
+            card.style.opacity = "1";
+            allCards.forEach((c) => c.classList.remove("exercise-card-drag-over"));
+            draggingCard = null;
+            
+            // Reorder if moved
+            if (targetIndex !== draggedIndex) {
+                await reorderExercises(draggedIndex, targetIndex);
+            }
         });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
