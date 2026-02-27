@@ -24,6 +24,8 @@ const workoutNotesEl = document.getElementById("workout-notes");
 const finishWorkoutBtn = document.getElementById("finish-workout");
 const pauseWorkoutBtn = document.getElementById("pause-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
+const syncIndicator = document.getElementById("sync-indicator");
+const syncIcon = document.getElementById("sync-icon");
 const sessionTemplateLabel = document.getElementById("session-template-label");
 
 // Floating widget refs
@@ -390,6 +392,7 @@ function handleSyncStateChange(nextSyncState) {
         lastSyncedAt: String(nextSyncState?.lastSyncedAt || ""),
     };
     renderSyncState(state.sync);
+    updateSyncIndicator();
     if (state.sync.status === "failed") {
         if (!state.hasShownSyncFailureToast || prevStatus !== "failed") {
             state.hasShownSyncFailureToast = true;
@@ -397,6 +400,28 @@ function handleSyncStateChange(nextSyncState) {
         }
     } else {
         state.hasShownSyncFailureToast = false;
+    }
+}
+
+function updateSyncIndicator() {
+    if (!syncIndicator || !syncIcon) return;
+    
+    const sync = state.sync;
+    
+    syncIndicator.classList.remove("syncing", "error");
+    
+    if (sync.status === "syncing") {
+        syncIcon.textContent = "⟳";
+        syncIndicator.classList.add("syncing");
+        syncIndicator.title = "Syncing to cloud...";
+    } else if (sync.status === "failed") {
+        syncIcon.textContent = "✗";
+        syncIndicator.classList.add("error");
+        syncIndicator.title = `Sync failed: ${sync.error}`;
+    } else {
+        syncIcon.textContent = "✓";
+        syncIndicator.classList.remove("error", "syncing");
+        syncIndicator.title = sync.lastSyncedAt ? `Last synced at ${formatClockTime(sync.lastSyncedAt)}` : "Ready to sync";
     }
 }
 

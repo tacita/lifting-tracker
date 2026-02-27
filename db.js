@@ -13,6 +13,9 @@ let authSubscription = null;
 let syncTimer = null;
 let syncInFlight = false;
 let syncListeners = [];
+let hydrationComplete = false;
+let hydrationError = null;
+let hydrationListeners = [];
 let syncState = {
     status: "idle",
     error: "",

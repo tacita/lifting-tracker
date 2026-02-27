@@ -190,6 +190,37 @@ body {
     font-size: 26px;
 }
 
+.sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    padding: 4px 8px;
+}
+
+.sync-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    text-align: center;
+    line-height: 16px;
+}
+
+.sync-indicator.syncing {
+    color: var(--accent);
+    animation: pulse 1s infinite;
+}
+
+.sync-indicator.error {
+    color: var(--danger);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
 .eyebrow {
     margin: 0;
     color: var(--muted);
