@@ -417,6 +417,9 @@ button.small {
     margin-bottom: 10px;
     background: var(--surface);
     transition: border-color 0.2s, margin-bottom 0.2s;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 .exercise-card[data-superset-id] {

@@ -2263,15 +2263,17 @@ function renderWorkoutExercises() {
             if (!e.target.closest(".exercise-header")) return;
             if (e.target.closest("button")) return;
             
+            e.preventDefault();
             touchStartY = e.touches[0].clientY;
             isTouchDragging = true;
             card.classList.add("exercise-card-dragging");
             card.style.opacity = "0.6";
-        }, { passive: true });
+        }, { passive: false });
 
         card.addEventListener("touchmove", (e) => {
             if (!isTouchDragging || String(card.dataset.exerciseId) !== String(ex.id)) return;
             
+            e.preventDefault();
             const currentY = e.touches[0].clientY;
             const deltaY = currentY - touchStartY;
             
@@ -2280,7 +2282,7 @@ function renderWorkoutExercises() {
                 // User is dragging significantly
                 card.style.transform = `translateY(${deltaY}px)`;
             }
-        }, { passive: true });
+        }, { passive: false });
 
         card.addEventListener("touchend", async (e) => {
             if (!isTouchDragging || String(card.dataset.exerciseId) !== String(ex.id)) {
@@ -2288,6 +2290,7 @@ function renderWorkoutExercises() {
                 return;
             }
             
+            e.preventDefault();
             const currentY = e.changedTouches[0].clientY;
             const deltaY = currentY - touchStartY;
             
@@ -2317,7 +2320,7 @@ function renderWorkoutExercises() {
             if (targetIndex !== draggedIndex) {
                 await reorderExercises(draggedIndex, targetIndex);
             }
-        }, { passive: true });
+        }, { passive: false });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
 
