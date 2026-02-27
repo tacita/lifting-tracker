@@ -3383,12 +3383,8 @@ async function init() {
         renderAuthState(auth);
         if (auth?.user && !auth.loading) {
             await refreshUI();
-            // Install defaults AFTER hydration is complete
-            try {
-                await db.installDefaultLibrary({ onlyIfEmpty: true });
-            } catch (err) {
-                console.error(err);
-            }
+            // Don't auto-install defaults — causes duplicate ID conflicts with cloud data
+            // Users can click "Load PF defaults" button manually if they want them
         }
     });
     db.onSyncStateChange((nextSyncState) => {
