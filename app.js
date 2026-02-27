@@ -2654,14 +2654,14 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         if (!setRecord) {
             const saved = await saveSetRow(container, exercise, row, weightInput, repsInput);
             if (!saved) {
-                showToast("Enter weight and reps before marking done", "error");
+                showToast("Enter reps before marking done", "error");
                 return;
             }
             setRecord = saved;
         } else {
-            const inputWeight = parseFloat(weightInput.value);
+            const inputWeight = weightInput.value.trim() ? parseFloat(weightInput.value) : 0;
             const inputReps = parseInt(repsInput.value, 10);
-            if (Number.isFinite(inputWeight) && Number.isFinite(inputReps)
+            if (Number.isFinite(inputReps) && inputReps > 0
                 && (setRecord.weight !== inputWeight || setRecord.reps !== inputReps)) {
                 const refreshed = {
                     ...setRecord,
@@ -2781,9 +2781,11 @@ function applyCompletionPrefillRules(container, sourceRow, weight, reps, forceOv
 
 async function saveSetRow(container, exercise, row, weightInput, repsInput) {
     if (!state.activeSession) return null;
-    const weight = parseFloat(weightInput.value);
+    const weight = weightInput.value.trim() ? parseFloat(weightInput.value) : 0;
     const reps = parseInt(repsInput.value, 10);
-    if (!Number.isFinite(weight) || !Number.isFinite(reps)) return null;
+    
+    // Reps are required, weight defaults to 0 if empty
+    if (!Number.isFinite(reps) || reps <= 0) return null;
 
     const setNumber = Array.from(container.querySelectorAll(".set-row")).indexOf(row) + 1;
     const existing = row.dataset.setId ? state.sets.find((item) => String(item.id) === row.dataset.setId) : null;
