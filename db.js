@@ -1061,6 +1061,21 @@ async function ensureInitialCloudSeedForUser() {
     if (!useCloudSync()) return;
     const userId = String(authState.user.id);
     
+    // Check if local data exists
+    const localExercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
+    const localSessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
+    const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+    
+    const hasLocalData = (localExercises?.length || 0) > 0 || (localSessions?.length || 0) > 0 || (localTemplates?.length || 0) > 0;
+    
+    // If user is seeded but has NO local data, they probably cleared site data
+    // Force re-hydration from cloud
+    if (isUserSeeded(userId) && !hasLocalData) {
+        console.log("User marked seeded but local data is empty — force re-hydration");
+        localStorage.removeItem(MIGRATION_FLAG);
+        localStorage.removeItem(SEEDED_USERS_KEY);
+    }
+    
     if (isUserSeeded(userId)) {
         console.log("User already seeded, skipping hydration");
         return;
@@ -1085,18 +1100,13 @@ async function ensureInitialCloudSeedForUser() {
     
     console.log("No cloud data found in normalized tables");
     
-    // Step 3: Check if we have local data to preserve
-    const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
-    const localExercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
-    const localSessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
-    
     console.log("Local data check:", {
         templates: localTemplates?.length || 0,
         exercises: localExercises?.length || 0,
         sessions: localSessions?.length || 0,
     });
     
-    if (Array.isArray(localTemplates) && localTemplates.length > 0) {
+    if (hasLocalData) {
         // Local data exists, push it to cloud
         console.log("Local data found, pushing to cloud...");
         markUserSeeded(userId);
