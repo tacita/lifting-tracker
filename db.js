@@ -677,13 +677,19 @@ async function pushLocalSnapshotToCloud() {
             folders: folders?.length || 0,
         });
         
-        // Build template items from templates.items
-        const templateItems = [];
+        // Build template items from templates.items, removing duplicates
+        const templateItemsMap = new Map();
         templates?.forEach(t => {
             if (Array.isArray(t.items)) {
-                templateItems.push(...t.items);
+                t.items.forEach(item => {
+                    // Deduplicate by ID
+                    if (!templateItemsMap.has(item.id)) {
+                        templateItemsMap.set(item.id, item);
+                    }
+                });
             }
         });
+        const templateItems = Array.from(templateItemsMap.values());
         
         // Sync each table
         await Promise.all([
@@ -993,7 +999,8 @@ async function migrateToNormalizedSchema() {
             console.log("✓ Migrated templates");
         }
         
-        // Extract template items from templates.items (embedded format)
+        // Extract template items from templates.items (embedded format), deduplicating by ID
+        const itemsSeen = new Set();
         const allTemplateItems = [];
         if (payload.templates?.length > 0) {
             payload.templates.forEach(template => {
@@ -1004,6 +1011,15 @@ async function migrateToNormalizedSchema() {
                             console.log("Skipping template item without exerciseId");
                             return;
                         }
+                        
+                        const itemId = item.id || `${template.id}-${item.exerciseId}-${idx}`;
+                        
+                        // Skip if we've already seen this item ID
+                        if (itemsSeen.has(itemId)) {
+                            console.log("Skipping duplicate template item:", itemId);
+                            return;
+                        }
+                        itemsSeen.add(itemId);
                         
                         // Parse ranges like "6-8" to integers (take first number)
                         const parseSets = (val) => {
@@ -1025,7 +1041,7 @@ async function migrateToNormalizedSchema() {
                         };
                         
                         allTemplateItems.push({
-                            id: item.id || `${template.id}-${item.exerciseId}-${idx}`,
+                            id: itemId,
                             user_id: userId,
                             template_id: template.id,
                             exercise_id: item.exerciseId,
