@@ -587,7 +587,18 @@ async function localImportData(data) {
 // ============ Normalized Table Sync ============
 
 async function syncTableToCloud(tableName, data, userId) {
-    const rows = data.map(item => {
+    // Deduplicate by ID to avoid "ON CONFLICT DO UPDATE" errors
+    const seen = new Set();
+    const dedupedData = [];
+    
+    for (const item of data) {
+        if (!seen.has(item.id)) {
+            seen.add(item.id);
+            dedupedData.push(item);
+        }
+    }
+    
+    const rows = dedupedData.map(item => {
         const row = { user_id: userId, updated_at: new Date().toISOString() };
         
         if (tableName === "exercises") {

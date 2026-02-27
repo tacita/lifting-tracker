@@ -1990,7 +1990,18 @@ async function startWorkout(templateId = null) {
 
 function maybeResumeDraft() {
     if (state.activeSession) return;
-    const draft = state.sessions.find((s) => s.status === "draft");
+    
+    // Only resume draft if it's from THIS session (less than 1 hour old)
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000;
+    
+    const draft = state.sessions.find((s) => {
+        if (s.status !== "draft") return false;
+        const createdAt = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+        // Only resume if created very recently (this session)
+        return createdAt && (now - createdAt) < ONE_HOUR;
+    });
+    
     if (draft) {
         state.activeSession = draft;
         state.activeExercises = getExercisesForSession(draft);
@@ -2942,8 +2953,11 @@ async function finishWorkout() {
     await refreshUI();
 }
 
+let cancelWorkoutInProgress = false;
+
 async function cancelWorkout() {
     if (!state.activeSession) return;
+    if (cancelWorkoutInProgress) return; // Prevent double-click
     
     const approved = await confirmAction({
         title: "Cancel workout",
@@ -2955,7 +2969,7 @@ async function cancelWorkout() {
     if (!approved) return;
     
     try {
-        // Disable button to prevent multiple clicks
+        cancelWorkoutInProgress = true;
         cancelWorkoutBtn.disabled = true;
         
         await db.deleteSession(state.activeSession.id);
@@ -2982,6 +2996,7 @@ async function cancelWorkout() {
         await refreshUI();
     } finally {
         cancelWorkoutBtn.disabled = false;
+        cancelWorkoutInProgress = false;
     }
 }
 
