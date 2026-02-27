@@ -22,6 +22,7 @@ let syncState = {
 const SUPABASE_URL_KEY = "overload-supabase-url";
 const SUPABASE_ANON_KEY = "overload-supabase-anon-key";
 const SEEDED_USERS_KEY = "overload-cloud-seeded-users";
+const MIGRATION_FLAG = "overload-migrated-to-normalized";
 const SNAPSHOT_TABLE = "user_snapshots";
 
 const DEFAULT_EXERCISES = [
@@ -583,34 +584,93 @@ async function localImportData(data) {
     });
 }
 
+// ============ Normalized Table Sync ============
+
+async function syncTableToCloud(tableName, data, userId) {
+    const rows = data.map(item => {
+        const row = { user_id: userId, updated_at: new Date().toISOString() };
+        
+        if (tableName === "exercises") {
+            row.id = item.id;
+            row.name = item.name;
+            row.rep_floor = item.repFloor;
+            row.rep_ceiling = item.repCeiling;
+            row.rest_seconds = item.restSeconds || null;
+        } else if (tableName === "sessions") {
+            row.id = item.id;
+            row.date = item.date;
+            row.status = item.status || "draft";
+            row.notes = item.notes || null;
+            row.template_id = item.templateId || null;
+            row.started_at = item.startedAt || null;
+            row.finished_at = item.finishedAt || null;
+            row.is_paused = item.isPaused || false;
+            row.paused_at = item.pausedAt || null;
+            row.paused_accumulated_seconds = parseInt(item.pausedAccumulatedSeconds || 0, 10);
+        } else if (tableName === "sets") {
+            row.id = item.id;
+            row.session_id = item.sessionId;
+            row.exercise_id = item.exerciseId;
+            row.set_number = item.setNumber;
+            row.weight = item.weight || null;
+            row.reps = item.reps || null;
+            row.is_skipped = item.isSkipped || false;
+        } else if (tableName === "templates") {
+            row.id = item.id;
+            row.name = item.name;
+        } else if (tableName === "template_items") {
+            row.id = item.id;
+            row.template_id = item.templateId;
+            row.exercise_id = item.exerciseId;
+            row.sets = item.sets;
+            row.reps = item.reps;
+            row.rest_seconds = item.restSeconds;
+            row.superset_id = item.supersetId || null;
+            row.superset_order = item.supersetOrder || null;
+        }
+        
+        return row;
+    });
+    
+    if (rows.length === 0) return true;
+    
+    const { error } = await supabaseClient
+        .from(tableName)
+        .upsert(rows, { onConflict: "id" });
+    
+    if (error) throw error;
+    return true;
+}
+
 async function pushLocalSnapshotToCloud() {
     if (!useCloudSync() || syncInFlight) return false;
     syncInFlight = true;
     setSyncState({ status: "syncing", error: "" });
     try {
-        const payload = await localExportData();
         const userId = authState.user.id;
         
+        const exercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
+        const sessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
+        const sets = await tx(["sets"], "readonly", (store) => requestToPromise(store.getAll()));
+        const templates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+        const templateItems = await tx(["templateItems"], "readonly", (store) => requestToPromise(store.getAll()));
+        
         console.log("Syncing to cloud:", {
-            exercises: payload.exercises?.length || 0,
-            sessions: payload.sessions?.length || 0,
-            sets: payload.sets?.length || 0,
-            templates: payload.templates?.length || 0,
+            exercises: exercises?.length || 0,
+            sessions: sessions?.length || 0,
+            sets: sets?.length || 0,
+            templates: templates?.length || 0,
+            templateItems: templateItems?.length || 0,
         });
         
-        const { error } = await supabaseClient
-            .from(SNAPSHOT_TABLE)
-            .upsert(
-                {
-                    user_id: userId,
-                    payload,
-                    updated_at: new Date().toISOString(),
-                },
-                { onConflict: "user_id" }
-            );
-        if (error) {
-            throw new Error(parseSupabaseError(error, "Failed to sync to cloud"));
-        }
+        // Sync each table
+        await Promise.all([
+            syncTableToCloud("exercises", exercises || [], userId),
+            syncTableToCloud("sessions", sessions || [], userId),
+            syncTableToCloud("sets", sets || [], userId),
+            syncTableToCloud("templates", templates || [], userId),
+            syncTableToCloud("template_items", templateItems || [], userId),
+        ]);
         
         console.log("✓ Cloud sync successful");
         setSyncState({
@@ -666,42 +726,263 @@ export async function ensureCloudSyncComplete() {
 async function hydrateLocalFromCloudIfAvailable() {
     if (!useCloudSync()) return { loaded: false };
     const userId = authState.user.id;
+    
     try {
-        const { data, error } = await supabaseClient
+        console.log("Loading data from normalized cloud tables...");
+        
+        const [exercisesData, sessionsData, setsData, templatesData, itemsData] = await Promise.all([
+            supabaseClient.from("exercises").select("*").eq("user_id", userId),
+            supabaseClient.from("sessions").select("*").eq("user_id", userId),
+            supabaseClient.from("sets").select("*").eq("user_id", userId),
+            supabaseClient.from("templates").select("*").eq("user_id", userId),
+            supabaseClient.from("template_items").select("*").eq("user_id", userId),
+        ]);
+        
+        // Check for errors
+        if (exercisesData.error) throw exercisesData.error;
+        if (sessionsData.error) throw sessionsData.error;
+        if (setsData.error) throw setsData.error;
+        if (templatesData.error) throw templatesData.error;
+        if (itemsData.error) throw itemsData.error;
+        
+        const hasData = (exercisesData.data?.length || 0) > 0 ||
+                        (sessionsData.data?.length || 0) > 0 ||
+                        (setsData.data?.length || 0) > 0;
+        
+        if (!hasData) {
+            console.log("No data in cloud normalized tables");
+            return { loaded: false };
+        }
+        
+        console.log("Loading from cloud:", {
+            exercises: exercisesData.data?.length || 0,
+            sessions: sessionsData.data?.length || 0,
+            sets: setsData.data?.length || 0,
+            templates: templatesData.data?.length || 0,
+            items: itemsData.data?.length || 0,
+        });
+        
+        // Import to local IndexedDB
+        await tx(
+            ["exercises", "sessions", "sets", "templates", "templateItems"],
+            "readwrite",
+            (exStore, sessStore, setStore, tmplStore, itemStore) => {
+                // Convert snake_case to camelCase
+                exercisesData.data?.forEach(row => {
+                    exStore.put({
+                        id: row.id,
+                        name: row.name,
+                        repFloor: row.rep_floor,
+                        repCeiling: row.rep_ceiling,
+                        restSeconds: row.rest_seconds,
+                    });
+                });
+                
+                sessionsData.data?.forEach(row => {
+                    sessStore.put({
+                        id: row.id,
+                        date: row.date,
+                        status: row.status,
+                        notes: row.notes,
+                        templateId: row.template_id,
+                        startedAt: row.started_at,
+                        finishedAt: row.finished_at,
+                        isPaused: row.is_paused,
+                        pausedAt: row.paused_at,
+                        pausedAccumulatedSeconds: row.paused_accumulated_seconds,
+                        exerciseIds: [],
+                    });
+                });
+                
+                setsData.data?.forEach(row => {
+                    setStore.put({
+                        id: row.id,
+                        sessionId: row.session_id,
+                        exerciseId: row.exercise_id,
+                        setNumber: row.set_number,
+                        weight: row.weight,
+                        reps: row.reps,
+                        isSkipped: row.is_skipped,
+                    });
+                });
+                
+                templatesData.data?.forEach(row => {
+                    tmplStore.put({
+                        id: row.id,
+                        name: row.name,
+                    });
+                });
+                
+                itemsData.data?.forEach(row => {
+                    itemStore.put({
+                        id: row.id,
+                        templateId: row.template_id,
+                        exerciseId: row.exercise_id,
+                        sets: row.sets,
+                        reps: row.reps,
+                        restSeconds: row.rest_seconds,
+                        supersetId: row.superset_id,
+                        supersetOrder: row.superset_order,
+                    });
+                });
+            }
+        );
+        
+        console.log("✓ Cloud data imported successfully");
+        return { loaded: true };
+    } catch (err) {
+        console.error("Hydration error:", err);
+        return { loaded: false };
+    }
+}
+
+// Check if user has migrated from blob to normalized schema
+function hasMigrated() {
+    return localStorage.getItem(MIGRATION_FLAG) === "true";
+}
+
+function markMigrated() {
+    localStorage.setItem(MIGRATION_FLAG, "true");
+}
+
+// One-time migration from blob to normalized tables
+async function migrateToNormalizedSchema() {
+    if (hasMigrated()) {
+        console.log("Already migrated to normalized schema");
+        return true;
+    }
+    
+    console.log("=== Checking for blob data to migrate ===");
+    
+    try {
+        const { data: blobData, error } = await supabaseClient
             .from(SNAPSHOT_TABLE)
-            .select("payload, updated_at")
-            .eq("user_id", userId)
+            .select("payload")
+            .eq("user_id", authState.user.id)
             .maybeSingle();
         
         if (error) {
-            console.warn("Failed to fetch cloud snapshot:", error);
-            return { loaded: false };
+            console.log("No blob data found");
+            markMigrated();
+            return true;
         }
         
-        if (!data || !data.payload) {
-            console.log("No cloud snapshot found for user");
-            return { loaded: false };
+        if (!blobData?.payload) {
+            console.log("Blob data is empty");
+            markMigrated();
+            return true;
         }
         
-        // Validate payload has expected structure
-        const payload = data.payload;
-        if (!payload.exercises || !payload.sessions || !payload.sets) {
-            console.warn("Cloud snapshot missing expected data");
-            return { loaded: false };
-        }
-        
-        console.log(`Loading cloud snapshot from ${data.updated_at}:`, {
+        const payload = blobData.payload;
+        console.log("Found blob data to migrate:", {
             exercises: payload.exercises?.length || 0,
             sessions: payload.sessions?.length || 0,
             sets: payload.sets?.length || 0,
             templates: payload.templates?.length || 0,
         });
         
-        await localImportData(payload);
-        return { loaded: true };
+        const userId = authState.user.id;
+        
+        // Migrate each data type
+        if (payload.exercises?.length > 0) {
+            const rows = payload.exercises.map(ex => ({
+                id: ex.id,
+                user_id: userId,
+                name: ex.name,
+                rep_floor: ex.repFloor,
+                rep_ceiling: ex.repCeiling,
+                rest_seconds: ex.restSeconds || null,
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("exercises")
+                .upsert(rows, { onConflict: "id" });
+            if (e) throw e;
+            console.log("✓ Migrated exercises");
+        }
+        
+        if (payload.sessions?.length > 0) {
+            const rows = payload.sessions.map(s => ({
+                id: s.id,
+                user_id: userId,
+                date: s.date,
+                status: s.status || "draft",
+                notes: s.notes || null,
+                template_id: s.templateId || null,
+                started_at: s.startedAt || null,
+                finished_at: s.finishedAt || null,
+                is_paused: s.isPaused || false,
+                paused_at: s.pausedAt || null,
+                paused_accumulated_seconds: parseInt(s.pausedAccumulatedSeconds || 0, 10),
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("sessions")
+                .upsert(rows, { onConflict: "id" });
+            if (e) throw e;
+            console.log("✓ Migrated sessions");
+        }
+        
+        if (payload.sets?.length > 0) {
+            const rows = payload.sets.map(s => ({
+                id: s.id,
+                user_id: userId,
+                session_id: s.sessionId,
+                exercise_id: s.exerciseId,
+                set_number: s.setNumber,
+                weight: s.weight || null,
+                reps: s.reps || null,
+                is_skipped: s.isSkipped || false,
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("sets")
+                .upsert(rows, { onConflict: "id" });
+            if (e) throw e;
+            console.log("✓ Migrated sets");
+        }
+        
+        if (payload.templates?.length > 0) {
+            const rows = payload.templates.map(t => ({
+                id: t.id,
+                user_id: userId,
+                name: t.name,
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("templates")
+                .upsert(rows, { onConflict: "id" });
+            if (e) throw e;
+            console.log("✓ Migrated templates");
+        }
+        
+        if (payload.templateItems?.length > 0) {
+            const rows = payload.templateItems.map(item => ({
+                id: item.id,
+                user_id: userId,
+                template_id: item.templateId,
+                exercise_id: item.exerciseId,
+                sets: item.sets,
+                reps: item.reps,
+                rest_seconds: item.restSeconds,
+                superset_id: item.supersetId || null,
+                superset_order: item.supersetOrder || null,
+            }));
+            
+            const { error: e } = await supabaseClient
+                .from("template_items")
+                .upsert(rows, { onConflict: "id" });
+            if (e) throw e;
+            console.log("✓ Migrated template items");
+        }
+        
+        markMigrated();
+        console.log("=== Migration complete ===");
+        return true;
     } catch (err) {
-        console.error("Hydration error:", err);
-        return { loaded: false };
+        console.error("Migration failed:", err);
+        markMigrated(); // Mark as migrated anyway to avoid infinite loops
+        return false;
     }
 }
 
@@ -716,8 +997,14 @@ async function ensureInitialCloudSeedForUser() {
     
     console.log("=== Starting cloud hydration for user ===");
     
-    // Always try to hydrate from cloud first (recover lost data on fresh login)
-    console.log("Attempting to load from cloud...");
+    // Step 1: Check if needs migration from blob
+    if (!hasMigrated()) {
+        console.log("Running one-time migration...");
+        await migrateToNormalizedSchema();
+    }
+    
+    // Step 2: Try to hydrate from new normalized tables
+    console.log("Attempting to load from normalized cloud tables...");
     const hydrated = await hydrateLocalFromCloudIfAvailable();
     if (hydrated.loaded) {
         console.log("✓ Hydration successful");
@@ -725,9 +1012,9 @@ async function ensureInitialCloudSeedForUser() {
         return;
     }
     
-    console.log("No cloud data found");
+    console.log("No cloud data found in normalized tables");
     
-    // No cloud data, check if we have local data to preserve
+    // Step 3: Check if we have local data to preserve
     const localTemplates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
     const localExercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
     const localSessions = await tx(["sessions"], "readonly", (store) => requestToPromise(store.getAll()));
