@@ -636,9 +636,9 @@ async function syncTableToCloud(tableName, data, userId) {
             row.id = item.id;
             row.template_id = item.templateId;
             row.exercise_id = item.exerciseId;
-            row.sets = item.sets;
-            row.reps = item.reps;
-            row.rest_seconds = item.restSeconds;
+            row.sets = Math.max(1, Number.parseInt(item.sets, 10) || 3);
+            row.reps = String(item.reps || "8-12").trim();
+            row.rest_seconds = Math.max(0, Number.parseInt(item.restSeconds, 10) || 90);
             row.superset_id = item.supersetId || null;
             row.superset_order = item.supersetOrder || null;
         } else if (tableName === "folders") {
