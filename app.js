@@ -26,6 +26,7 @@ const pauseWorkoutBtn = document.getElementById("pause-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
 const syncIndicator = document.getElementById("sync-indicator");
 const syncIcon = document.getElementById("sync-icon");
+const hydrationLoader = document.getElementById("hydration-loader");
 const sessionTemplateLabel = document.getElementById("session-template-label");
 
 // Floating widget refs
@@ -3407,7 +3408,15 @@ async function init() {
     db.onAuthStateChange(async (auth) => {
         renderAuthState(auth);
         if (auth?.user && !auth.loading) {
+            // Show loading indicator while hydrating
+            if (hydrationLoader) {
+                hydrationLoader.classList.remove("hidden");
+            }
             await refreshUI();
+            // Hide loader after data is loaded
+            if (hydrationLoader) {
+                hydrationLoader.classList.add("hidden");
+            }
             // Don't auto-install defaults — causes duplicate ID conflicts with cloud data
             // Users can click "Load PF defaults" button manually if they want them
         }
