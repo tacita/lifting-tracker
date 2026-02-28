@@ -1493,7 +1493,9 @@ export async function installDefaultLibrary({ onlyIfEmpty = false } = {}) {
     DEFAULT_EXERCISES.forEach((item) => {
         const normalized = normalizeName(item.name);
         if (existingExerciseNames.has(normalized)) return;
-        const exercise = { id: createId(allExerciseIds), ...item };
+        // Strip weightIncrement (not used, only restSeconds matters)
+        const { weightIncrement, ...cleanItem } = item;
+        const exercise = { id: createId(allExerciseIds), ...cleanItem };
         exercisesToAdd.push(exercise);
         existingExerciseNames.add(normalized);
     });

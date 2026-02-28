@@ -3111,7 +3111,7 @@ function computeNextTarget(exercise) {
         const topSet = sets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
         if (!topSet) continue;
         if (topSet.reps >= exercise.repCeiling) {
-            const nextWeight = topSet.weight + (exercise.weightIncrement || 2.5);
+            const nextWeight = topSet.weight + 2.5;
             return `${formatWeight(nextWeight)} × ${exercise.repFloor}`;
         }
         return `${formatWeight(topSet.weight)} × ${topSet.reps + 1}–${exercise.repCeiling}`;
