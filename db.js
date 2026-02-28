@@ -680,14 +680,16 @@ async function pushLocalSnapshotToCloud() {
             folders: folders?.length || 0,
         });
         
-        // Build template items from templates.items, removing duplicates
+        // Build template items from templates.items, removing duplicates and generating IDs if missing
         const templateItemsMap = new Map();
-        templates?.forEach(t => {
+        templates?.forEach((t, templateIdx) => {
             if (Array.isArray(t.items)) {
-                t.items.forEach(item => {
-                    // Deduplicate by ID
-                    if (!templateItemsMap.has(item.id)) {
-                        templateItemsMap.set(item.id, item);
+                t.items.forEach((item, itemIdx) => {
+                    // Generate ID if missing (same as migration does)
+                    const itemId = item.id || `${t.id}-${item.exerciseId}-${itemIdx}`;
+                    // Deduplicate by generated ID
+                    if (!templateItemsMap.has(itemId)) {
+                        templateItemsMap.set(itemId, { ...item, id: itemId });
                     }
                 });
             }
