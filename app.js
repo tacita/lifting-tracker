@@ -1218,7 +1218,7 @@ function renderExercises() {
         card.innerHTML = `
             <div>
                 <p class="label">${escapeHtml(ex.name)}</p>
-                <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs</p>
+                <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest</p>
             </div>
             <div class="list-actions">
                 <button class="ghost small" data-action="edit">Edit</button>
@@ -1242,12 +1242,12 @@ function renderExercises() {
             if (!newName) return;
             const newFloor = parseInt(prompt("Rep floor", ex.repFloor) || ex.repFloor, 10);
             const newCeil = parseInt(prompt("Rep ceiling", ex.repCeiling) || ex.repCeiling, 10);
-            const newInc = parseFloat(prompt("Weight increment", ex.weightIncrement) || ex.weightIncrement);
-            if (Number.isNaN(newFloor) || Number.isNaN(newCeil) || newFloor >= newCeil || Number.isNaN(newInc)) {
+            const newRest = parseInt(prompt("Rest seconds", ex.restSeconds || 90) || ex.restSeconds || 90, 10);
+            if (Number.isNaN(newFloor) || Number.isNaN(newCeil) || newFloor >= newCeil || Number.isNaN(newRest) || newRest < 0) {
                 showToast("Invalid values", "error");
                 return;
             }
-            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newCeil, weightIncrement: newInc });
+            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newCeil, restSeconds: newRest });
             await refreshUI();
             showToast("Exercise updated", "success");
         });
@@ -2113,7 +2113,7 @@ function renderSelectExerciseList(searchTerm = "") {
         item.className = "exercise-select-item";
         item.innerHTML = `
             <p class="exercise-select-item-name">${escapeHtml(exercise.name)}</p>
-            <p class="exercise-select-item-meta">${exercise.repFloor}–${exercise.repCeiling} reps • +${formatWeight(exercise.weightIncrement)} lbs</p>
+            <p class="exercise-select-item-meta">${exercise.repFloor}–${exercise.repCeiling} reps • ${exercise.restSeconds || 90}s rest</p>
         `;
         item.addEventListener("click", () => selectAndAddExercise(exercise));
         selectExerciseList.appendChild(item);
@@ -2216,7 +2216,7 @@ function renderWorkoutExercises() {
         }
         const planText = templateItem
             ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
-            : `${ex.repFloor}–${ex.repCeiling} reps • +${formatWeight(ex.weightIncrement)} lbs`;
+            : `${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest`;
         card.innerHTML = `
             <div class="exercise-header">
                 <div class="exercise-title-row">
@@ -3111,7 +3111,8 @@ function computeNextTarget(exercise) {
         const topSet = sets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
         if (!topSet) continue;
         if (topSet.reps >= exercise.repCeiling) {
-            return `${formatWeight(topSet.weight + exercise.weightIncrement)} × ${exercise.repFloor}`;
+            const nextWeight = topSet.weight + (exercise.weightIncrement || 2.5);
+            return `${formatWeight(nextWeight)} × ${exercise.repFloor}`;
         }
         return `${formatWeight(topSet.weight)} × ${topSet.reps + 1}–${exercise.repCeiling}`;
     }
