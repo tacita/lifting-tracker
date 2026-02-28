@@ -3086,13 +3086,11 @@ function renderExerciseHistoryCards() {
         return;
     }
     state.exercises.forEach((ex) => {
-        const target = computeNextTarget(ex);
         const card = document.createElement("div");
         card.className = "list-card";
         card.innerHTML = `
             <div>
                 <p class="label">${escapeHtml(ex.name)}</p>
-                <p class="sub">Next: ${target}</p>
             </div>
             <div class="list-actions">
                 <button class="ghost small" data-action="history">History</button>
@@ -3101,22 +3099,6 @@ function renderExerciseHistoryCards() {
         card.querySelector('[data-action="history"]').addEventListener("click", () => openExerciseModal(ex));
         historyExercisesEl.appendChild(card);
     });
-}
-
-function computeNextTarget(exercise) {
-    const completedSessions = state.sessions.filter((s) => s.status !== "draft").sort((a, b) => new Date(b.date) - new Date(a.date));
-    for (const session of completedSessions) {
-        const sets = state.sets.filter((s) => s.sessionId === session.id && s.exerciseId === exercise.id);
-        if (sets.length === 0) continue;
-        const topSet = sets.slice().sort((a, b) => (b.weight === a.weight ? b.reps - a.reps : b.weight - a.weight))[0];
-        if (!topSet) continue;
-        if (topSet.reps >= exercise.repCeiling) {
-            const nextWeight = topSet.weight + 2.5;
-            return `${formatWeight(nextWeight)} × ${exercise.repFloor}`;
-        }
-        return `${formatWeight(topSet.weight)} × ${topSet.reps + 1}–${exercise.repCeiling}`;
-    }
-    return "No history yet";
 }
 
 function openSessionModal(session) {
