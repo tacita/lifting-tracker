@@ -689,7 +689,7 @@ async function pushLocalSnapshotToCloud() {
                     const itemId = item.id || `${t.id}-${item.exerciseId}-${itemIdx}`;
                     // Deduplicate by generated ID
                     if (!templateItemsMap.has(itemId)) {
-                        templateItemsMap.set(itemId, { ...item, id: itemId });
+                        templateItemsMap.set(itemId, { ...item, id: itemId, templateId: t.id });
                     }
                 });
             }
