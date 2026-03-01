@@ -1873,6 +1873,8 @@ function renderTemplatesList() {
                 card.innerHTML = `
                     <span class="drag-handle" aria-hidden="true">⋮⋮</span>
                     <span class="template-name">${escapeHtml(template.name)}</span>
+                    <button type="button" class="ghost icon-btn template-action" data-action="move-up" aria-label="Move up">↑</button>
+                    <button type="button" class="ghost icon-btn template-action" data-action="move-down" aria-label="Move down">↓</button>
                     <button type="button" class="ghost icon-btn template-action" data-action="edit-template" aria-label="${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit template"}">✎</button>
                     <button type="button" class="danger ghost icon-btn template-action" data-action="delete-template" aria-label="Delete template">🗑</button>
                 `;
@@ -1884,11 +1886,13 @@ function renderTemplatesList() {
                 card.addEventListener("dragend", () => card.classList.remove("dragging"));
                 card.addEventListener("dragover", (event) => {
                     event.preventDefault();
+                    event.stopPropagation();
                     card.classList.add("drag-over");
                 });
                 card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
                 card.addEventListener("drop", async (event) => {
                     event.preventDefault();
+                    event.stopPropagation();
                     card.classList.remove("drag-over");
                     const draggedTemplateId = event.dataTransfer?.getData("text/template-id");
                     if (!draggedTemplateId || String(draggedTemplateId) === String(template.id)) return;
@@ -1915,6 +1919,12 @@ function renderTemplatesList() {
                         return;
                     }
                     showToast("Template order updated", "success");
+                });
+                card.querySelector('[data-action="move-up"]').addEventListener("click", async () => {
+                    await moveTemplateByStep(template.id, folderKey, -1);
+                });
+                card.querySelector('[data-action="move-down"]').addEventListener("click", async () => {
+                    await moveTemplateByStep(template.id, folderKey, 1);
                 });
 
                 card.querySelector('[data-action="edit-template"]').addEventListener("click", async () => {
@@ -1986,6 +1996,24 @@ async function moveTemplateToFolder(templateId, folderName) {
         console.error(err);
         showToast("Could not move template", "error");
     }
+}
+
+async function moveTemplateByStep(templateId, folderName, step) {
+    const ordered = getTemplatesForFolderOrdered(folderName);
+    const index = ordered.findIndex((template) => String(template.id) === String(templateId));
+    if (index === -1) return;
+    const targetIndex = index + step;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+    const target = ordered[targetIndex];
+    const changed = await reorderTemplateWithinFolder(folderName, templateId, target.id, step > 0);
+    if (!changed) return;
+    const syncOk = await db.ensureCloudSyncComplete();
+    await refreshUI();
+    if (!syncOk) {
+        showToast("Reordered locally; cloud sync pending", "warning");
+        return;
+    }
+    showToast("Template order updated", "success");
 }
 
 function openManageFoldersModal() {
