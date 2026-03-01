@@ -2388,7 +2388,7 @@ function renderWorkoutExercises() {
                 <div class="exercise-title-row">
                     <span class="exercise-drag-handle" aria-label="Drag to reorder">⋮⋮</span>
                     <p class="label">${escapeHtml(ex.name)}</p>
-                    <button class="ghost small swap-chip" type="button">Swap</button>
+                    <button class="ghost small swap-chip" type="button" aria-label="Swap exercise" title="Swap exercise">⇄</button>
                 </div>
                 <div class="exercise-meta-row">
                     <p class="sub">${escapeHtml(planText)}</p>
