@@ -602,6 +602,22 @@ button.small {
     flex-shrink: 0;
 }
 
+.exercise-note-field {
+    margin-bottom: 8px;
+}
+
+.exercise-note-input {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.3;
+    padding: 8px 10px;
+    min-height: 42px;
+}
+
+.exercise-note-input::placeholder {
+    color: var(--muted);
+}
+
 .history-chip {
     padding: 4px 8px;
     border-radius: 9px;
