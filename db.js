@@ -28,6 +28,7 @@ const cloudColumnSupport = {
     templateFolder: true,
     templateSortOrder: true,
     folderSortOrder: true,
+    templateItemSortOrder: true,
 };
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
@@ -202,7 +203,7 @@ function generateItemId() {
 
 function sanitizeTemplateItems(items) {
     const sanitized = (items || [])
-        .map((item) => ({
+        .map((item, index) => ({
             id: item.id || generateItemId(),
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
@@ -210,8 +211,14 @@ function sanitizeTemplateItems(items) {
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
+            sortOrder: Math.max(1, Number.parseInt(item.sortOrder, 10) || (index + 1)),
         }))
         .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps > 0);
+
+    sanitized.sort((a, b) => a.sortOrder - b.sortOrder);
+    sanitized.forEach((item, index) => {
+        item.sortOrder = index + 1;
+    });
 
     const orderByGroup = new Map();
     sanitized.forEach((item) => {
@@ -691,6 +698,9 @@ async function syncTableToCloud(tableName, data, userId) {
             row.rest_seconds = Math.max(0, Number.parseInt(item.restSeconds, 10) || 90);
             row.superset_id = item.supersetId || null;
             row.superset_order = item.supersetOrder || null;
+            if (cloudColumnSupport.templateItemSortOrder) {
+                row.sort_order = Math.max(1, Number.parseInt(item.sortOrder, 10) || 1);
+            }
         } else if (tableName === "folders") {
             row.id = item.id;
             row.name = item.name;
@@ -729,6 +739,10 @@ async function syncTableToCloud(tableName, data, userId) {
         }
         if (tableName === "folders" && cloudColumnSupport.folderSortOrder && missingColumn(message, "sort_order")) {
             cloudColumnSupport.folderSortOrder = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        if (tableName === "template_items" && cloudColumnSupport.templateItemSortOrder && missingColumn(message, "sort_order")) {
+            cloudColumnSupport.templateItemSortOrder = false;
             return syncTableToCloud(tableName, data, userId);
         }
         throw error;
@@ -797,10 +811,15 @@ async function _pushLocalSnapshotToCloud() {
         const templateItemsMap = new Map();
         templates?.forEach((t) => {
             if (Array.isArray(t.items)) {
-                t.items.forEach((item) => {
+                t.items.forEach((item, index) => {
                     const itemId = item.id || generateItemId();
                     if (!templateItemsMap.has(itemId)) {
-                        templateItemsMap.set(itemId, { ...item, id: itemId, templateId: t.id });
+                        templateItemsMap.set(itemId, {
+                            ...item,
+                            id: itemId,
+                            templateId: t.id,
+                            sortOrder: Math.max(1, Number.parseInt(item.sortOrder, 10) || (index + 1)),
+                        });
                     }
                 });
             }
@@ -1068,13 +1087,24 @@ async function hydrateLocalFromCloudIfAvailable() {
                 templatesData.data?.forEach(row => {
                     const cloudSortOrder = Math.max(0, Number.parseInt(row.sort_order, 10) || 0);
                     const sortOrder = cloudSortOrder || localTemplateSortOrders.get(row.id) || 0;
+                    const templateItems = (itemsData.data || [])
+                        .filter(item => String(item.template_id) === String(row.id))
+                        .sort((a, b) => {
+                            const aOrder = Math.max(0, Number.parseInt(a.sort_order, 10) || 0);
+                            const bOrder = Math.max(0, Number.parseInt(b.sort_order, 10) || 0);
+                            if (aOrder !== bOrder) return aOrder - bOrder;
+                            const aUpdated = Date.parse(a.updated_at || "") || 0;
+                            const bUpdated = Date.parse(b.updated_at || "") || 0;
+                            if (aUpdated !== bUpdated) return aUpdated - bUpdated;
+                            return String(a.id || "").localeCompare(String(b.id || ""));
+                        });
                     tmplStore.put({
                         id: row.id,
                         name: row.name,
                         folder: row.folder || "",
                         note: row.note || "",
                         sortOrder,
-                        items: itemsData.data?.filter(item => String(item.template_id) === String(row.id)).map(item => ({
+                        items: templateItems.map(item => ({
                             id: item.id,
                             templateId: item.template_id,
                             exerciseId: item.exercise_id,
@@ -1083,6 +1113,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                             restSeconds: item.rest_seconds,
                             supersetId: item.superset_id,
                             supersetOrder: item.superset_order,
+                            sortOrder: Math.max(1, Number.parseInt(item.sort_order, 10) || 0),
                         })) || [],
                     });
                 });
