@@ -618,6 +618,10 @@ async function localImportData(data) {
 // ============ Normalized Table Sync ============
 
 async function syncTableToCloud(tableName, data, userId) {
+    const missingColumn = (message, columnName) => {
+        const escaped = String(columnName).replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+        return new RegExp(`(column.*${escaped}|${escaped}.*column)`, "i").test(message);
+    };
     // Deduplicate by ID to avoid "ON CONFLICT DO UPDATE" errors
     const seen = new Set();
     const dedupedData = [];
@@ -700,7 +704,7 @@ async function syncTableToCloud(tableName, data, userId) {
     
     if (error) {
         const message = String(error.message || "");
-        const missingNoteColumn = /column.*note/i.test(message);
+        const missingNoteColumn = missingColumn(message, "note");
         if (tableName === "exercises" && cloudColumnSupport.exerciseNote && missingNoteColumn) {
             cloudColumnSupport.exerciseNote = false;
             return syncTableToCloud(tableName, data, userId);
@@ -709,15 +713,15 @@ async function syncTableToCloud(tableName, data, userId) {
             cloudColumnSupport.templateNote = false;
             return syncTableToCloud(tableName, data, userId);
         }
-        if (tableName === "templates" && cloudColumnSupport.templateFolder && /column.*folder/i.test(message)) {
+        if (tableName === "templates" && cloudColumnSupport.templateFolder && missingColumn(message, "folder")) {
             cloudColumnSupport.templateFolder = false;
             return syncTableToCloud(tableName, data, userId);
         }
-        if (tableName === "templates" && cloudColumnSupport.templateSortOrder && /column.*sort_order/i.test(message)) {
+        if (tableName === "templates" && cloudColumnSupport.templateSortOrder && missingColumn(message, "sort_order")) {
             cloudColumnSupport.templateSortOrder = false;
             return syncTableToCloud(tableName, data, userId);
         }
-        if (tableName === "folders" && cloudColumnSupport.folderSortOrder && /column.*sort_order/i.test(message)) {
+        if (tableName === "folders" && cloudColumnSupport.folderSortOrder && missingColumn(message, "sort_order")) {
             cloudColumnSupport.folderSortOrder = false;
             return syncTableToCloud(tableName, data, userId);
         }
@@ -841,11 +845,15 @@ export async function saveTemplatePlacementToCloud(templateId, folder, sortOrder
         .eq("user_id", authState.user.id);
     if (error) {
         const message = String(error.message || "");
-        if (cloudColumnSupport.templateSortOrder && /column.*sort_order/i.test(message)) {
+        const missingColumn = (columnName) => {
+            const escaped = String(columnName).replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+            return new RegExp(`(column.*${escaped}|${escaped}.*column)`, "i").test(message);
+        };
+        if (cloudColumnSupport.templateSortOrder && missingColumn("sort_order")) {
             cloudColumnSupport.templateSortOrder = false;
             return saveTemplatePlacementToCloud(templateId, folder, sortOrder);
         }
-        if (cloudColumnSupport.templateFolder && /column.*folder/i.test(message)) {
+        if (cloudColumnSupport.templateFolder && missingColumn("folder")) {
             cloudColumnSupport.templateFolder = false;
             return saveTemplatePlacementToCloud(templateId, folder, sortOrder);
         }
