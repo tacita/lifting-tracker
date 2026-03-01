@@ -433,6 +433,7 @@ export async function initAuth() {
                 loading: false,
             };
             if (!session?.user) {
+                hydrationComplete = false;
                 setSyncState({ status: "idle", error: "", lastSyncedAt: "" });
             }
             notifyAuthListeners();
@@ -790,6 +791,10 @@ async function pushLocalSnapshotToCloud() {
 
 async function _pushLocalSnapshotToCloud() {
     if (!useCloudSync()) return false;
+    if (!hydrationComplete) {
+        console.log("Skipping cloud push until initial hydration completes");
+        return false;
+    }
     syncInFlight = true;
     setSyncState({ status: "syncing", error: "" });
     try {
@@ -1372,6 +1377,7 @@ async function migrateToNormalizedSchema() {
 
 async function ensureInitialCloudSeedForUser() {
     if (!useCloudSync()) return;
+    hydrationComplete = false;
     const userId = String(authState.user.id);
     
     // Check if local data exists
@@ -1392,45 +1398,49 @@ async function ensureInitialCloudSeedForUser() {
     // Step 2: Try to hydrate from new normalized tables
     console.log("Attempting to load from normalized cloud tables...");
     const hydrated = await hydrateLocalFromCloudIfAvailable();
-    if (hydrated.loaded) {
-        console.log("✓ Hydration successful");
-        markUserSeeded(userId);
-        return;
-    }
-
-    if (hydrated.failed) {
-        console.log("Hydration failed; skipping bootstrap push to avoid bad overwrite");
-        return;
-    }
-    
-    console.log("No cloud data found in normalized tables");
-    
-    console.log("Local data check:", {
-        templates: localTemplates?.length || 0,
-        exercises: localExercises?.length || 0,
-        sessions: localSessions?.length || 0,
-    });
-    
-    if (hasLocalData && !isUserSeeded(userId)) {
-        // One-time bootstrap only: cloud is empty and user has local data.
-        console.log("Cloud empty and local data found, doing one-time bootstrap push...");
-        try {
-            await pushLocalSnapshotToCloud();
+    try {
+        if (hydrated.loaded) {
+            console.log("✓ Hydration successful");
             markUserSeeded(userId);
-            console.log("✓ Pushed local data to cloud");
-        } catch (err) {
-            console.error("Failed to push local data to cloud:", err);
+            return;
         }
-        return;
-    }
-    
-    if (hasLocalData) {
-        console.log("Cloud empty but user already seeded; skipping auto-push to avoid overwrite");
-        return;
-    }
 
-    // Empty everywhere.
-    console.log("No data in cloud or local");
+        if (hydrated.failed) {
+            console.log("Hydration failed; skipping bootstrap push to avoid bad overwrite");
+            return;
+        }
+
+        console.log("No cloud data found in normalized tables");
+
+        console.log("Local data check:", {
+            templates: localTemplates?.length || 0,
+            exercises: localExercises?.length || 0,
+            sessions: localSessions?.length || 0,
+        });
+
+        if (hasLocalData && !isUserSeeded(userId)) {
+            // One-time bootstrap only: cloud is empty and user has local data.
+            console.log("Cloud empty and local data found, doing one-time bootstrap push...");
+            try {
+                await pushLocalSnapshotToCloud();
+                markUserSeeded(userId);
+                console.log("✓ Pushed local data to cloud");
+            } catch (err) {
+                console.error("Failed to push local data to cloud:", err);
+            }
+            return;
+        }
+
+        if (hasLocalData) {
+            console.log("Cloud empty but user already seeded; skipping auto-push to avoid overwrite");
+            return;
+        }
+
+        // Empty everywhere.
+        console.log("No data in cloud or local");
+    } finally {
+        hydrationComplete = true;
+    }
 }
 
 // Exercises
