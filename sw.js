@@ -1,4 +1,4 @@
-const CACHE_NAME = "overload-cache-v94";
+const CACHE_NAME = "overload-cache-v95";
 const ASSETS = [
     "./",
     "./index.html",
@@ -6,6 +6,7 @@ const ASSETS = [
     "./app.js",
     "./db.js",
     "./manifest.json",
+    "./icons/apple-touch-icon-180.png",
     "./icons/icon-192.png",
     "./icons/icon-512.png",
 ];
