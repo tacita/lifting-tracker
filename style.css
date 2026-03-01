@@ -494,7 +494,7 @@ button.small {
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
     background: var(--surface);
     transition: border-color 0.2s, margin-bottom 0.2s;
     user-select: none;
