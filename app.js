@@ -3573,6 +3573,7 @@ async function ensureExerciseByName(name, exerciseDefaults, exerciseIdByName) {
         repFloor: Math.max(1, Number.parseInt(defaults.repFloor, 10) || 8),
         repCeiling: Math.max(2, Number.parseInt(defaults.repCeiling, 10) || 12),
         restSeconds: Math.max(0, Number.parseInt(defaults.restSeconds, 10) || 90),
+        note: String(defaults.note || defaults.notes || "").trim(),
     };
     if (payload.repFloor >= payload.repCeiling) {
         payload.repFloor = 8;
@@ -3736,6 +3737,7 @@ async function importWorkoutsData(parsed) {
             .filter(([key]) => Boolean(key))
     );
     const exerciseIdByName = new Map(state.exercises.map((exercise) => [normalizeEntityName(exercise.name), exercise.id]));
+    const exerciseById = new Map(state.exercises.map((exercise) => [String(exercise.id), exercise]));
 
     const existingTemplateNames = new Set(state.templates.map((template) => normalizeEntityName(template.name)));
     const knownFolders = new Set(
@@ -3751,6 +3753,7 @@ async function importWorkoutsData(parsed) {
     }
 
     let added = 0;
+    let exerciseNotesUpdated = 0;
     for (const template of templates) {
         const sourceFolder = String(template?.folder || "").trim();
         const folder = targetFolder || sourceFolder;
@@ -3764,8 +3767,23 @@ async function importWorkoutsData(parsed) {
         for (const item of rawItems) {
             const exerciseName = String(item?.exerciseName || "").trim();
             if (!exerciseName) continue;
+            const normalizedExerciseName = normalizeEntityName(exerciseName);
+            const itemNote = String(item?.notes || item?.note || "").trim();
+            if (itemNote && normalizedExerciseName && !exerciseDefaults.has(normalizedExerciseName)) {
+                exerciseDefaults.set(normalizedExerciseName, { note: itemNote });
+            }
             const exerciseId = await ensureExerciseByName(exerciseName, exerciseDefaults, exerciseIdByName);
             if (exerciseId == null) continue;
+            if (itemNote) {
+                const existingExercise = exerciseById.get(String(exerciseId));
+                const existingNote = String(existingExercise?.note || "").trim();
+                if (existingExercise && !existingNote) {
+                    const updatedExercise = { ...existingExercise, note: itemNote };
+                    await db.updateExercise(updatedExercise);
+                    exerciseById.set(String(exerciseId), updatedExercise);
+                    exerciseNotesUpdated += 1;
+                }
+            }
             items.push({
                 exerciseId,
                 sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
@@ -3782,6 +3800,7 @@ async function importWorkoutsData(parsed) {
             id: uuid(),
             name,
             folder,
+            note: String(template?.notes || template?.note || "").trim(),
             items,
             exerciseIds: items.map((item) => item.exerciseId),
         });
@@ -3789,7 +3808,10 @@ async function importWorkoutsData(parsed) {
     }
 
     await refreshUI();
-    showToast(`Imported ${added} workout template${added === 1 ? "" : "s"}`, "success");
+    showToast(
+        `Imported ${added} workout template${added === 1 ? "" : "s"}${exerciseNotesUpdated ? ` • ${exerciseNotesUpdated} exercise notes updated` : ""}`,
+        "success"
+    );
 }
 
 async function handleImport(event) {
