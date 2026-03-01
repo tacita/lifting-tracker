@@ -43,6 +43,7 @@ const expandWorkoutBtn = document.getElementById("expand-workout-btn");
 
 // Select exercise modal refs
 const selectExerciseModal = document.getElementById("select-exercise-modal");
+const selectExerciseTitleEl = document.getElementById("select-exercise-title");
 const selectExerciseSearchInput = document.getElementById("select-exercise-search");
 const selectExerciseList = document.getElementById("select-exercise-list");
 const selectExerciseCancelTopBtn = document.getElementById("select-exercise-cancel-top");
@@ -150,6 +151,8 @@ const state = {
     expandedFolders: new Set(),
     pendingDeleteFolder: null,
     hasInitializedFolderExpansion: false,
+    pendingSwapExerciseId: null,
+    keepSwapOnSelectClose: false,
     workoutTimer: {
         intervalId: null,
     },
@@ -2106,6 +2109,32 @@ function renderSessionExercisePicker() {
     sessionAddExerciseBtn.disabled = false;
 }
 
+function getSwapTargetExercise() {
+    if (!state.pendingSwapExerciseId) return null;
+    return state.activeExercises.find((exercise) => String(exercise.id) === String(state.pendingSwapExerciseId)) || null;
+}
+
+function updateSelectExerciseModalTitle() {
+    if (!selectExerciseTitleEl) return;
+    const target = getSwapTargetExercise();
+    if (target) {
+        selectExerciseTitleEl.textContent = `Swap: ${target.name}`;
+        return;
+    }
+    selectExerciseTitleEl.textContent = "Add exercise";
+}
+
+function clearSwapSelection() {
+    state.pendingSwapExerciseId = null;
+    updateSelectExerciseModalTitle();
+}
+
+function closeSelectExerciseModal() {
+    if (selectExerciseModal?.open) {
+        selectExerciseModal.close();
+    }
+}
+
 async function addExerciseToActiveSession() {
     if (!state.activeSession) return;
     const exerciseId = sessionAddExerciseSelect.value;
@@ -2127,7 +2156,9 @@ async function addExerciseToActiveSession() {
     renderWorkoutExercises();
 }
 
-function openSelectExerciseModal() {
+function openSelectExerciseModal({ swapExerciseId = null } = {}) {
+    state.pendingSwapExerciseId = swapExerciseId ? String(swapExerciseId) : null;
+    updateSelectExerciseModalTitle();
     selectExerciseSearchInput.value = "";
     renderSelectExerciseList("");
     selectExerciseSearchInput.focus();
@@ -2135,8 +2166,16 @@ function openSelectExerciseModal() {
 }
 
 function renderSelectExerciseList(searchTerm = "") {
-    const inSession = new Set(state.activeExercises.map((exercise) => String(exercise.id)));
+    const swapTargetId = String(state.pendingSwapExerciseId || "");
+    const inSession = new Set(
+        state.activeExercises
+            .filter((exercise) => String(exercise.id) !== swapTargetId)
+            .map((exercise) => String(exercise.id))
+    );
     let available = state.exercises.filter((exercise) => !inSession.has(String(exercise.id)));
+    if (swapTargetId) {
+        available = available.filter((exercise) => String(exercise.id) !== swapTargetId);
+    }
     
     if (searchTerm.trim()) {
         const lowerTerm = searchTerm.toLowerCase();
@@ -2148,7 +2187,9 @@ function renderSelectExerciseList(searchTerm = "") {
     if (available.length === 0) {
         const empty = document.createElement("div");
         empty.className = "empty";
-        empty.textContent = searchTerm.trim() ? "No exercises found" : "All exercises already added";
+        empty.textContent = searchTerm.trim()
+            ? "No exercises found"
+            : (swapTargetId ? "No replacement exercises available" : "All exercises already added");
         selectExerciseList.appendChild(empty);
         
         const createBtn = document.createElement("button");
@@ -2156,7 +2197,10 @@ function renderSelectExerciseList(searchTerm = "") {
         createBtn.textContent = "+ Create new exercise";
         createBtn.style.marginTop = "12px";
         createBtn.addEventListener("click", () => {
-            selectExerciseModal.close();
+            if (state.pendingSwapExerciseId) {
+                state.keepSwapOnSelectClose = true;
+            }
+            closeSelectExerciseModal();
             openCreateExerciseModal();
         });
         selectExerciseList.appendChild(createBtn);
@@ -2170,7 +2214,13 @@ function renderSelectExerciseList(searchTerm = "") {
             <p class="exercise-select-item-name">${escapeHtml(exercise.name)}</p>
             <p class="exercise-select-item-meta">${exercise.repFloor}–${exercise.repCeiling} reps • ${exercise.restSeconds || 90}s rest</p>
         `;
-        item.addEventListener("click", () => selectAndAddExercise(exercise));
+        item.addEventListener("click", () => {
+            if (state.pendingSwapExerciseId) {
+                swapExerciseInSession(exercise);
+                return;
+            }
+            selectAndAddExercise(exercise);
+        });
         selectExerciseList.appendChild(item);
     });
 }
@@ -2189,9 +2239,60 @@ async function selectAndAddExercise(exercise) {
     state.activeSession = updatedSession;
     state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
     
-    selectExerciseModal.close();
+    clearSwapSelection();
+    closeSelectExerciseModal();
     renderSessionExercisePicker();
     renderWorkoutExercises();
+}
+
+async function swapExerciseInSession(nextExercise) {
+    if (!state.activeSession || !state.pendingSwapExerciseId) return;
+    const sessionId = state.activeSession.id;
+    const currentExerciseId = String(state.pendingSwapExerciseId);
+    const swapIndex = state.activeExercises.findIndex((exercise) => String(exercise.id) === currentExerciseId);
+    if (swapIndex === -1) {
+        showToast("Could not find exercise to swap", "error");
+        clearSwapSelection();
+        closeSelectExerciseModal();
+        return;
+    }
+    const duplicateInSession = state.activeExercises.some(
+        (exercise, index) => index !== swapIndex && String(exercise.id) === String(nextExercise.id)
+    );
+    if (duplicateInSession) {
+        showToast("Exercise already in workout", "error");
+        return;
+    }
+
+    const currentExercise = state.activeExercises[swapIndex];
+    const setsToDelete = state.sets.filter(
+        (set) => String(set.sessionId) === String(sessionId) && String(set.exerciseId) === String(currentExercise.id)
+    );
+    for (const set of setsToDelete) {
+        await db.deleteSet(set.id);
+    }
+    state.sets = state.sets.filter(
+        (set) => !(String(set.sessionId) === String(sessionId) && String(set.exerciseId) === String(currentExercise.id))
+    );
+
+    const nextExercises = [...state.activeExercises];
+    nextExercises[swapIndex] = nextExercise;
+    state.activeExercises = nextExercises;
+
+    const updatedSession = {
+        ...state.activeSession,
+        exerciseIds: nextExercises.map((exercise) => exercise.id),
+        notes: workoutNotesEl.value,
+    };
+    await db.updateSession(updatedSession);
+    state.activeSession = updatedSession;
+    state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
+
+    clearSwapSelection();
+    closeSelectExerciseModal();
+    renderSessionExercisePicker();
+    renderWorkoutExercises();
+    showToast(`Swapped to ${nextExercise.name}`, "success");
 }
 
 function openCreateExerciseModal() {
@@ -2220,7 +2321,13 @@ async function submitCreateExercise() {
     try {
         await db.addExercise(newExercise);
         state.exercises.push(newExercise);
-        
+        if (state.pendingSwapExerciseId) {
+            createExerciseModal.close();
+            await swapExerciseInSession(newExercise);
+            showToast(`"${name}" created and swapped in`, "success");
+            return;
+        }
+
         // Add the new exercise to the active session
         state.activeExercises.push(newExercise);
         const updatedSession = {
@@ -2233,6 +2340,7 @@ async function submitCreateExercise() {
         state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
         
         createExerciseModal.close();
+        clearSwapSelection();
         renderSessionExercisePicker();
         renderWorkoutExercises();
         showToast(`"${name}" created and added`, "success");
@@ -2280,6 +2388,7 @@ function renderWorkoutExercises() {
                 <div class="exercise-title-row">
                     <span class="exercise-drag-handle" aria-label="Drag to reorder">⋮⋮</span>
                     <p class="label">${escapeHtml(ex.name)}</p>
+                    <button class="ghost small swap-chip" type="button">Swap</button>
                 </div>
                 <div class="exercise-meta-row">
                     <p class="sub">${escapeHtml(planText)}</p>
@@ -2416,6 +2525,9 @@ function renderWorkoutExercises() {
         }, { passive: false });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
+        card.querySelector(".swap-chip").addEventListener("click", () => {
+            openSelectExerciseModal({ swapExerciseId: ex.id });
+        });
         const noteInput = card.querySelector(".exercise-note-input");
         if (noteInput) {
             noteInput.addEventListener("change", async () => {
@@ -3734,8 +3846,14 @@ function bindEvents() {
     
     // Create exercise modal
     createExerciseSubmitBtn.addEventListener("click", submitCreateExercise);
-    createExerciseCancelBtn.addEventListener("click", () => createExerciseModal.close());
-    createExerciseCancelTopBtn.addEventListener("click", () => createExerciseModal.close());
+    createExerciseCancelBtn.addEventListener("click", () => {
+        createExerciseModal.close();
+        clearSwapSelection();
+    });
+    createExerciseCancelTopBtn.addEventListener("click", () => {
+        createExerciseModal.close();
+        clearSwapSelection();
+    });
     createExerciseNameInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") submitCreateExercise();
     });
@@ -3751,6 +3869,13 @@ function bindEvents() {
     startEmptyWorkoutBtn.addEventListener("click", () => startWorkout(null));
     sessionAddExerciseBtn.addEventListener("click", openSelectExerciseModal);
     selectExerciseCancelTopBtn.addEventListener("click", () => selectExerciseModal.close());
+    selectExerciseModal.addEventListener("close", () => {
+        if (state.keepSwapOnSelectClose) {
+            state.keepSwapOnSelectClose = false;
+            return;
+        }
+        clearSwapSelection();
+    });
     selectExerciseSearchInput.addEventListener("input", (e) => {
         renderSelectExerciseList(e.target.value);
     });
