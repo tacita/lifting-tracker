@@ -1812,7 +1812,6 @@ function renderTemplatesList() {
                 card.innerHTML = `
                     <span class="drag-handle" aria-hidden="true">⋮⋮</span>
                     <span class="template-name">${escapeHtml(template.name)}</span>
-                    <button type="button" class="ghost icon-btn template-action" data-action="move-template" aria-label="Move template">📁</button>
                     <button type="button" class="ghost icon-btn template-action" data-action="edit-template" aria-label="${String(template.id) === String(state.selectedTemplateId) ? "Editing" : "Edit template"}">✎</button>
                     <button type="button" class="danger ghost icon-btn template-action" data-action="delete-template" aria-label="Delete template">🗑</button>
                 `;
@@ -1842,10 +1841,6 @@ function renderTemplatesList() {
                     focusTemplateEditor();
                 });
 
-                card.querySelector('[data-action="move-template"]').addEventListener("click", async () => {
-                    await moveTemplateFromAction(template);
-                });
-
                 card.querySelector('[data-action="delete-template"]').addEventListener("click", async () => {
                     const approved = await confirmAction({
                         title: "Delete template",
@@ -1871,23 +1866,6 @@ function renderTemplatesList() {
     });
 }
 
-async function moveTemplateFromAction(template) {
-    const currentFolder = getTemplateFolderName(template);
-    const folderNames = getFolderNames();
-    const suggestions = folderNames.length ? `\nExisting: ${folderNames.join(", ")}` : "";
-    const input = prompt(
-        `Move "${template.name}" to folder (leave blank for Unorganized).${suggestions}`,
-        currentFolder
-    );
-    if (input == null) return;
-    const nextFolder = String(input || "").trim();
-    if (nextFolder.toLowerCase() === "unorganized" || nextFolder.toLowerCase() === "unfiled") {
-        await moveTemplateToFolder(template.id, "");
-        return;
-    }
-    await moveTemplateToFolder(template.id, nextFolder);
-}
-
 async function moveTemplateToFolder(templateId, folderName) {
     try {
         const template = state.templates.find((item) => String(item.id) === String(templateId));
@@ -1898,10 +1876,11 @@ async function moveTemplateToFolder(templateId, folderName) {
             await db.addFolder({ id: uuid(), name: nextFolder });
         }
         await db.updateTemplate({ ...template, folder: nextFolder });
+        const directCloudSaveOk = await db.saveTemplateFolderToCloud(template.id, nextFolder);
         const syncOk = await db.ensureCloudSyncComplete();
         await refreshUI();
-        if (!syncOk) {
-            showToast("Moved locally; cloud sync pending", "warning");
+        if (!directCloudSaveOk || !syncOk) {
+            showToast("Moved locally; cloud update failed", "warning");
             return;
         }
         showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unorganized", "success");

@@ -795,6 +795,29 @@ export async function ensureCloudSyncComplete() {
     }
 }
 
+// For operations that need immediate cloud persistence guarantees for a specific template field.
+export async function saveTemplateFolderToCloud(templateId, folder) {
+    if (!useCloudSync()) return true;
+    const payload = {
+        folder: String(folder || "").trim() || null,
+        updated_at: new Date().toISOString(),
+    };
+    const { error } = await supabaseClient
+        .from("templates")
+        .update(payload)
+        .eq("id", templateId)
+        .eq("user_id", authState.user.id);
+    if (error) {
+        console.error("Failed to persist template folder to cloud:", error);
+        setSyncState({
+            status: "failed",
+            error: parseSupabaseError(error, "Failed to save template folder"),
+        });
+        return false;
+    }
+    return true;
+}
+
 async function hydrateLocalFromCloudIfAvailable() {
     if (!useCloudSync()) return { loaded: false, hasCloudData: false, failed: false };
     const userId = authState.user.id;
