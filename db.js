@@ -788,23 +788,34 @@ async function pushLocalSnapshotToCloud() {
         });
         const templateItems = Array.from(templateItemsMap.values());
         
-        // Sync each table
+        // Sync tables in dependency order to respect foreign key constraints:
+        // 1. Parent tables first (no FK dependencies)
         await Promise.all([
             syncTableToCloud("exercises", exercises || [], userId),
-            syncTableToCloud("sessions", sessions || [], userId),
-            syncTableToCloud("sets", sets || [], userId),
-            syncTableToCloud("templates", templates || [], userId),
-            syncTableToCloud("template_items", templateItems, userId),
             syncTableToCloud("folders", folders || [], userId),
         ]);
+        // 2. Tables that reference parents
+        await Promise.all([
+            syncTableToCloud("sessions", sessions || [], userId),
+            syncTableToCloud("templates", templates || [], userId),
+        ]);
+        // 3. Child tables that reference the above
+        await Promise.all([
+            syncTableToCloud("sets", sets || [], userId),
+            syncTableToCloud("template_items", templateItems, userId),
+        ]);
 
-        // Delete cloud records that no longer exist locally
+        // Delete stale cloud records in reverse dependency order (children first)
+        await Promise.all([
+            deleteStaleCloudRecords("sets", (sets || []).map(s => s.id), userId),
+            deleteStaleCloudRecords("template_items", templateItems.map(ti => ti.id), userId),
+        ]);
+        await Promise.all([
+            deleteStaleCloudRecords("sessions", (sessions || []).map(s => s.id), userId),
+            deleteStaleCloudRecords("templates", (templates || []).map(t => t.id), userId),
+        ]);
         await Promise.all([
             deleteStaleCloudRecords("exercises", (exercises || []).map(e => e.id), userId),
-            deleteStaleCloudRecords("sessions", (sessions || []).map(s => s.id), userId),
-            deleteStaleCloudRecords("sets", (sets || []).map(s => s.id), userId),
-            deleteStaleCloudRecords("templates", (templates || []).map(t => t.id), userId),
-            deleteStaleCloudRecords("template_items", templateItems.map(ti => ti.id), userId),
             deleteStaleCloudRecords("folders", (folders || []).map(f => f.id), userId),
         ]);
 
