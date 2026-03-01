@@ -25,6 +25,7 @@ const cloudColumnSupport = {
     exerciseNote: true,
     templateNote: true,
     templateFolder: true,
+    templateSortOrder: true,
 };
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
@@ -234,6 +235,7 @@ function normalizeTemplate(template) {
         ...template,
         folder: String(template.folder || "").trim(),
         note: String(template.note || "").trim(),
+        sortOrder: Math.max(0, Number.parseInt(template.sortOrder, 10) || 0),
         items,
         exerciseIds: items.map((item) => item.exerciseId),
     };
@@ -665,6 +667,9 @@ async function syncTableToCloud(tableName, data, userId) {
             if (cloudColumnSupport.templateNote) {
                 row.note = item.note || null;
             }
+            if (cloudColumnSupport.templateSortOrder) {
+                row.sort_order = Math.max(0, Number.parseInt(item.sortOrder, 10) || 0);
+            }
         } else if (tableName === "template_items") {
             row.id = item.id;
             row.template_id = item.templateId;
@@ -701,6 +706,10 @@ async function syncTableToCloud(tableName, data, userId) {
         }
         if (tableName === "templates" && cloudColumnSupport.templateFolder && /column.*folder/i.test(message)) {
             cloudColumnSupport.templateFolder = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        if (tableName === "templates" && cloudColumnSupport.templateSortOrder && /column.*sort_order/i.test(message)) {
+            cloudColumnSupport.templateSortOrder = false;
             return syncTableToCloud(tableName, data, userId);
         }
         throw error;
@@ -807,22 +816,34 @@ export async function ensureCloudSyncComplete() {
 }
 
 // For operations that need immediate cloud persistence guarantees for a specific template field.
-export async function saveTemplateFolderToCloud(templateId, folder) {
+export async function saveTemplatePlacementToCloud(templateId, folder, sortOrder = 0) {
     if (!useCloudSync()) return true;
-    const payload = {
-        folder: String(folder || "").trim() || null,
-        updated_at: new Date().toISOString(),
-    };
+    const payload = { updated_at: new Date().toISOString() };
+    if (cloudColumnSupport.templateFolder) {
+        payload.folder = String(folder || "").trim() || null;
+    }
+    if (cloudColumnSupport.templateSortOrder) {
+        payload.sort_order = Math.max(0, Number.parseInt(sortOrder, 10) || 0);
+    }
     const { error } = await supabaseClient
         .from("templates")
         .update(payload)
         .eq("id", templateId)
         .eq("user_id", authState.user.id);
     if (error) {
-        console.error("Failed to persist template folder to cloud:", error);
+        const message = String(error.message || "");
+        if (cloudColumnSupport.templateSortOrder && /column.*sort_order/i.test(message)) {
+            cloudColumnSupport.templateSortOrder = false;
+            return saveTemplatePlacementToCloud(templateId, folder, sortOrder);
+        }
+        if (cloudColumnSupport.templateFolder && /column.*folder/i.test(message)) {
+            cloudColumnSupport.templateFolder = false;
+            return saveTemplatePlacementToCloud(templateId, folder, sortOrder);
+        }
+        console.error("Failed to persist template placement to cloud:", error);
         setSyncState({
             status: "failed",
-            error: parseSupabaseError(error, "Failed to save template folder"),
+            error: parseSupabaseError(error, "Failed to save template placement"),
         });
         return false;
     }
@@ -939,6 +960,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                         name: row.name,
                         folder: row.folder || "",
                         note: row.note || "",
+                        sortOrder: Math.max(0, Number.parseInt(row.sort_order, 10) || 0),
                         items: itemsData.data?.filter(item => String(item.template_id) === String(row.id)).map(item => ({
                             id: item.id,
                             templateId: item.template_id,

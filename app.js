@@ -924,6 +924,61 @@ function getTemplateFolderName(template) {
     return String(template?.folder || "").trim();
 }
 
+function getTemplatesForFolderOrdered(folderName, { excludeTemplateId = null } = {}) {
+    const target = String(folderName || "").trim().toLowerCase();
+    return state.templates
+        .filter((template) => {
+            if (excludeTemplateId != null && String(template.id) === String(excludeTemplateId)) return false;
+            return getTemplateFolderName(template).toLowerCase() === target;
+        })
+        .sort((a, b) => {
+            const aOrder = Math.max(0, Number.parseInt(a.sortOrder, 10) || 0);
+            const bOrder = Math.max(0, Number.parseInt(b.sortOrder, 10) || 0);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a.name || "").localeCompare(String(b.name || ""));
+        });
+}
+
+function getNextTemplateSortOrder(folderName, { excludeTemplateId = null } = {}) {
+    const ordered = getTemplatesForFolderOrdered(folderName, { excludeTemplateId });
+    if (ordered.length === 0) return 1;
+    return Math.max(...ordered.map((template) => Math.max(0, Number.parseInt(template.sortOrder, 10) || 0))) + 1;
+}
+
+async function rebalanceTemplateSortOrder(folderName, { excludeTemplateId = null } = {}) {
+    const ordered = getTemplatesForFolderOrdered(folderName, { excludeTemplateId });
+    for (let i = 0; i < ordered.length; i += 1) {
+        const template = ordered[i];
+        const targetOrder = i + 1;
+        const currentOrder = Math.max(0, Number.parseInt(template.sortOrder, 10) || 0);
+        if (currentOrder === targetOrder) continue;
+        await db.updateTemplate({ ...template, sortOrder: targetOrder });
+    }
+}
+
+async function reorderTemplateWithinFolder(folderName, draggedTemplateId, targetTemplateId, placeAfter = false) {
+    const ordered = getTemplatesForFolderOrdered(folderName);
+    const fromIndex = ordered.findIndex((template) => String(template.id) === String(draggedTemplateId));
+    const targetIndex = ordered.findIndex((template) => String(template.id) === String(targetTemplateId));
+    if (fromIndex === -1 || targetIndex === -1) return false;
+    if (fromIndex === targetIndex) return false;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(fromIndex, 1);
+    const adjustedTarget = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    const insertIndex = placeAfter ? adjustedTarget + 1 : adjustedTarget;
+    reordered.splice(Math.max(0, Math.min(insertIndex, reordered.length)), 0, moved);
+
+    for (let i = 0; i < reordered.length; i += 1) {
+        const template = reordered[i];
+        const targetOrder = i + 1;
+        const currentOrder = Math.max(0, Number.parseInt(template.sortOrder, 10) || 0);
+        if (currentOrder === targetOrder) continue;
+        await db.updateTemplate({ ...template, sortOrder: targetOrder });
+    }
+    return true;
+}
+
 function getFolderNames() {
     const namesByLower = new Map();
     const collect = (name) => {
@@ -1219,6 +1274,7 @@ async function createTemplate() {
         name,
         folder,
         note: "",
+        sortOrder: getNextTemplateSortOrder(folder),
         items: [],
         exerciseIds: [],
     });
@@ -1808,10 +1864,8 @@ function renderTemplatesList() {
             return;
         }
         
-        group.templates
-            .slice()
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .forEach((template) => {
+        const orderedTemplates = getTemplatesForFolderOrdered(folderKey);
+        orderedTemplates.forEach((template) => {
                 const card = document.createElement("div");
                 card.className = "list-card template-list-card";
                 card.draggable = true;
@@ -1828,6 +1882,40 @@ function renderTemplatesList() {
                     card.classList.add("dragging");
                 });
                 card.addEventListener("dragend", () => card.classList.remove("dragging"));
+                card.addEventListener("dragover", (event) => {
+                    event.preventDefault();
+                    card.classList.add("drag-over");
+                });
+                card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+                card.addEventListener("drop", async (event) => {
+                    event.preventDefault();
+                    card.classList.remove("drag-over");
+                    const draggedTemplateId = event.dataTransfer?.getData("text/template-id");
+                    if (!draggedTemplateId || String(draggedTemplateId) === String(template.id)) return;
+
+                    const draggedTemplate = state.templates.find((item) => String(item.id) === String(draggedTemplateId));
+                    if (!draggedTemplate) return;
+
+                    const draggedFolder = getTemplateFolderName(draggedTemplate);
+                    const targetFolder = folderKey;
+                    if (draggedFolder.toLowerCase() !== targetFolder.toLowerCase()) {
+                        await moveTemplateToFolder(draggedTemplateId, targetFolder);
+                        return;
+                    }
+
+                    const cardRect = card.getBoundingClientRect();
+                    const placeAfter = event.clientY > cardRect.top + cardRect.height / 2;
+                    const changed = await reorderTemplateWithinFolder(targetFolder, draggedTemplateId, template.id, placeAfter);
+                    if (!changed) return;
+
+                    const syncOk = await db.ensureCloudSyncComplete();
+                    await refreshUI();
+                    if (!syncOk) {
+                        showToast("Reordered locally; cloud sync pending", "warning");
+                        return;
+                    }
+                    showToast("Template order updated", "success");
+                });
 
                 card.querySelector('[data-action="edit-template"]').addEventListener("click", async () => {
                     if (state.templateEditorDirty && String(state.selectedTemplateId) !== String(template.id)) {
@@ -1878,12 +1966,15 @@ async function moveTemplateToFolder(templateId, folderName) {
         const template = state.templates.find((item) => String(item.id) === String(templateId));
         if (!template) return;
         const nextFolder = String(folderName || "").trim();
-        if (getTemplateFolderName(template) === nextFolder) return;
+        const currentFolder = getTemplateFolderName(template);
+        if (currentFolder.toLowerCase() === nextFolder.toLowerCase()) return;
         if (nextFolder) {
             await db.addFolder({ id: uuid(), name: nextFolder });
         }
-        await db.updateTemplate({ ...template, folder: nextFolder });
-        const directCloudSaveOk = await db.saveTemplateFolderToCloud(template.id, nextFolder);
+        const nextSortOrder = getNextTemplateSortOrder(nextFolder, { excludeTemplateId: template.id });
+        await db.updateTemplate({ ...template, folder: nextFolder, sortOrder: nextSortOrder });
+        await rebalanceTemplateSortOrder(currentFolder, { excludeTemplateId: template.id });
+        const directCloudSaveOk = await db.saveTemplatePlacementToCloud(template.id, nextFolder, nextSortOrder);
         const syncOk = await db.ensureCloudSyncComplete();
         await refreshUI();
         if (!directCloudSaveOk || !syncOk) {
@@ -1936,6 +2027,7 @@ function openManageFoldersModal() {
                 for (const template of templatesToUpdate) {
                     await db.updateTemplate({ ...template, folder: newName.trim() });
                 }
+                await db.ensureCloudSyncComplete();
                 
                 await refreshUI();
                 openManageFoldersModal();
@@ -3806,6 +3898,7 @@ async function importWorkoutsData(parsed) {
             name,
             folder,
             note: String(template?.notes || template?.note || "").trim(),
+            sortOrder: getNextTemplateSortOrder(folder),
             items,
             exerciseIds: items.map((item) => item.exerciseId),
         });
