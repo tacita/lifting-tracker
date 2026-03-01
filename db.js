@@ -12,6 +12,7 @@ let authListeners = [];
 let authSubscription = null;
 let syncTimer = null;
 let syncInFlight = false;
+let syncLock = Promise.resolve();
 let syncListeners = [];
 let hydrationComplete = false;
 let hydrationError = null;
@@ -195,9 +196,14 @@ function createId(existingIds) {
     return nextId;
 }
 
+function generateItemId() {
+    return `ti-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+}
+
 function sanitizeTemplateItems(items) {
     const sanitized = (items || [])
         .map((item) => ({
+            id: item.id || generateItemId(),
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: parseTemplateReps(item.reps, 8),
@@ -740,19 +746,34 @@ async function deleteStaleCloudRecords(tableName, localIds, userId) {
             if (error) console.error(`Failed to clean stale ${tableName}:`, error);
             return;
         }
+        // Sanitize IDs to prevent injection — only allow alphanumeric, hyphens, underscores
+        const safeIds = localIds
+            .map((id) => String(id))
+            .filter((id) => /^[\w-]+$/.test(id));
+        if (safeIds.length === 0) return;
         const { error } = await supabaseClient
             .from(tableName)
             .delete()
             .eq("user_id", userId)
-            .not("id", "in", `(${localIds.join(",")})`);
+            .not("id", "in", `(${safeIds.join(",")})`);
         if (error) console.error(`Failed to clean stale ${tableName}:`, error);
     } catch (err) {
         console.error(`Failed to clean stale ${tableName}:`, err);
     }
 }
 
+function acquireSyncLock(fn) {
+    const next = syncLock.then(fn, fn);
+    syncLock = next.catch(() => {});
+    return next;
+}
+
 async function pushLocalSnapshotToCloud() {
-    if (!useCloudSync() || syncInFlight) return false;
+    return acquireSyncLock(_pushLocalSnapshotToCloud);
+}
+
+async function _pushLocalSnapshotToCloud() {
+    if (!useCloudSync()) return false;
     syncInFlight = true;
     setSyncState({ status: "syncing", error: "" });
     try {
@@ -772,14 +793,12 @@ async function pushLocalSnapshotToCloud() {
             folders: folders?.length || 0,
         });
         
-        // Build template items from templates.items, removing duplicates and generating IDs if missing
+        // Build template items from templates.items, removing duplicates
         const templateItemsMap = new Map();
-        templates?.forEach((t, templateIdx) => {
+        templates?.forEach((t) => {
             if (Array.isArray(t.items)) {
-                t.items.forEach((item, itemIdx) => {
-                    // Generate ID if missing (same as migration does)
-                    const itemId = item.id || `${t.id}-${item.exerciseId}-${itemIdx}`;
-                    // Deduplicate by generated ID
+                t.items.forEach((item) => {
+                    const itemId = item.id || generateItemId();
                     if (!templateItemsMap.has(itemId)) {
                         templateItemsMap.set(itemId, { ...item, id: itemId, templateId: t.id });
                     }
@@ -1057,14 +1076,16 @@ async function hydrateLocalFromCloudIfAvailable() {
  * Returns true if local data was refreshed from cloud.
  */
 export async function pullFromCloud() {
-    if (!useCloudSync()) return false;
-    try {
-        const result = await hydrateLocalFromCloudIfAvailable();
-        return result.loaded;
-    } catch (err) {
-        console.error("pullFromCloud failed:", err);
-        return false;
-    }
+    return acquireSyncLock(async () => {
+        if (!useCloudSync()) return false;
+        try {
+            const result = await hydrateLocalFromCloudIfAvailable();
+            return result.loaded;
+        } catch (err) {
+            console.error("pullFromCloud failed:", err);
+            return false;
+        }
+    });
 }
 
 // Check if user has migrated from blob to normalized schema

@@ -533,10 +533,10 @@ button.small {
 
 .swap-chip {
     margin-left: auto;
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    min-height: 30px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
     padding: 0;
     border-radius: 8px;
     font-weight: 600;
@@ -994,10 +994,10 @@ button.small {
 
 .set-delete-btn {
     flex-shrink: 0;
-    min-width: 34px;
-    min-height: 34px;
-    width: 34px;
-    height: 34px;
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
     padding: 3px 6px;
     font-size: 18px;
     display: flex;
@@ -1044,8 +1044,8 @@ button.small {
 
 .set-delete-btn,
 .set-row .mark-set {
-    min-width: 34px;
-    min-height: 34px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 3px 6px;
     border-radius: 12px;
     font-size: 18px;

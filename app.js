@@ -2272,14 +2272,24 @@ async function startWorkout(templateId = null) {
             notes: "",
             status: "draft",
         };
-        await db.addSession(session);
+        try {
+            await db.addSession(session);
+        } catch (err) {
+            showToast("Failed to start workout", "error");
+            return;
+        }
         state.sessions.unshift(session);
         state.activeSession = session;
     } else {
         // If active session template differs, confirm restart
         if (state.activeSession.templateId !== templateId) {
             const prevId = state.activeSession.id;
-            await db.deleteSession(prevId);
+            try {
+                await db.deleteSession(prevId);
+            } catch (err) {
+                showToast("Failed to restart workout", "error");
+                return;
+            }
             state.sets = state.sets.filter((s) => s.sessionId !== prevId);
             state.sessions = state.sessions.filter((s) => s.id !== prevId);
             state.activeSession = null;
@@ -2288,7 +2298,7 @@ async function startWorkout(templateId = null) {
     }
 
     if (!state.activeSession.startedAt) {
-        state.activeSession = {
+        const updatedSession = {
             ...state.activeSession,
             startedAt: state.activeSession.date || new Date().toISOString(),
             isPaused: false,
@@ -2296,8 +2306,14 @@ async function startWorkout(templateId = null) {
             pausedAccumulatedSeconds: Number.parseInt(state.activeSession.pausedAccumulatedSeconds, 10) || 0,
             exerciseIds: Array.isArray(state.activeSession.exerciseIds) ? state.activeSession.exerciseIds : exercises.map((exercise) => exercise.id),
         };
-        await db.updateSession(state.activeSession);
-        state.sessions = state.sessions.map((item) => (String(item.id) === String(state.activeSession.id) ? state.activeSession : item));
+        try {
+            await db.updateSession(updatedSession);
+        } catch (err) {
+            showToast("Failed to start workout", "error");
+            return;
+        }
+        state.activeSession = updatedSession;
+        state.sessions = state.sessions.map((item) => (String(item.id) === String(updatedSession.id) ? updatedSession : item));
     }
 
     state.activeExercises = exercises;
@@ -2470,17 +2486,23 @@ function renderSelectExerciseList(searchTerm = "") {
 async function selectAndAddExercise(exercise) {
     if (!state.activeSession) return;
     if (state.activeExercises.some((item) => String(item.id) === String(exercise.id))) return;
-    
-    state.activeExercises.push(exercise);
+
+    const nextExercises = [...state.activeExercises, exercise];
     const updatedSession = {
         ...state.activeSession,
-        exerciseIds: state.activeExercises.map((item) => item.id),
+        exerciseIds: nextExercises.map((item) => item.id),
         notes: workoutNotesEl.value,
     };
-    await db.updateSession(updatedSession);
+    try {
+        await db.updateSession(updatedSession);
+    } catch (err) {
+        showToast("Failed to add exercise", "error");
+        return;
+    }
+    state.activeExercises = nextExercises;
     state.activeSession = updatedSession;
     state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
-    
+
     clearSwapSelection();
     closeSelectExerciseModal();
     renderSessionExercisePicker();
@@ -2510,8 +2532,13 @@ async function swapExerciseInSession(nextExercise) {
     const setsToDelete = state.sets.filter(
         (set) => String(set.sessionId) === String(sessionId) && String(set.exerciseId) === String(currentExercise.id)
     );
-    for (const set of setsToDelete) {
-        await db.deleteSet(set.id);
+    try {
+        for (const set of setsToDelete) {
+            await db.deleteSet(set.id);
+        }
+    } catch (err) {
+        showToast("Failed to swap exercise", "error");
+        return;
     }
     state.sets = state.sets.filter(
         (set) => !(String(set.sessionId) === String(sessionId) && String(set.exerciseId) === String(currentExercise.id))
@@ -2519,14 +2546,19 @@ async function swapExerciseInSession(nextExercise) {
 
     const nextExercises = [...state.activeExercises];
     nextExercises[swapIndex] = nextExercise;
-    state.activeExercises = nextExercises;
 
     const updatedSession = {
         ...state.activeSession,
         exerciseIds: nextExercises.map((exercise) => exercise.id),
         notes: workoutNotesEl.value,
     };
-    await db.updateSession(updatedSession);
+    try {
+        await db.updateSession(updatedSession);
+    } catch (err) {
+        showToast("Failed to swap exercise", "error");
+        return;
+    }
+    state.activeExercises = nextExercises;
     state.activeSession = updatedSession;
     state.sessions = state.sessions.map((session) => (String(session.id) === String(updatedSession.id) ? updatedSession : session));
 
@@ -2772,7 +2804,12 @@ function renderWorkoutExercises() {
                 const nextNote = String(noteInput.value || "").trim();
                 if (nextNote === String(ex.note || "").trim()) return;
                 const updatedExercise = { ...ex, note: nextNote };
-                await db.updateExercise(updatedExercise);
+                try {
+                    await db.updateExercise(updatedExercise);
+                } catch (err) {
+                    showToast("Failed to update note", "error");
+                    return;
+                }
                 state.exercises = state.exercises.map((item) => (String(item.id) === String(ex.id) ? updatedExercise : item));
                 state.activeExercises = state.activeExercises.map((item) =>
                     String(item.id) === String(ex.id) ? updatedExercise : item
@@ -3125,7 +3162,12 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                     weight: inputWeight,
                     reps: inputReps,
                 };
-                await db.updateSet(refreshed);
+                try {
+                    await db.updateSet(refreshed);
+                } catch (err) {
+                    showToast("Failed to save set", "error");
+                    return;
+                }
                 state.sets = state.sets.map((item) => (String(item.id) === String(refreshed.id) ? refreshed : item));
                 setRecord = refreshed;
             }
@@ -3137,7 +3179,12 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
             isComplete: nextComplete,
             completedAt: nextComplete ? new Date().toISOString() : null,
         };
-        await db.updateSet(updated);
+        try {
+            await db.updateSet(updated);
+        } catch (err) {
+            showToast("Failed to update set", "error");
+            return;
+        }
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
         row.classList.toggle("set-complete", nextComplete);
         row.querySelector(".mark-set").classList.toggle("done", nextComplete);
@@ -3256,13 +3303,18 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
         reps,
     };
 
-    if (row.dataset.setId) {
-        await db.updateSet(payload);
-        state.sets = state.sets.map((s) => (s.id === payload.id ? payload : s));
-    } else {
-        await db.addSet(payload);
-        row.dataset.setId = payload.id;
-        state.sets.push(payload);
+    try {
+        if (row.dataset.setId) {
+            await db.updateSet(payload);
+            state.sets = state.sets.map((s) => (s.id === payload.id ? payload : s));
+        } else {
+            await db.addSet(payload);
+            row.dataset.setId = payload.id;
+            state.sets.push(payload);
+        }
+    } catch (err) {
+        showToast("Failed to save set", "error");
+        return null;
     }
     return payload;
 }
@@ -3370,9 +3422,14 @@ async function finishWorkout() {
         notes: workoutNotesEl.value,
         status: "complete",
     };
-    await db.updateSession(updated);
+    try {
+        await db.updateSession(updated);
+    } catch (err) {
+        showToast("Failed to save workout", "error");
+        return;
+    }
     state.sessions = state.sessions.map((s) => (s.id === updated.id ? updated : s));
-    
+
     // Ensure workout is synced to cloud before clearing local state
     const syncSuccess = await db.ensureCloudSyncComplete();
     if (!syncSuccess) {
