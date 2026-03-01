@@ -112,8 +112,12 @@ const confirmModalCancelBtn = document.getElementById("confirm-modal-cancel");
 const confirmModalConfirmBtn = document.getElementById("confirm-modal-confirm");
 
 // Settings refs
-const exportBtn = document.getElementById("export-data");
-const importBtn = document.getElementById("import-data");
+const exportHistoryBtn = document.getElementById("export-history-data");
+const importHistoryBtn = document.getElementById("import-history-data");
+const exportExercisesBtn = document.getElementById("export-exercises-data");
+const importExercisesBtn = document.getElementById("import-exercises-data");
+const exportWorkoutsBtn = document.getElementById("export-workouts-data");
+const importWorkoutsBtn = document.getElementById("import-workouts-data");
 const importInput = document.getElementById("import-file");
 const clearDataBtn = document.getElementById("clear-data");
 const authEmailInput = document.getElementById("auth-email");
@@ -177,6 +181,7 @@ function formatClockTime(iso) {
 }
 
 let confirmResolver = null;
+let pendingImportType = "";
 function bindConfirmModal() {
     if (!confirmModal) return;
     const onCancel = () => confirmModal.close();
@@ -3243,20 +3248,365 @@ function renderChart(exercise, sessionsWithExercise, bySession) {
 }
 
 // Settings: export/import/clear
-async function exportData() {
-    const data = await db.exportData();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+function normalizeEntityName(value) {
+    return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function downloadJson(filename, payload) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `overload-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
-    showToast("Exported data", "success");
 }
 
-function triggerImport() {
+async function exportHistoryData() {
+    const exercisesById = new Map(state.exercises.map((exercise) => [String(exercise.id), exercise]));
+    const sessions = state.sessions
+        .filter((session) => session.status !== "draft")
+        .sort((a, b) => new Date(a.date) - new Date(b.date))
+        .map((session) => {
+            const sessionSets = state.sets
+                .filter((set) => String(set.sessionId) === String(session.id))
+                .sort((a, b) => a.setNumber - b.setNumber)
+                .map((set) => ({
+                    exerciseName: exercisesById.get(String(set.exerciseId))?.name || "Unknown exercise",
+                    setNumber: set.setNumber,
+                    weight: set.weight,
+                    reps: set.reps,
+                    isComplete: Boolean(set.isComplete),
+                    isSkipped: Boolean(set.isSkipped),
+                    completedAt: set.completedAt || null,
+                }));
+
+            const exerciseNames = Array.isArray(session.exerciseIds)
+                ? session.exerciseIds.map((exerciseId) => exercisesById.get(String(exerciseId))?.name).filter(Boolean)
+                : [];
+
+            return {
+                date: session.date,
+                startedAt: session.startedAt || null,
+                finishedAt: session.finishedAt || null,
+                pausedAccumulatedSeconds: Number.parseInt(session.pausedAccumulatedSeconds, 10) || 0,
+                notes: session.notes || "",
+                status: session.status || "complete",
+                exerciseNames,
+                sets: sessionSets,
+            };
+        });
+
+    const payload = {
+        type: "overload-history-v1",
+        exportedAt: new Date().toISOString(),
+        sessions,
+    };
+    downloadJson(`overload-history-${new Date().toISOString().slice(0, 10)}.json`, payload);
+    showToast("Workout history exported", "success");
+}
+
+async function exportExercisesData() {
+    const payload = {
+        type: "overload-exercises-v1",
+        exportedAt: new Date().toISOString(),
+        exercises: state.exercises.map((exercise) => ({
+            name: exercise.name,
+            repFloor: exercise.repFloor,
+            repCeiling: exercise.repCeiling,
+            restSeconds: exercise.restSeconds ?? 90,
+        })),
+    };
+    downloadJson(`overload-exercises-${new Date().toISOString().slice(0, 10)}.json`, payload);
+    showToast("Exercise library exported", "success");
+}
+
+async function exportWorkoutsData() {
+    const exercisesById = new Map(state.exercises.map((exercise) => [String(exercise.id), exercise]));
+    const referencedExerciseNames = new Set();
+    const templates = state.templates.map((template) => {
+        const items = getTemplateItems(template).map((item) => {
+            const exercise = exercisesById.get(String(item.exerciseId));
+            const exerciseName = exercise?.name || "";
+            if (exerciseName) referencedExerciseNames.add(normalizeEntityName(exerciseName));
+            return {
+                exerciseName,
+                sets: item.sets,
+                reps: item.reps,
+                restSeconds: item.restSeconds,
+                supersetId: item.supersetId || null,
+                supersetOrder: item.supersetOrder || 0,
+            };
+        }).filter((item) => item.exerciseName);
+
+        return {
+            name: template.name,
+            folder: template.folder || "",
+            items,
+        };
+    });
+
+    const exercises = state.exercises
+        .filter((exercise) => referencedExerciseNames.has(normalizeEntityName(exercise.name)))
+        .map((exercise) => ({
+            name: exercise.name,
+            repFloor: exercise.repFloor,
+            repCeiling: exercise.repCeiling,
+            restSeconds: exercise.restSeconds ?? 90,
+        }));
+
+    const folderNames = new Set(state.folders.map((folder) => String(folder.name || "").trim()).filter(Boolean));
+    state.templates.forEach((template) => {
+        const folder = String(template.folder || "").trim();
+        if (folder) folderNames.add(folder);
+    });
+
+    const payload = {
+        type: "overload-workouts-v1",
+        exportedAt: new Date().toISOString(),
+        folders: Array.from(folderNames).sort((a, b) => a.localeCompare(b)),
+        exercises,
+        templates,
+    };
+    downloadJson(`overload-workouts-${new Date().toISOString().slice(0, 10)}.json`, payload);
+    showToast("Workouts exported", "success");
+}
+
+function triggerImport(type) {
+    pendingImportType = type;
     importInput.click();
+}
+
+async function ensureExerciseByName(name, exerciseDefaults, exerciseIdByName) {
+    const normalized = normalizeEntityName(name);
+    if (!normalized) return null;
+    const existing = exerciseIdByName.get(normalized);
+    if (existing != null) return existing;
+
+    const defaults = exerciseDefaults.get(normalized) || {};
+    const payload = {
+        id: uuid(),
+        name: String(name || "").trim(),
+        repFloor: Math.max(1, Number.parseInt(defaults.repFloor, 10) || 8),
+        repCeiling: Math.max(2, Number.parseInt(defaults.repCeiling, 10) || 12),
+        restSeconds: Math.max(0, Number.parseInt(defaults.restSeconds, 10) || 90),
+    };
+    if (payload.repFloor >= payload.repCeiling) {
+        payload.repFloor = 8;
+        payload.repCeiling = 12;
+    }
+
+    try {
+        await db.addExercise(payload);
+        exerciseIdByName.set(normalized, payload.id);
+        return payload.id;
+    } catch {
+        const refreshed = await db.getExercises();
+        refreshed.forEach((exercise) => exerciseIdByName.set(normalizeEntityName(exercise.name), exercise.id));
+        return exerciseIdByName.get(normalized) || null;
+    }
+}
+
+function createUniqueTemplateName(baseName, existingNames) {
+    const root = String(baseName || "").trim() || "Imported Template";
+    let candidate = root;
+    let index = 2;
+    while (existingNames.has(normalizeEntityName(candidate))) {
+        candidate = `${root} (${index})`;
+        index += 1;
+    }
+    existingNames.add(normalizeEntityName(candidate));
+    return candidate;
+}
+
+async function importExercisesData(parsed) {
+    const exercises = Array.isArray(parsed?.exercises) ? parsed.exercises : [];
+    if (exercises.length === 0) {
+        showToast("No exercises found in file", "error");
+        return;
+    }
+
+    const existingByName = new Map(state.exercises.map((exercise) => [normalizeEntityName(exercise.name), exercise.id]));
+    let added = 0;
+    let skipped = 0;
+
+    for (const item of exercises) {
+        const name = String(item?.name || "").trim();
+        const key = normalizeEntityName(name);
+        if (!key) {
+            skipped += 1;
+            continue;
+        }
+        if (existingByName.has(key)) {
+            skipped += 1;
+            continue;
+        }
+        try {
+            await db.addExercise({
+                id: uuid(),
+                name,
+                repFloor: Math.max(1, Number.parseInt(item.repFloor, 10) || 8),
+                repCeiling: Math.max(2, Number.parseInt(item.repCeiling, 10) || 12),
+                restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            });
+        } catch {
+            skipped += 1;
+            continue;
+        }
+        existingByName.set(key, true);
+        added += 1;
+    }
+
+    await refreshUI();
+    showToast(`Exercises imported: ${added} added, ${skipped} skipped`, "success");
+}
+
+async function importHistoryData(parsed) {
+    const sessions = Array.isArray(parsed?.sessions) ? parsed.sessions : [];
+    if (sessions.length === 0) {
+        showToast("No workout history found in file", "error");
+        return;
+    }
+
+    const exerciseDefaults = new Map();
+    const exerciseIdByName = new Map(state.exercises.map((exercise) => [normalizeEntityName(exercise.name), exercise.id]));
+    let importedSessions = 0;
+    let importedSets = 0;
+
+    for (const entry of sessions) {
+        const exerciseNameCandidates = [
+            ...(Array.isArray(entry.exerciseNames) ? entry.exerciseNames : []),
+            ...(Array.isArray(entry.sets) ? entry.sets.map((set) => set.exerciseName) : []),
+        ].map((name) => String(name || "").trim()).filter(Boolean);
+
+        for (const exerciseName of exerciseNameCandidates) {
+            if (!exerciseDefaults.has(normalizeEntityName(exerciseName))) {
+                exerciseDefaults.set(normalizeEntityName(exerciseName), { repFloor: 8, repCeiling: 12, restSeconds: 90 });
+            }
+            await ensureExerciseByName(exerciseName, exerciseDefaults, exerciseIdByName);
+        }
+
+        const orderedExerciseIds = [];
+        for (const exerciseName of Array.isArray(entry.exerciseNames) ? entry.exerciseNames : []) {
+            const exerciseId = exerciseIdByName.get(normalizeEntityName(exerciseName));
+            if (exerciseId == null) continue;
+            if (!orderedExerciseIds.some((id) => String(id) === String(exerciseId))) {
+                orderedExerciseIds.push(exerciseId);
+            }
+        }
+
+        const sessionId = uuid();
+        await db.addSession({
+            id: sessionId,
+            date: entry.date || new Date().toISOString(),
+            startedAt: entry.startedAt || entry.date || new Date().toISOString(),
+            finishedAt: entry.finishedAt || entry.date || new Date().toISOString(),
+            isPaused: false,
+            pausedAt: null,
+            pausedAccumulatedSeconds: Number.parseInt(entry.pausedAccumulatedSeconds, 10) || 0,
+            templateId: null,
+            exerciseIds: orderedExerciseIds,
+            notes: String(entry.notes || ""),
+            status: entry.status === "draft" ? "complete" : "complete",
+        });
+
+        const sets = Array.isArray(entry.sets) ? entry.sets : [];
+        for (const set of sets) {
+            const exerciseId = exerciseIdByName.get(normalizeEntityName(set.exerciseName));
+            const weight = Number.parseFloat(set.weight);
+            const reps = Number.parseInt(set.reps, 10);
+            if (exerciseId == null || !Number.isFinite(weight) || !Number.isFinite(reps)) continue;
+            await db.addSet({
+                id: uuid(),
+                sessionId,
+                exerciseId,
+                setNumber: Math.max(1, Number.parseInt(set.setNumber, 10) || 1),
+                weight,
+                reps,
+                isComplete: Boolean(set.isComplete ?? true),
+                isSkipped: Boolean(set.isSkipped),
+                completedAt: set.completedAt || null,
+            });
+            importedSets += 1;
+        }
+        importedSessions += 1;
+    }
+
+    await refreshUI();
+    showToast(`History imported: ${importedSessions} sessions, ${importedSets} sets`, "success");
+}
+
+async function importWorkoutsData(parsed) {
+    const templates = Array.isArray(parsed?.templates) ? parsed.templates : [];
+    if (templates.length === 0) {
+        showToast("No workouts found in file", "error");
+        return;
+    }
+
+    const folderPrompt = prompt("Import templates into folder (optional). Leave blank to keep source folders.");
+    if (folderPrompt === null) return;
+    const targetFolder = String(folderPrompt || "").trim();
+
+    const exerciseDefaults = new Map(
+        (Array.isArray(parsed?.exercises) ? parsed.exercises : [])
+            .map((exercise) => [normalizeEntityName(exercise?.name), exercise])
+            .filter(([key]) => Boolean(key))
+    );
+    const exerciseIdByName = new Map(state.exercises.map((exercise) => [normalizeEntityName(exercise.name), exercise.id]));
+
+    const existingTemplateNames = new Set(state.templates.map((template) => normalizeEntityName(template.name)));
+    const knownFolders = new Set(
+        [
+            ...state.folders.map((folder) => String(folder.name || "").trim()),
+            ...state.templates.map((template) => String(template.folder || "").trim()),
+        ].filter(Boolean).map((name) => name.toLowerCase())
+    );
+
+    if (targetFolder && !knownFolders.has(targetFolder.toLowerCase())) {
+        await db.addFolder({ id: uuid(), name: targetFolder });
+        knownFolders.add(targetFolder.toLowerCase());
+    }
+
+    let added = 0;
+    for (const template of templates) {
+        const sourceFolder = String(template?.folder || "").trim();
+        const folder = targetFolder || sourceFolder;
+        if (folder && !knownFolders.has(folder.toLowerCase())) {
+            await db.addFolder({ id: uuid(), name: folder });
+            knownFolders.add(folder.toLowerCase());
+        }
+
+        const rawItems = Array.isArray(template?.items) ? template.items : [];
+        const items = [];
+        for (const item of rawItems) {
+            const exerciseName = String(item?.exerciseName || "").trim();
+            if (!exerciseName) continue;
+            const exerciseId = await ensureExerciseByName(exerciseName, exerciseDefaults, exerciseIdByName);
+            if (exerciseId == null) continue;
+            items.push({
+                exerciseId,
+                sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
+                reps: String(item.reps || "8-12").trim(),
+                restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+                supersetId: item.supersetId ? String(item.supersetId) : null,
+                supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
+            });
+        }
+        if (items.length === 0) continue;
+
+        const name = createUniqueTemplateName(template?.name, existingTemplateNames);
+        await db.addTemplate({
+            id: uuid(),
+            name,
+            folder,
+            items,
+            exerciseIds: items.map((item) => item.exerciseId),
+        });
+        added += 1;
+    }
+
+    await refreshUI();
+    showToast(`Imported ${added} workout template${added === 1 ? "" : "s"}`, "success");
 }
 
 async function handleImport(event) {
@@ -3265,20 +3615,26 @@ async function handleImport(event) {
     const text = await file.text();
     try {
         const parsed = JSON.parse(text);
-        const approved = await confirmAction({
-            title: "Import data",
-            message: "Import data and overwrite current records?",
-            confirmLabel: "Import",
-            danger: true,
-        });
-        if (!approved) return;
-        await db.importData(parsed);
-        await refreshUI();
-        showToast("Data imported", "success");
+        const kind = pendingImportType;
+        if (!kind) {
+            showToast("Choose an import type first", "error");
+            return;
+        }
+
+        if (kind === "history") {
+            await importHistoryData(parsed);
+        } else if (kind === "exercises") {
+            await importExercisesData(parsed);
+        } else if (kind === "workouts") {
+            await importWorkoutsData(parsed);
+        } else {
+            showToast("Unknown import type", "error");
+        }
     } catch (err) {
         console.error(err);
         showToast("Invalid import file", "error");
     } finally {
+        pendingImportType = "";
         importInput.value = "";
     }
 }
@@ -3373,8 +3729,12 @@ function bindEvents() {
     }
     wireDeleteFolderModal();
     refreshHistoryBtn.addEventListener("click", renderHistory);
-    exportBtn.addEventListener("click", exportData);
-    importBtn.addEventListener("click", triggerImport);
+    exportHistoryBtn.addEventListener("click", exportHistoryData);
+    importHistoryBtn.addEventListener("click", () => triggerImport("history"));
+    exportExercisesBtn.addEventListener("click", exportExercisesData);
+    importExercisesBtn.addEventListener("click", () => triggerImport("exercises"));
+    exportWorkoutsBtn.addEventListener("click", exportWorkoutsData);
+    importWorkoutsBtn.addEventListener("click", () => triggerImport("workouts"));
     importInput.addEventListener("change", handleImport);
     clearDataBtn.addEventListener("click", clearData);
     signInGoogleBtn.addEventListener("click", signInWithGoogle);

@@ -255,19 +255,35 @@
                     <h2>Data</h2>
                     <div class="action-row">
                         <div>
-                            <p class="label">Export data</p>
-                            <p class="sub">Download JSON backup</p>
+                            <p class="label">Workout history</p>
+                            <p class="sub">Export/import sessions and sets</p>
                         </div>
-                        <button id="export-data" class="primary">Export</button>
+                        <div class="inline-actions compact-actions">
+                            <button id="export-history-data" class="primary">Export</button>
+                            <button id="import-history-data" class="ghost">Import</button>
+                        </div>
                     </div>
                     <div class="action-row">
                         <div>
-                            <p class="label">Import data</p>
-                            <p class="sub">Overwrite current data</p>
+                            <p class="label">Exercise library</p>
+                            <p class="sub">Export/import exercises</p>
                         </div>
-                        <input id="import-file" type="file" accept="application/json" class="hidden">
-                        <button id="import-data" class="ghost">Import</button>
+                        <div class="inline-actions compact-actions">
+                            <button id="export-exercises-data" class="primary">Export</button>
+                            <button id="import-exercises-data" class="ghost">Import</button>
+                        </div>
                     </div>
+                    <div class="action-row">
+                        <div>
+                            <p class="label">Workouts & folders</p>
+                            <p class="sub">Export/import templates and folders</p>
+                        </div>
+                        <div class="inline-actions compact-actions">
+                            <button id="export-workouts-data" class="primary">Export</button>
+                            <button id="import-workouts-data" class="ghost">Import</button>
+                        </div>
+                    </div>
+                    <input id="import-file" type="file" accept="application/json" class="hidden">
                     <div class="action-row">
                         <div>
                             <p class="label">Clear all data</p>

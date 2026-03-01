@@ -880,6 +880,11 @@ button.small {
     align-items: center;
 }
 
+.compact-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .template-superset-actions {
     display: flex;
     gap: 8px;
