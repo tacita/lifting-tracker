@@ -23,6 +23,11 @@
     --shadow-strong: 0 12px 30px rgba(0, 0, 0, 0.35);
     --toast-bg: #111827;
     --backdrop: rgba(0, 0, 0, 0.6);
+    --set-index-col: 24px;
+    --set-previous-col: minmax(72px, 1fr);
+    --set-input-col: 60px;
+    --set-separator-col: 14px;
+    --set-action-col: 34px;
 }
 
 body[data-theme="light"] {
@@ -97,7 +102,7 @@ body {
 
 #app {
     min-height: 100vh;
-    padding: 16px 16px 80px;
+    padding: 16px 12px 80px;
     max-width: 640px;
     margin: 0 auto;
     position: relative;
@@ -488,7 +493,7 @@ button.small {
 .exercise-card {
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 10px;
+    padding: 8px;
     margin-bottom: 10px;
     background: var(--surface);
     transition: border-color 0.2s, margin-bottom 0.2s;
@@ -765,17 +770,17 @@ button.small {
 .sets-container {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
 }
 
 .set-row-header {
     display: grid;
-    grid-template-columns: 20px minmax(38px, 1fr) 44px 10px 44px 24px;
-    gap: 3px;
+    grid-template-columns: var(--set-index-col) var(--set-previous-col) var(--set-input-col) var(--set-separator-col) var(--set-input-col) var(--set-action-col);
+    gap: 4px;
     align-items: center;
-    padding: 0 6px 0;
+    padding: 0 8px 0;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -785,14 +790,14 @@ button.small {
     grid-column: 3;
     justify-self: stretch;
     text-align: left;
-    padding-left: 6px;
+    padding-left: 8px;
 }
 
 .set-row-header .reps-label {
     grid-column: 5;
     justify-self: stretch;
     text-align: left;
-    padding-left: 6px;
+    padding-left: 8px;
 }
 
 .picker-list {
@@ -951,18 +956,18 @@ button.small {
 .set-row {
     display: flex;
     align-items: stretch;
-    gap: 4px;
+    gap: 6px;
     border-radius: 10px;
     border: 1px solid transparent;
 }
 
 .set-delete-btn {
     flex-shrink: 0;
-    min-width: 24px;
-    min-height: 24px;
-    padding: 2px 4px;
-    border-radius: 6px;
-    font-size: 13px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -973,11 +978,11 @@ button.small {
 
 .set-row-content {
     display: grid;
-    grid-template-columns: 20px minmax(38px, 1fr) 44px 10px 44px 24px;
-    gap: 3px;
+    grid-template-columns: var(--set-index-col) var(--set-previous-col) var(--set-input-col) var(--set-separator-col) var(--set-input-col) var(--set-action-col);
+    gap: 4px;
     align-items: center;
     background: var(--surface);
-    padding: 6px;
+    padding: 8px;
     flex: 1;
     min-width: 0;
     border-radius: 8px;
@@ -986,14 +991,16 @@ button.small {
 .set-row .x {
     color: var(--muted);
     text-align: center;
-    font-size: 10px;
+    font-size: 14px;
 }
 
 .set-row-content input {
     width: 100%;
     min-width: 0;
-    padding: 5px 6px;
-    font-size: 15px;
+    padding: 7px 8px;
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.1;
 }
 
 .set-row-content input.auto-populated {
@@ -1003,10 +1010,10 @@ button.small {
 
 .set-delete-btn,
 .set-row .mark-set {
-    min-width: 24px;
-    min-height: 24px;
-    padding: 2px 4px;
-    font-size: 13px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 3px 6px;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1032,21 +1039,22 @@ button.small {
 }
 
 .set-index {
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 5px;
+    border-radius: 6px;
     border: 1px solid var(--border);
     color: var(--muted);
     font-weight: 700;
-    font-size: 10px;
+    font-size: 13px;
 }
 
 .previous-set {
     color: var(--muted);
-    font-size: 13px;
+    font-size: 16px;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1289,6 +1297,14 @@ dialog::backdrop {
 }
 
 @media (max-width: 520px) {
+    #app {
+        padding: 12px 8px 80px;
+    }
+
+    #workout-session {
+        padding: 12px 10px;
+    }
+
     .launcher-template-grid {
         grid-template-columns: 1fr;
     }
@@ -1307,25 +1323,25 @@ dialog::backdrop {
     }
 
     .set-row-content {
-        grid-template-columns: 20px minmax(34px, 1fr) 44px 10px 44px 24px;
-        gap: 3px;
-        padding: 5px;
+        grid-template-columns: var(--set-index-col) minmax(64px, 1fr) var(--set-input-col) var(--set-separator-col) var(--set-input-col) var(--set-action-col);
+        gap: 4px;
+        padding: 7px;
     }
 
     .set-row-header {
-        grid-template-columns: 20px minmax(34px, 1fr) 44px 10px 44px 24px;
-        gap: 3px;
-        padding: 0 5px 0;
+        grid-template-columns: var(--set-index-col) minmax(64px, 1fr) var(--set-input-col) var(--set-separator-col) var(--set-input-col) var(--set-action-col);
+        gap: 4px;
+        padding: 0 7px 0;
     }
 
     .set-index {
-        width: 20px;
-        height: 20px;
-        font-size: 11px;
+        width: 24px;
+        height: 24px;
+        font-size: 13px;
     }
 
     .previous-set {
-        font-size: 14px;
+        font-size: 16px;
     }
 
     .rest-display {
