@@ -24,6 +24,7 @@ let syncState = {
 const cloudColumnSupport = {
     exerciseNote: true,
     templateNote: true,
+    templateFolder: true,
 };
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
@@ -647,6 +648,9 @@ async function syncTableToCloud(tableName, data, userId) {
         } else if (tableName === "templates") {
             row.id = item.id;
             row.name = item.name;
+            if (cloudColumnSupport.templateFolder) {
+                row.folder = item.folder || null;
+            }
             if (cloudColumnSupport.templateNote) {
                 row.note = item.note || null;
             }
@@ -682,6 +686,10 @@ async function syncTableToCloud(tableName, data, userId) {
         }
         if (tableName === "templates" && cloudColumnSupport.templateNote && missingNoteColumn) {
             cloudColumnSupport.templateNote = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        if (tableName === "templates" && cloudColumnSupport.templateFolder && /column.*folder/i.test(message)) {
+            cloudColumnSupport.templateFolder = false;
             return syncTableToCloud(tableName, data, userId);
         }
         throw error;
