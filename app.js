@@ -4015,13 +4015,16 @@ async function importWorkoutsData(parsed) {
     const exerciseIdByName = new Map(state.exercises.map((exercise) => [normalizeEntityName(exercise.name), exercise.id]));
     const exerciseById = new Map(state.exercises.map((exercise) => [String(exercise.id), exercise]));
 
-    const existingTemplateNames = new Set(state.templates.map((template) => normalizeEntityName(template.name)));
+    const existingTemplatesByName = new Map(
+        state.templates.map((template) => [normalizeEntityName(template.name), template])
+    );
     const knownFolders = new Set(
         [
             ...state.folders.map((folder) => String(folder.name || "").trim()),
             ...state.templates.map((template) => String(template.folder || "").trim()),
         ].filter(Boolean).map((name) => name.toLowerCase())
     );
+    const importStamp = Date.now();
 
     if (targetFolder && !knownFolders.has(targetFolder.toLowerCase())) {
         await db.addFolder({ id: uuid(), name: targetFolder });
@@ -4032,6 +4035,9 @@ async function importWorkoutsData(parsed) {
     let exerciseNotesUpdated = 0;
     for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
         const template = templates[templateIndex];
+        const templateName = String(template?.name || "").trim();
+        const templateKey = normalizeEntityName(templateName);
+        if (!templateKey) continue;
         const sourceFolder = String(template?.folder || "").trim();
         const folder = targetFolder || sourceFolder;
         if (folder && !knownFolders.has(folder.toLowerCase())) {
@@ -4065,7 +4071,7 @@ async function importWorkoutsData(parsed) {
                 }
             }
             items.push({
-                id: `ti-import-${Date.now()}-${templateIndex + 1}-${itemIndex + 1}`,
+                id: `ti-import-${importStamp}-${String(templateIndex + 1).padStart(3, "0")}-${String(itemIndex + 1).padStart(3, "0")}`,
                 exerciseId,
                 sets: Math.max(1, Number.parseInt(item?.sets ?? item?.setCount ?? item?.set_count, 10) || 3),
                 reps: parseTemplateReps(item?.reps ?? item?.repRange ?? item?.rep_range ?? item?.rep, 8),
@@ -4080,17 +4086,30 @@ async function importWorkoutsData(parsed) {
         }
         if (items.length === 0) continue;
 
-        const name = createUniqueTemplateName(template?.name, existingTemplateNames);
-        await db.addTemplate({
-            id: uuid(),
-            name,
-            folder,
-            note: String(template?.notes || template?.note || "").trim(),
-            sortOrder: getNextTemplateSortOrder(folder),
-            items,
-            exerciseIds: items.map((item) => item.exerciseId),
-        });
-        added += 1;
+        const existingTemplate = existingTemplatesByName.get(templateKey);
+        const note = String(template?.notes || template?.note || "").trim();
+        if (existingTemplate) {
+            await db.updateTemplate({
+                ...existingTemplate,
+                name: templateName || existingTemplate.name,
+                folder,
+                note,
+                sortOrder: getNextTemplateSortOrder(folder, { excludeTemplateId: existingTemplate.id }),
+                items,
+                exerciseIds: items.map((item) => item.exerciseId),
+            });
+        } else {
+            await db.addTemplate({
+                id: uuid(),
+                name: templateName || "Imported Template",
+                folder,
+                note,
+                sortOrder: getNextTemplateSortOrder(folder),
+                items,
+                exerciseIds: items.map((item) => item.exerciseId),
+            });
+            added += 1;
+        }
     }
 
     await refreshUI();
