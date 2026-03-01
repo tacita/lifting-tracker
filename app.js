@@ -781,13 +781,24 @@ function toggleRestTimer() {
     startRestTimer(seconds);
 }
 
+function parseTemplateReps(value, fallback = 8) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.max(1, Math.floor(value));
+    }
+    const match = String(value || "").match(/(\d+)/);
+    if (match) {
+        return Math.max(1, Number.parseInt(match[1], 10));
+    }
+    return Math.max(1, Number.parseInt(fallback, 10) || 8);
+}
+
 function getTemplateItems(template) {
     if (!template) return [];
     if (Array.isArray(template.items)) {
         return template.items.map((item) => ({
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
-            reps: String(item.reps || "8-12").trim(),
+            reps: parseTemplateReps(item.reps, 8),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
@@ -796,7 +807,7 @@ function getTemplateItems(template) {
     return (template.exerciseIds || []).map((exerciseId) => ({
         exerciseId,
         sets: 3,
-        reps: "8-12",
+        reps: 8,
         restSeconds: 90,
         supersetId: null,
         supersetOrder: 0,
@@ -808,12 +819,12 @@ function applyTemplateItems(template, items) {
         .map((item) => ({
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
-            reps: String(item.reps || "8-12").trim(),
+            reps: parseTemplateReps(item.reps, 8),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }))
-        .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps);
+        .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps > 0);
 
     const orderByGroup = new Map();
     normalizedItems.forEach((item) => {
@@ -1435,7 +1446,7 @@ async function addExerciseToTemplate() {
         showToast("Exercise already in template", "info");
         return;
     }
-    const repsDefault = `${exercise.repFloor}-${exercise.repCeiling}`;
+    const repsDefault = Math.max(1, Number.parseInt(exercise.repFloor, 10) || 8);
     applyTemplateDraft(
         applyTemplateItems(template, [
             ...currentItems,
@@ -1618,7 +1629,7 @@ function renderTemplateEditor() {
                     </label>
                     <label>
                         <span class="sub small">Reps</span>
-                        <input type="text" value="${templateItem.reps}" data-field="reps">
+                        <input type="number" min="1" value="${templateItem.reps}" data-field="reps">
                     </label>
                     <label>
                         <span class="sub small">Rest (sec)</span>
@@ -1671,11 +1682,7 @@ function renderTemplateEditor() {
             input.addEventListener("change", async () => {
                 const field = input.dataset.field;
                 if (!field) return;
-                const value = field === "reps" ? input.value.trim() : Number.parseInt(input.value, 10);
-                if (field === "reps" && !value) {
-                    showToast("Reps cannot be empty", "error");
-                    return;
-                }
+                const value = field === "reps" ? parseTemplateReps(input.value, templateItem.reps) : Number.parseInt(input.value, 10);
                 await updateTemplateItemConfig(index, { [field]: value });
             });
         });
@@ -3046,11 +3053,9 @@ function buildRepsTextForTemplate(exercise, setsForExercise) {
         .map((set) => Number.parseInt(set.reps, 10))
         .filter((value) => Number.isFinite(value) && value > 0);
     if (repValues.length === 0) {
-        return `${exercise.repFloor}-${exercise.repCeiling}`;
+        return Math.max(1, Number.parseInt(exercise.repFloor, 10) || 8);
     }
-    const min = Math.min(...repValues);
-    const max = Math.max(...repValues);
-    return min === max ? String(min) : `${min}-${max}`;
+    return Math.max(1, Number.parseInt(repValues[0], 10) || 8);
 }
 
 async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
@@ -3787,7 +3792,7 @@ async function importWorkoutsData(parsed) {
             items.push({
                 exerciseId,
                 sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
-                reps: String(item.reps || "8-12").trim(),
+                reps: parseTemplateReps(item.reps, 8),
                 restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
                 supersetId: item.supersetId ? String(item.supersetId) : null,
                 supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,

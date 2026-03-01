@@ -173,6 +173,17 @@ function normalizeExercise(exercise) {
     };
 }
 
+function parseTemplateReps(value, fallback = 8) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.max(1, Math.floor(value));
+    }
+    const match = String(value || "").match(/(\d+)/);
+    if (match) {
+        return Math.max(1, Number.parseInt(match[1], 10));
+    }
+    return Math.max(1, Number.parseInt(fallback, 10) || 8);
+}
+
 function createId(existingIds) {
     let nextId;
     do {
@@ -187,12 +198,12 @@ function sanitizeTemplateItems(items) {
         .map((item) => ({
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
-            reps: String(item.reps || "8-12").trim(),
+            reps: parseTemplateReps(item.reps, 8),
             restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }))
-        .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps);
+        .filter((item) => item.exerciseId !== undefined && item.exerciseId !== null && item.reps > 0);
 
     const orderByGroup = new Map();
     sanitized.forEach((item) => {
@@ -214,7 +225,7 @@ function normalizeTemplate(template) {
         : (template.exerciseIds || []).map((exerciseId) => ({
             exerciseId,
             sets: 3,
-            reps: "8-12",
+            reps: 8,
             restSeconds: 90,
             supersetId: null,
             supersetOrder: 0,
@@ -659,7 +670,7 @@ async function syncTableToCloud(tableName, data, userId) {
             row.template_id = item.templateId;
             row.exercise_id = item.exerciseId;
             row.sets = Math.max(1, Number.parseInt(item.sets, 10) || 3);
-            row.reps = String(item.reps || "8-12").trim();
+            row.reps = parseTemplateReps(item.reps, 8);
             row.rest_seconds = Math.max(0, Number.parseInt(item.restSeconds, 10) || 90);
             row.superset_id = item.supersetId || null;
             row.superset_order = item.supersetOrder || null;
