@@ -795,6 +795,14 @@ async function _pushLocalSnapshotToCloud() {
         console.log("Skipping cloud push until initial hydration completes");
         return false;
     }
+    // Re-enable all column support flags so that columns added via migration
+    // are picked up without requiring a full page reload. If the column still
+    // doesn't exist, the error handler in syncTableToCloud will disable it again.
+    cloudColumnSupport.exerciseNote = true;
+    cloudColumnSupport.templateNote = true;
+    cloudColumnSupport.templateFolder = true;
+    cloudColumnSupport.templateSortOrder = true;
+    cloudColumnSupport.folderSortOrder = true;
     syncInFlight = true;
     setSyncState({ status: "syncing", error: "" });
     try {
