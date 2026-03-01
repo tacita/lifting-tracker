@@ -787,6 +787,11 @@ button.small {
     opacity: 0.55;
 }
 
+.template-list-card.drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
 .session-elapsed-inline {
     margin: 0;
     font-size: 12px;

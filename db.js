@@ -979,6 +979,39 @@ async function hydrateLocalFromCloudIfAvailable() {
             folders: foldersData.data?.length || 0,
         });
         
+        // Before clearing local data, snapshot local sort orders so we can
+        // preserve them if the cloud schema doesn't have the sort_order column.
+        let localTemplateSortOrders = new Map();
+        let localFolderSortOrders = new Map();
+        if (!cloudColumnSupport.templateSortOrder || !cloudColumnSupport.folderSortOrder) {
+            try {
+                await tx(
+                    ["templates", "folders"],
+                    "readonly",
+                    (tmplStore, folderStore) => {
+                        if (!cloudColumnSupport.templateSortOrder) {
+                            const tmplReq = tmplStore.getAll();
+                            tmplReq.onsuccess = () => {
+                                (tmplReq.result || []).forEach(t => {
+                                    if (t.sortOrder) localTemplateSortOrders.set(t.id, t.sortOrder);
+                                });
+                            };
+                        }
+                        if (!cloudColumnSupport.folderSortOrder) {
+                            const folderReq = folderStore.getAll();
+                            folderReq.onsuccess = () => {
+                                (folderReq.result || []).forEach(f => {
+                                    if (f.sortOrder) localFolderSortOrders.set(f.id, f.sortOrder);
+                                });
+                            };
+                        }
+                    }
+                );
+            } catch (err) {
+                console.warn("Could not snapshot local sort orders:", err);
+            }
+        }
+
         // Import to local IndexedDB
         // Note: templateItems store doesn't exist yet in local IndexedDB, storing as template.items for now
         await tx(
@@ -1003,7 +1036,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                         note: row.note || "",
                     });
                 });
-                
+
                 sessionsData.data?.forEach(row => {
                     sessStore.put({
                         id: row.id,
@@ -1019,7 +1052,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                         exerciseIds: [],
                     });
                 });
-                
+
                 setsData.data?.forEach(row => {
                     setStore.put({
                         id: row.id,
@@ -1031,14 +1064,16 @@ async function hydrateLocalFromCloudIfAvailable() {
                         isSkipped: row.is_skipped,
                     });
                 });
-                
+
                 templatesData.data?.forEach(row => {
+                    const cloudSortOrder = Math.max(0, Number.parseInt(row.sort_order, 10) || 0);
+                    const sortOrder = cloudSortOrder || localTemplateSortOrders.get(row.id) || 0;
                     tmplStore.put({
                         id: row.id,
                         name: row.name,
                         folder: row.folder || "",
                         note: row.note || "",
-                        sortOrder: Math.max(0, Number.parseInt(row.sort_order, 10) || 0),
+                        sortOrder,
                         items: itemsData.data?.filter(item => String(item.template_id) === String(row.id)).map(item => ({
                             id: item.id,
                             templateId: item.template_id,
@@ -1051,12 +1086,14 @@ async function hydrateLocalFromCloudIfAvailable() {
                         })) || [],
                     });
                 });
-                
+
                 foldersData.data?.forEach(row => {
+                    const cloudSortOrder = Math.max(0, Number.parseInt(row.sort_order, 10) || 0);
+                    const sortOrder = cloudSortOrder || localFolderSortOrders.get(row.id) || 0;
                     folderStore.put({
                         id: row.id,
                         name: row.name,
-                        sortOrder: Math.max(0, Number.parseInt(row.sort_order, 10) || 0),
+                        sortOrder,
                     });
                 });
             }
