@@ -26,6 +26,7 @@ const cloudColumnSupport = {
     templateNote: true,
     templateFolder: true,
     templateSortOrder: true,
+    folderSortOrder: true,
 };
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
@@ -246,6 +247,7 @@ function normalizeFolder(folder) {
     return {
         id: folder?.id ?? Date.now() + Math.floor(Math.random() * 1000000),
         name,
+        sortOrder: Math.max(0, Number.parseInt(folder?.sortOrder, 10) || 0),
     };
 }
 
@@ -682,6 +684,9 @@ async function syncTableToCloud(tableName, data, userId) {
         } else if (tableName === "folders") {
             row.id = item.id;
             row.name = item.name;
+            if (cloudColumnSupport.folderSortOrder) {
+                row.sort_order = Math.max(0, Number.parseInt(item.sortOrder, 10) || 0);
+            }
         }
         
         return row;
@@ -710,6 +715,10 @@ async function syncTableToCloud(tableName, data, userId) {
         }
         if (tableName === "templates" && cloudColumnSupport.templateSortOrder && /column.*sort_order/i.test(message)) {
             cloudColumnSupport.templateSortOrder = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        if (tableName === "folders" && cloudColumnSupport.folderSortOrder && /column.*sort_order/i.test(message)) {
+            cloudColumnSupport.folderSortOrder = false;
             return syncTableToCloud(tableName, data, userId);
         }
         throw error;
@@ -978,6 +987,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                     folderStore.put({
                         id: row.id,
                         name: row.name,
+                        sortOrder: Math.max(0, Number.parseInt(row.sort_order, 10) || 0),
                     });
                 });
             }
@@ -1343,7 +1353,8 @@ export async function addTemplate(template) {
                 const existing = event.target.result || [];
                 const match = existing.some((folder) => String(folder.name || "").trim().toLowerCase() === normalizedTemplate.folder.toLowerCase());
                 if (!match) {
-                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder });
+                    const nextSortOrder = existing.reduce((max, item) => Math.max(max, Math.max(0, Number.parseInt(item.sortOrder, 10) || 0)), 0) + 1;
+                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder, sortOrder: nextSortOrder });
                 }
             };
         }
@@ -1362,7 +1373,8 @@ export async function updateTemplate(template) {
                 const existing = event.target.result || [];
                 const match = existing.some((folder) => String(folder.name || "").trim().toLowerCase() === normalizedTemplate.folder.toLowerCase());
                 if (!match) {
-                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder });
+                    const nextSortOrder = existing.reduce((max, item) => Math.max(max, Math.max(0, Number.parseInt(item.sortOrder, 10) || 0)), 0) + 1;
+                    folderStore.add({ id: Date.now() + Math.floor(Math.random() * 1000000), name: normalizedTemplate.folder, sortOrder: nextSortOrder });
                 }
             };
         }
@@ -1384,17 +1396,21 @@ export async function getTemplates() {
 }
 
 export async function addFolder(folder) {
-    const normalized = normalizeFolder(folder);
-    if (!normalized.name) {
+    const incoming = normalizeFolder(folder);
+    if (!incoming.name) {
         throw new Error("Folder name is required");
     }
-    const lower = normalized.name.toLowerCase();
+    const lower = incoming.name.toLowerCase();
     const result = await tx(["folders"], "readwrite", (store) => {
         store.getAll().onsuccess = (event) => {
             const existing = event.target.result || [];
             if (existing.some((item) => String(item.name || "").trim().toLowerCase() === lower)) {
                 return;
             }
+            const nextSortOrder = incoming.sortOrder > 0
+                ? incoming.sortOrder
+                : ((existing.reduce((max, item) => Math.max(max, Math.max(0, Number.parseInt(item.sortOrder, 10) || 0)), 0)) + 1);
+            const normalized = { ...incoming, sortOrder: nextSortOrder };
             store.add(normalized);
         };
     });
@@ -1403,7 +1419,8 @@ export async function addFolder(folder) {
 }
 
 export async function getFolders() {
-    return tx(["folders"], "readonly", (store) => requestToPromise(store.getAll()));
+    const folders = await tx(["folders"], "readonly", (store) => requestToPromise(store.getAll()));
+    return (folders || []).map((folder) => normalizeFolder(folder));
 }
 
 export async function updateFolder(folderId, updates) {

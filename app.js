@@ -980,18 +980,36 @@ async function reorderTemplateWithinFolder(folderName, draggedTemplateId, target
 }
 
 function getFolderNames() {
-    const namesByLower = new Map();
-    const collect = (name) => {
-        const trimmed = String(name || "").trim();
-        if (!trimmed) return;
-        const lower = trimmed.toLowerCase();
-        if (!namesByLower.has(lower)) {
-            namesByLower.set(lower, trimmed);
+    const known = new Map();
+    state.folders.forEach((folder) => {
+        const name = String(folder?.name || "").trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        const sortOrder = Math.max(0, Number.parseInt(folder?.sortOrder, 10) || 0);
+        const existing = known.get(key);
+        if (!existing || sortOrder < existing.sortOrder) {
+            known.set(key, { name, sortOrder });
         }
-    };
-    state.folders.forEach((folder) => collect(folder?.name));
-    state.templates.forEach((template) => collect(getTemplateFolderName(template)));
-    return Array.from(namesByLower.values()).sort((a, b) => a.localeCompare(b));
+    });
+
+    const orderedKnown = Array.from(known.values()).sort((a, b) => {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return a.name.localeCompare(b.name);
+    });
+
+    const names = orderedKnown.map((entry) => entry.name);
+    const seen = new Set(names.map((name) => name.toLowerCase()));
+    const templateOnly = [];
+    state.templates.forEach((template) => {
+        const folderName = String(getTemplateFolderName(template) || "").trim();
+        if (!folderName) return;
+        const key = folderName.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        templateOnly.push(folderName);
+    });
+    templateOnly.sort((a, b) => a.localeCompare(b));
+    return names.concat(templateOnly);
 }
 
 function renderFolderSuggestions() {
@@ -1092,16 +1110,20 @@ function renderTemplateEditorFolderOptions(selectedFolder = "") {
 }
 
 function getTemplatesGroupedByFolder({ includeEmpty = false } = {}) {
+    const orderedFolders = getFolderNames();
+    const knownOrder = new Map(orderedFolders.map((name, index) => [name.toLowerCase(), index]));
     const groups = new Map();
+
     if (includeEmpty) {
-        groups.set("__unfiled__", { label: "Unfiled", templates: [] });
-        getFolderNames().forEach((folderName) => {
+        orderedFolders.forEach((folderName) => {
             const key = folderName || "__unfiled__";
             if (!groups.has(key)) {
                 groups.set(key, { label: folderName || "Unfiled", templates: [] });
             }
         });
+        groups.set("__unfiled__", { label: "Unfiled", templates: [] });
     }
+
     state.templates.forEach((template) => {
         const folder = getTemplateFolderName(template);
         const key = folder || "__unfiled__";
@@ -1112,11 +1134,27 @@ function getTemplatesGroupedByFolder({ includeEmpty = false } = {}) {
     });
 
     const grouped = Array.from(groups.values());
-    grouped.forEach((group) => group.templates.sort((a, b) => a.name.localeCompare(b.name)));
+    grouped.forEach((group) => {
+        group.templates.sort((a, b) => {
+            const aOrder = Math.max(0, Number.parseInt(a.sortOrder, 10) || 0);
+            const bOrder = Math.max(0, Number.parseInt(b.sortOrder, 10) || 0);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a.name || "").localeCompare(String(b.name || ""));
+        });
+    });
+
     grouped.sort((a, b) => {
-        if (a.label === "Unfiled") return -1;
-        if (b.label === "Unfiled") return 1;
-        return a.label.localeCompare(b.label);
+        const aUnfiled = a.label === "Unfiled";
+        const bUnfiled = b.label === "Unfiled";
+        if (aUnfiled && !bUnfiled) return 1;
+        if (!aUnfiled && bUnfiled) return -1;
+
+        const aKey = String(a.label || "").toLowerCase();
+        const bKey = String(b.label || "").toLowerCase();
+        const aIndex = knownOrder.has(aKey) ? knownOrder.get(aKey) : Number.POSITIVE_INFINITY;
+        const bIndex = knownOrder.has(bKey) ? knownOrder.get(bKey) : Number.POSITIVE_INFINITY;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        return String(a.label || "").localeCompare(String(b.label || ""));
     });
     return grouped;
 }
@@ -2016,16 +2054,59 @@ async function moveTemplateByStep(templateId, folderName, step) {
     showToast("Template order updated", "success");
 }
 
+async function moveFolderByStep(folderId, step) {
+    const ordered = state.folders
+        .filter((folder) => String(folder?.name || "").trim())
+        .sort((a, b) => {
+            const aOrder = Math.max(0, Number.parseInt(a.sortOrder, 10) || 0);
+            const bOrder = Math.max(0, Number.parseInt(b.sortOrder, 10) || 0);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a.name || "").localeCompare(String(b.name || ""));
+        });
+    const index = ordered.findIndex((folder) => String(folder.id) === String(folderId));
+    if (index === -1) return;
+    const targetIndex = index + step;
+    if (targetIndex < 0 || targetIndex >= ordered.length) return;
+
+    const reordered = [...ordered];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    for (let i = 0; i < reordered.length; i += 1) {
+        const folder = reordered[i];
+        const targetOrder = i + 1;
+        const currentOrder = Math.max(0, Number.parseInt(folder.sortOrder, 10) || 0);
+        if (currentOrder === targetOrder) continue;
+        await db.updateFolder(folder.id, { sortOrder: targetOrder });
+    }
+
+    const syncOk = await db.ensureCloudSyncComplete();
+    await refreshUI();
+    openManageFoldersModal();
+    if (!syncOk) {
+        showToast("Reordered locally; cloud sync pending", "warning");
+        return;
+    }
+    showToast("Folder order updated", "success");
+}
+
 function openManageFoldersModal() {
     if (!foldersListEl || !manageFoldersModal) return;
     
     foldersListEl.innerHTML = "";
-    const folders = state.folders.filter((f) => f.name);
+    const folders = state.folders
+        .filter((f) => String(f?.name || "").trim())
+        .sort((a, b) => {
+            const aOrder = Math.max(0, Number.parseInt(a.sortOrder, 10) || 0);
+            const bOrder = Math.max(0, Number.parseInt(b.sortOrder, 10) || 0);
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a.name || "").localeCompare(String(b.name || ""));
+        });
     
     if (folders.length === 0) {
         foldersListEl.innerHTML = '<div class="empty">No folders yet</div>';
     } else {
-        folders.forEach((folder) => {
+        folders.forEach((folder, index) => {
             const templatesInFolder = state.templates.filter((t) => 
                 String(t.folder || "").toLowerCase() === String(folder.name || "").toLowerCase()
             );
@@ -2038,10 +2119,19 @@ function openManageFoldersModal() {
                     <p class="sub small">${templatesInFolder.length} template${templatesInFolder.length === 1 ? '' : 's'}</p>
                 </div>
                 <div class="folder-item-actions">
+                    <button class="ghost small move-folder-up" data-folder-id="${folder.id}" ${index === 0 ? "disabled" : ""}>↑</button>
+                    <button class="ghost small move-folder-down" data-folder-id="${folder.id}" ${index === folders.length - 1 ? "disabled" : ""}>↓</button>
                     <button class="ghost small rename-folder" data-folder-id="${folder.id}">Rename</button>
                     <button class="danger ghost small delete-folder" data-folder-id="${folder.id}">Delete</button>
                 </div>
             `;
+
+            folderItem.querySelector(".move-folder-up").addEventListener("click", async () => {
+                await moveFolderByStep(folder.id, -1);
+            });
+            folderItem.querySelector(".move-folder-down").addEventListener("click", async () => {
+                await moveFolderByStep(folder.id, 1);
+            });
             
             folderItem.querySelector(".rename-folder").addEventListener("click", async () => {
                 const newName = prompt("Enter new folder name:", folder.name);
