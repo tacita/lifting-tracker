@@ -21,6 +21,7 @@ const sessionAddExerciseSelect = document.getElementById("session-add-exercise")
 const sessionAddExerciseBtn = document.getElementById("session-add-exercise-btn");
 const workoutExercisesEl = document.getElementById("workout-exercises");
 const workoutNotesEl = document.getElementById("workout-notes");
+const sessionTemplateNoteEl = document.getElementById("session-template-note");
 const finishWorkoutBtn = document.getElementById("finish-workout");
 const pauseWorkoutBtn = document.getElementById("pause-workout");
 const cancelWorkoutBtn = document.getElementById("cancel-workout");
@@ -52,6 +53,7 @@ const createExerciseNameInput = document.getElementById("create-exercise-name");
 const createExerciseRepFloorInput = document.getElementById("create-exercise-rep-floor");
 const createExerciseRepCeilingInput = document.getElementById("create-exercise-rep-ceiling");
 const createExerciseRestSecondsInput = document.getElementById("create-exercise-rest-seconds");
+const createExerciseNoteInput = document.getElementById("create-exercise-note");
 const createExerciseSubmitBtn = document.getElementById("create-exercise-submit");
 const createExerciseCancelBtn = document.getElementById("create-exercise-cancel");
 const createExerciseCancelTopBtn = document.getElementById("create-exercise-cancel-top");
@@ -65,6 +67,7 @@ const exerciseNameInput = document.getElementById("exercise-name");
 const repFloorInput = document.getElementById("rep-floor");
 const repCeilingInput = document.getElementById("rep-ceiling");
 const restSecondsInput = document.getElementById("rest-seconds");
+const exerciseNoteInput = document.getElementById("exercise-note");
 const templateNameInput = document.getElementById("template-name");
 const templateFolderInput = document.getElementById("template-folder");
 const createTemplateBtn = document.getElementById("create-template");
@@ -74,6 +77,7 @@ const templateEditorEmptyEl = document.getElementById("template-editor-empty");
 const templateEditorPanelEl = document.getElementById("template-editor-panel");
 const templateEditorNameInput = document.getElementById("template-editor-name");
 const templateEditorFolderInput = document.getElementById("template-editor-folder");
+const templateEditorNoteInput = document.getElementById("template-editor-note");
 const saveTemplateNameBtn = document.getElementById("save-template-name");
 const templateAddExerciseSelect = document.getElementById("template-add-exercise");
 const addTemplateExerciseBtn = document.getElementById("add-template-exercise");
@@ -1106,12 +1110,31 @@ function getTemplateRestSecondsForExercise(exerciseId) {
     return 90;
 }
 
+function renderActiveTemplateNote() {
+    if (!sessionTemplateNoteEl) return;
+    if (!state.activeSession?.templateId) {
+        sessionTemplateNoteEl.textContent = "";
+        sessionTemplateNoteEl.classList.add("hidden");
+        return;
+    }
+    const activeTemplate = state.templates.find((template) => String(template.id) === String(state.activeSession.templateId));
+    const note = String(activeTemplate?.note || "").trim();
+    if (!note) {
+        sessionTemplateNoteEl.textContent = "";
+        sessionTemplateNoteEl.classList.add("hidden");
+        return;
+    }
+    sessionTemplateNoteEl.textContent = note;
+    sessionTemplateNoteEl.classList.remove("hidden");
+}
+
 // Exercises
 async function addExercise() {
     const name = exerciseNameInput.value.trim();
     const repFloor = parseInt(repFloorInput.value, 10);
     const repCeiling = parseInt(repCeilingInput.value, 10);
     const restSeconds = parseInt(restSecondsInput.value, 10);
+    const note = (exerciseNoteInput.value || "").trim();
 
     if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
@@ -1119,13 +1142,14 @@ async function addExercise() {
     }
 
     try {
-        await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds });
+        await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds, note });
     } catch (err) {
         const message = err?.message || "Could not add exercise";
         showToast(message, "error");
         return;
     }
     exerciseNameInput.value = "";
+    exerciseNoteInput.value = "";
     showToast("Exercise added", "success");
     await refreshUI();
 }
@@ -1180,6 +1204,7 @@ async function createTemplate() {
         id: uuid(),
         name,
         folder,
+        note: "",
         items: [],
         exerciseIds: [],
     });
@@ -1230,6 +1255,7 @@ function renderExercises() {
             <div>
                 <p class="label">${escapeHtml(ex.name)}</p>
                 <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest</p>
+                ${ex.note ? `<p class="sub small">${escapeHtml(ex.note)}</p>` : ""}
             </div>
             <div class="list-actions">
                 <button class="ghost small" data-action="edit">Edit</button>
@@ -1254,11 +1280,14 @@ function renderExercises() {
             const newFloor = parseInt(prompt("Rep floor", ex.repFloor) || ex.repFloor, 10);
             const newCeil = parseInt(prompt("Rep ceiling", ex.repCeiling) || ex.repCeiling, 10);
             const newRest = parseInt(prompt("Rest seconds", ex.restSeconds || 90) || ex.restSeconds || 90, 10);
+            const newNoteInput = prompt("Exercise note (optional)", ex.note || "");
+            if (newNoteInput === null) return;
+            const newNote = newNoteInput.trim();
             if (Number.isNaN(newFloor) || Number.isNaN(newCeil) || newFloor >= newCeil || Number.isNaN(newRest) || newRest < 0) {
                 showToast("Invalid values", "error");
                 return;
             }
-            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newCeil, restSeconds: newRest });
+            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newCeil, restSeconds: newRest, note: newNote });
             await refreshUI();
             showToast("Exercise updated", "success");
         });
@@ -1300,6 +1329,13 @@ function markTemplateEditorDirty() {
         if (templateSaveChangesBtn) templateSaveChangesBtn.disabled = false;
         if (templateCancelChangesBtn) templateCancelChangesBtn.disabled = false;
     }
+}
+
+function handleTemplateEditorNoteInput() {
+    const draft = ensureTemplateDraft();
+    if (!draft || !templateEditorNoteInput) return;
+    draft.note = String(templateEditorNoteInput.value || "");
+    markTemplateEditorDirty();
 }
 
 async function handleTemplateEditorFolderChange() {
@@ -1508,6 +1544,7 @@ function renderTemplateEditor() {
         templateEditorPanelEl.classList.add("hidden");
         templateEditorEmptyEl.classList.remove("hidden");
         templateExercisePickerEl.innerHTML = "";
+        if (templateEditorNoteInput) templateEditorNoteInput.value = "";
         state.templateEditorDraft = null;
         state.templateEditorDirty = false;
         clearTemplateSelection();
@@ -1519,6 +1556,9 @@ function renderTemplateEditor() {
     templateEditorEmptyEl.classList.add("hidden");
     templateEditorPanelEl.classList.remove("hidden");
     templateEditorNameInput.value = template.name;
+    if (templateEditorNoteInput) {
+        templateEditorNoteInput.value = String(template.note || "");
+    }
     renderTemplateEditorFolderOptions(getTemplateFolderName(template));
     if (templateSaveChangesBtn) {
         templateSaveChangesBtn.disabled = !state.templateEditorDirty;
@@ -1563,6 +1603,7 @@ function renderTemplateEditor() {
                 <div class="picker-top-row">
                     <div class="picker-title">
                         <div>${escapeHtml(exercise.name)}</div>
+                        ${exercise.note ? `<div class="sub small">${escapeHtml(exercise.note)}</div>` : ""}
                         ${supersetMeta ? `<div class="template-superset-label">Superset ${supersetMeta.label} (A${supersetMeta.order})</div>` : ""}
                     </div>
                     <button class="danger ghost small" data-action="remove">Remove</button>
@@ -1646,6 +1687,7 @@ async function saveTemplateEditorChanges() {
     if (!selected || !draft) return;
     const name = templateEditorNameInput.value.trim();
     const folder = templateEditorFolderInput.value.trim();
+    const note = String(templateEditorNoteInput?.value || "").trim();
     if (!name) {
         showToast("Enter a template name", "error");
         return;
@@ -1655,7 +1697,7 @@ async function saveTemplateEditorChanges() {
         showToast("Template name already exists", "error");
         return;
     }
-    const payload = applyTemplateItems({ ...draft, name, folder }, getTemplateItems(draft));
+    const payload = applyTemplateItems({ ...draft, name, folder, note }, getTemplateItems(draft));
     await saveTemplate(payload, "Template updated");
     resetTemplateDraftFromSelected();
     renderTemplateEditor();
@@ -2019,6 +2061,7 @@ async function startWorkout(templateId = null) {
     }
     workoutNotesEl.value = state.activeSession.notes || "";
     sessionTemplateLabel.textContent = templateId ? state.templates.find((t) => String(t.id) === String(templateId))?.name || "Workout" : "Empty Workout";
+    renderActiveTemplateNote();
     workoutSection.classList.remove("hidden");
     startWorkoutElapsedTimer();
     renderWorkoutExercises();
@@ -2043,6 +2086,7 @@ function maybeResumeDraft() {
         state.activeSession = draft;
         state.activeExercises = getExercisesForSession(draft);
         sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
+        renderActiveTemplateNote();
         workoutNotesEl.value = draft.notes || "";
         workoutSection.classList.remove("hidden");
         startWorkoutElapsedTimer();
@@ -2155,6 +2199,7 @@ function openCreateExerciseModal() {
     createExerciseRepFloorInput.value = "8";
     createExerciseRepCeilingInput.value = "12";
     createExerciseRestSecondsInput.value = "90";
+    if (createExerciseNoteInput) createExerciseNoteInput.value = "";
     createExerciseNameInput.focus();
     createExerciseModal.showModal();
 }
@@ -2164,13 +2209,14 @@ async function submitCreateExercise() {
     const repFloor = parseInt(createExerciseRepFloorInput.value, 10);
     const repCeiling = parseInt(createExerciseRepCeilingInput.value, 10);
     const restSeconds = parseInt(createExerciseRestSecondsInput.value, 10);
+    const note = (createExerciseNoteInput?.value || "").trim();
 
     if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
         return;
     }
 
-    const newExercise = { id: uuid(), name, repFloor, repCeiling, restSeconds };
+    const newExercise = { id: uuid(), name, repFloor, repCeiling, restSeconds, note };
     try {
         await db.addExercise(newExercise);
         state.exercises.push(newExercise);
@@ -2228,6 +2274,7 @@ function renderWorkoutExercises() {
         const planText = templateItem
             ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
             : `${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest`;
+        const exerciseNote = String(ex.note || "").trim();
         card.innerHTML = `
             <div class="exercise-header">
                 <div class="exercise-title-row">
@@ -2241,6 +2288,9 @@ function renderWorkoutExercises() {
                         <button class="ghost small history-chip" type="button">History</button>
                     </div>
                 </div>
+            </div>
+            <div class="field exercise-note-field">
+                <textarea class="exercise-note-input" rows="2" placeholder="Exercise note (optional)">${escapeHtml(exerciseNote)}</textarea>
             </div>
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
             <button class="ghost add-set">+ Add set</button>
@@ -2266,12 +2316,8 @@ function renderWorkoutExercises() {
 
         // Desktop drag and drop
         card.addEventListener("dragstart", (e) => {
-            // Allow drag from exercise header, but not from buttons
-            if (!e.target.closest(".exercise-header")) {
-                e.preventDefault();
-                return;
-            }
-            if (e.target.closest("button")) {
+            // Only allow drag from the dedicated drag handle.
+            if (!e.target.closest(".exercise-drag-handle")) {
                 e.preventDefault();
                 return;
             }
@@ -2307,9 +2353,8 @@ function renderWorkoutExercises() {
         let isTouchDragging = false;
 
         card.addEventListener("touchstart", (e) => {
-            // Only drag from header, not buttons
-            if (!e.target.closest(".exercise-header")) return;
-            if (e.target.closest("button")) return;
+            // Only drag from the dedicated drag handle.
+            if (!e.target.closest(".exercise-drag-handle")) return;
             
             e.preventDefault();
             touchStartY = e.touches[0].clientY;
@@ -2371,6 +2416,20 @@ function renderWorkoutExercises() {
         }, { passive: false });
 
         card.querySelector(".history-chip").addEventListener("click", () => openExerciseModal(ex));
+        const noteInput = card.querySelector(".exercise-note-input");
+        if (noteInput) {
+            noteInput.addEventListener("change", async () => {
+                const nextNote = String(noteInput.value || "").trim();
+                if (nextNote === String(ex.note || "").trim()) return;
+                const updatedExercise = { ...ex, note: nextNote };
+                await db.updateExercise(updatedExercise);
+                state.exercises = state.exercises.map((item) => (String(item.id) === String(ex.id) ? updatedExercise : item));
+                state.activeExercises = state.activeExercises.map((item) =>
+                    String(item.id) === String(ex.id) ? updatedExercise : item
+                );
+                showToast("Exercise note updated", "success");
+            });
+        }
 
         const setsContainer = card.querySelector(".sets-container");
         setsContainer.innerHTML = `
@@ -2981,6 +3040,7 @@ async function finishWorkout() {
     renderRestTimer();
     workoutNotesEl.value = "";
     workoutSection.classList.add("hidden");
+    renderActiveTemplateNote();
     sessionExercisePickerEl.classList.add("hidden");
     showToast(
         createdTemplateName ? `Workout saved • Template "${createdTemplateName}" created` : "Workout saved",
@@ -3656,6 +3716,7 @@ async function clearData() {
     state.restTimer.lastDurationSeconds = 90;
     renderRestTimer();
     workoutSection.classList.add("hidden");
+    renderActiveTemplateNote();
     sessionExercisePickerEl.classList.add("hidden");
     await refreshUI();
     showToast("Data cleared", "success");
@@ -3718,6 +3779,7 @@ function bindEvents() {
     saveTemplateNameBtn.addEventListener("click", saveTemplateName);
     templateEditorNameInput.addEventListener("input", markTemplateEditorDirty);
     templateEditorFolderInput.addEventListener("change", handleTemplateEditorFolderChange);
+    templateEditorNoteInput?.addEventListener("input", handleTemplateEditorNoteInput);
     addTemplateExerciseBtn.addEventListener("click", addExerciseToTemplate);
     templateAddExerciseSelect.addEventListener("change", handleTemplateExerciseSelectChange);
     templateSaveChangesBtn.addEventListener("click", saveTemplateEditorChanges);

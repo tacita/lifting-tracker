@@ -21,6 +21,10 @@ let syncState = {
     error: "",
     lastSyncedAt: "",
 };
+const cloudColumnSupport = {
+    exerciseNote: true,
+    templateNote: true,
+};
 
 const SUPABASE_URL_KEY = "overload-supabase-url";
 const SUPABASE_ANON_KEY = "overload-supabase-anon-key";
@@ -161,6 +165,13 @@ function normalizeName(value) {
         .replace(/\s+/g, " ");
 }
 
+function normalizeExercise(exercise) {
+    return {
+        ...exercise,
+        note: String(exercise?.note || "").trim(),
+    };
+}
+
 function createId(existingIds) {
     let nextId;
     do {
@@ -210,6 +221,7 @@ function normalizeTemplate(template) {
     return {
         ...template,
         folder: String(template.folder || "").trim(),
+        note: String(template.note || "").trim(),
         items,
         exerciseIds: items.map((item) => item.exerciseId),
     };
@@ -610,6 +622,9 @@ async function syncTableToCloud(tableName, data, userId) {
             row.rep_floor = item.repFloor;
             row.rep_ceiling = item.repCeiling;
             row.rest_seconds = item.restSeconds || null;
+            if (cloudColumnSupport.exerciseNote) {
+                row.note = item.note || null;
+            }
         } else if (tableName === "sessions") {
             row.id = item.id;
             row.date = item.date;
@@ -632,6 +647,9 @@ async function syncTableToCloud(tableName, data, userId) {
         } else if (tableName === "templates") {
             row.id = item.id;
             row.name = item.name;
+            if (cloudColumnSupport.templateNote) {
+                row.note = item.note || null;
+            }
         } else if (tableName === "template_items") {
             row.id = item.id;
             row.template_id = item.templateId;
@@ -655,7 +673,19 @@ async function syncTableToCloud(tableName, data, userId) {
         .from(tableName)
         .upsert(rows, { onConflict: "id" });
     
-    if (error) throw error;
+    if (error) {
+        const message = String(error.message || "");
+        const missingNoteColumn = /column.*note/i.test(message);
+        if (tableName === "exercises" && cloudColumnSupport.exerciseNote && missingNoteColumn) {
+            cloudColumnSupport.exerciseNote = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        if (tableName === "templates" && cloudColumnSupport.templateNote && missingNoteColumn) {
+            cloudColumnSupport.templateNote = false;
+            return syncTableToCloud(tableName, data, userId);
+        }
+        throw error;
+    }
     return true;
 }
 
@@ -819,6 +849,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                         repFloor: row.rep_floor,
                         repCeiling: row.rep_ceiling,
                         restSeconds: row.rest_seconds,
+                        note: row.note || "",
                     });
                 });
                 
@@ -854,6 +885,8 @@ async function hydrateLocalFromCloudIfAvailable() {
                     tmplStore.put({
                         id: row.id,
                         name: row.name,
+                        folder: row.folder || "",
+                        note: row.note || "",
                         items: itemsData.data?.filter(item => String(item.template_id) === String(row.id)).map(item => ({
                             id: item.id,
                             templateId: item.template_id,
@@ -1173,13 +1206,15 @@ export async function addExercise(exercise) {
     if (duplicate) {
         throw new Error("Exercise already exists");
     }
-    const result = await tx(["exercises"], "readwrite", (store) => store.add(exercise));
+    const normalizedExercise = normalizeExercise(exercise);
+    const result = await tx(["exercises"], "readwrite", (store) => store.add(normalizedExercise));
     scheduleCloudSync();
     return result;
 }
 
 export async function updateExercise(exercise) {
-    const result = await tx(["exercises"], "readwrite", (store) => store.put(exercise));
+    const normalizedExercise = normalizeExercise(exercise);
+    const result = await tx(["exercises"], "readwrite", (store) => store.put(normalizedExercise));
     scheduleCloudSync();
     return result;
 }
@@ -1223,7 +1258,8 @@ export async function deleteExercise(exerciseId) {
 }
 
 export async function getExercises() {
-    return tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
+    const exercises = await tx(["exercises"], "readonly", (store) => requestToPromise(store.getAll()));
+    return (exercises || []).map((exercise) => normalizeExercise(exercise));
 }
 
 // Templates
@@ -1272,7 +1308,8 @@ export async function deleteTemplate(templateId) {
 }
 
 export async function getTemplates() {
-    return tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+    const templates = await tx(["templates"], "readonly", (store) => requestToPromise(store.getAll()));
+    return (templates || []).map((template) => normalizeTemplate(template));
 }
 
 export async function addFolder(folder) {
@@ -1453,7 +1490,7 @@ export async function importData(data) {
         sessionStore.clear();
         setStore.clear();
 
-        data.exercises.forEach((item) => exStore.add(item));
+        data.exercises.forEach((item) => exStore.add(normalizeExercise(item)));
         data.templates.forEach((item) => {
             const normalized = normalizeTemplate(item);
             tmplStore.add(normalized);
