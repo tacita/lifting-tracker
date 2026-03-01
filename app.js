@@ -1889,16 +1889,26 @@ async function moveTemplateFromAction(template) {
 }
 
 async function moveTemplateToFolder(templateId, folderName) {
-    const template = state.templates.find((item) => String(item.id) === String(templateId));
-    if (!template) return;
-    const nextFolder = String(folderName || "").trim();
-    if (getTemplateFolderName(template) === nextFolder) return;
-    if (nextFolder) {
-        await db.addFolder({ id: uuid(), name: nextFolder });
+    try {
+        const template = state.templates.find((item) => String(item.id) === String(templateId));
+        if (!template) return;
+        const nextFolder = String(folderName || "").trim();
+        if (getTemplateFolderName(template) === nextFolder) return;
+        if (nextFolder) {
+            await db.addFolder({ id: uuid(), name: nextFolder });
+        }
+        await db.updateTemplate({ ...template, folder: nextFolder });
+        const syncOk = await db.ensureCloudSyncComplete();
+        await refreshUI();
+        if (!syncOk) {
+            showToast("Moved locally; cloud sync pending", "warning");
+            return;
+        }
+        showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unorganized", "success");
+    } catch (err) {
+        console.error(err);
+        showToast("Could not move template", "error");
     }
-    await db.updateTemplate({ ...template, folder: nextFolder });
-    await refreshUI();
-    showToast(nextFolder ? `Moved to ${nextFolder}` : "Moved to Unorganized", "success");
 }
 
 function openManageFoldersModal() {
