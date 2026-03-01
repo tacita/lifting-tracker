@@ -198,7 +198,9 @@ function createId(existingIds) {
 }
 
 function generateItemId() {
-    return `ti-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+    if (!generateItemId.counter) generateItemId.counter = 0;
+    generateItemId.counter += 1;
+    return `ti-${Date.now()}-${String(generateItemId.counter).padStart(6, "0")}`;
 }
 
 function sanitizeTemplateItems(items) {

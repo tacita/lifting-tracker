@@ -4030,7 +4030,8 @@ async function importWorkoutsData(parsed) {
 
     let added = 0;
     let exerciseNotesUpdated = 0;
-    for (const template of templates) {
+    for (let templateIndex = 0; templateIndex < templates.length; templateIndex += 1) {
+        const template = templates[templateIndex];
         const sourceFolder = String(template?.folder || "").trim();
         const folder = targetFolder || sourceFolder;
         if (folder && !knownFolders.has(folder.toLowerCase())) {
@@ -4042,7 +4043,8 @@ async function importWorkoutsData(parsed) {
             ? template.items
             : (Array.isArray(template?.exercises) ? template.exercises : []);
         const items = [];
-        for (const item of rawItems) {
+        for (let itemIndex = 0; itemIndex < rawItems.length; itemIndex += 1) {
+            const item = rawItems[itemIndex];
             const exerciseName = String(item?.exerciseName || item?.name || item?.exercise || "").trim();
             if (!exerciseName) continue;
             const normalizedExerciseName = normalizeEntityName(exerciseName);
@@ -4063,6 +4065,7 @@ async function importWorkoutsData(parsed) {
                 }
             }
             items.push({
+                id: `ti-import-${Date.now()}-${templateIndex + 1}-${itemIndex + 1}`,
                 exerciseId,
                 sets: Math.max(1, Number.parseInt(item?.sets ?? item?.setCount ?? item?.set_count, 10) || 3),
                 reps: parseTemplateReps(item?.reps ?? item?.repRange ?? item?.rep_range ?? item?.rep, 8),
@@ -4072,6 +4075,7 @@ async function importWorkoutsData(parsed) {
                 ),
                 supersetId: item.supersetId ? String(item.supersetId) : null,
                 supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
+                sortOrder: itemIndex + 1,
             });
         }
         if (items.length === 0) continue;
