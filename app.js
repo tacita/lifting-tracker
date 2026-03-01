@@ -1113,7 +1113,13 @@ async function addExercise() {
         return;
     }
 
-    await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds });
+    try {
+        await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds });
+    } catch (err) {
+        const message = err?.message || "Could not add exercise";
+        showToast(message, "error");
+        return;
+    }
     exerciseNameInput.value = "";
     showToast("Exercise added", "success");
     await refreshUI();
@@ -3413,7 +3419,14 @@ async function init() {
         console.error(err);
         showToast(err?.message || "Auth init failed", "error");
     }
-    
+    try {
+        const dedupe = await db.dedupeExercisesByName();
+        if (dedupe?.removedExercises > 0) {
+            showToast(`Removed ${dedupe.removedExercises} duplicate exercises`, "success");
+        }
+    } catch (err) {
+        console.error(err);
+    }
     await refreshUI();
     // Default to workout view
     setView("view-workout");

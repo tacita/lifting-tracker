@@ -1164,6 +1164,15 @@ async function ensureInitialCloudSeedForUser() {
 
 // Exercises
 export async function addExercise(exercise) {
+    const nextName = normalizeName(exercise?.name);
+    if (!nextName) {
+        throw new Error("Exercise name is required");
+    }
+    const existing = await getExercises();
+    const duplicate = existing.find((item) => normalizeName(item.name) === nextName);
+    if (duplicate) {
+        throw new Error("Exercise already exists");
+    }
     const result = await tx(["exercises"], "readwrite", (store) => store.add(exercise));
     scheduleCloudSync();
     return result;
@@ -1555,5 +1564,93 @@ export async function resetTemplatesToFourDayProgram() {
     return {
         addedTemplates: templatesToAdd.length,
         addedExercises: exercisesToAdd.length,
+    };
+}
+
+export async function dedupeExercisesByName() {
+    const [exercises, templates, sets] = await Promise.all([
+        getExercises(),
+        getTemplates(),
+        getAllSets(),
+    ]);
+
+    const canonicalByName = new Map();
+    const duplicateIdToCanonicalId = new Map();
+    const sortedExercises = exercises.slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+    sortedExercises.forEach((exercise) => {
+        const key = normalizeName(exercise?.name);
+        if (!key) return;
+        if (!canonicalByName.has(key)) {
+            canonicalByName.set(key, exercise.id);
+            return;
+        }
+        duplicateIdToCanonicalId.set(String(exercise.id), canonicalByName.get(key));
+    });
+
+    if (duplicateIdToCanonicalId.size === 0) {
+        return { removedExercises: 0, updatedTemplates: 0, updatedSets: 0 };
+    }
+
+    let updatedTemplates = 0;
+    let updatedSets = 0;
+
+    const remapExerciseId = (exerciseId) => {
+        const mapped = duplicateIdToCanonicalId.get(String(exerciseId));
+        return mapped == null ? exerciseId : mapped;
+    };
+
+    const nextTemplates = templates.map((template) => {
+        let changed = false;
+        const originalItems = Array.isArray(template.items) ? template.items : [];
+        const items = originalItems.map((item) => {
+            const nextExerciseId = remapExerciseId(item.exerciseId);
+            if (String(nextExerciseId) !== String(item.exerciseId)) {
+                changed = true;
+            }
+            return {
+                ...item,
+                exerciseId: nextExerciseId,
+            };
+        });
+
+        const originalExerciseIds = Array.isArray(template.exerciseIds) ? template.exerciseIds : items.map((item) => item.exerciseId);
+        const nextExerciseIds = originalExerciseIds.map((exerciseId) => remapExerciseId(exerciseId));
+        if (nextExerciseIds.some((exerciseId, index) => String(exerciseId) !== String(originalExerciseIds[index]))) {
+            changed = true;
+        }
+
+        if (!changed) return template;
+        updatedTemplates += 1;
+        return normalizeTemplate({
+            ...template,
+            items,
+            exerciseIds: nextExerciseIds,
+        });
+    });
+
+    const nextSets = sets.map((set) => {
+        const nextExerciseId = remapExerciseId(set.exerciseId);
+        if (String(nextExerciseId) === String(set.exerciseId)) return set;
+        updatedSets += 1;
+        return {
+            ...set,
+            exerciseId: nextExerciseId,
+        };
+    });
+
+    await tx(["exercises", "templates", "sets"], "readwrite", (exerciseStore, templateStore, setStore) => {
+        duplicateIdToCanonicalId.forEach((_canonicalId, duplicateId) => {
+            exerciseStore.delete(duplicateId);
+        });
+        nextTemplates.forEach((template) => templateStore.put(template));
+        nextSets.forEach((set) => setStore.put(set));
+    });
+    scheduleCloudSync();
+
+    return {
+        removedExercises: duplicateIdToCanonicalId.size,
+        updatedTemplates,
+        updatedSets,
     };
 }
