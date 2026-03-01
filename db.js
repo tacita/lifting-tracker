@@ -730,6 +730,27 @@ async function syncTableToCloud(tableName, data, userId) {
     return true;
 }
 
+async function deleteStaleCloudRecords(tableName, localIds, userId) {
+    try {
+        if (localIds.length === 0) {
+            const { error } = await supabaseClient
+                .from(tableName)
+                .delete()
+                .eq("user_id", userId);
+            if (error) console.error(`Failed to clean stale ${tableName}:`, error);
+            return;
+        }
+        const { error } = await supabaseClient
+            .from(tableName)
+            .delete()
+            .eq("user_id", userId)
+            .not("id", "in", `(${localIds.join(",")})`);
+        if (error) console.error(`Failed to clean stale ${tableName}:`, error);
+    } catch (err) {
+        console.error(`Failed to clean stale ${tableName}:`, err);
+    }
+}
+
 async function pushLocalSnapshotToCloud() {
     if (!useCloudSync() || syncInFlight) return false;
     syncInFlight = true;
@@ -776,7 +797,17 @@ async function pushLocalSnapshotToCloud() {
             syncTableToCloud("template_items", templateItems, userId),
             syncTableToCloud("folders", folders || [], userId),
         ]);
-        
+
+        // Delete cloud records that no longer exist locally
+        await Promise.all([
+            deleteStaleCloudRecords("exercises", (exercises || []).map(e => e.id), userId),
+            deleteStaleCloudRecords("sessions", (sessions || []).map(s => s.id), userId),
+            deleteStaleCloudRecords("sets", (sets || []).map(s => s.id), userId),
+            deleteStaleCloudRecords("templates", (templates || []).map(t => t.id), userId),
+            deleteStaleCloudRecords("template_items", templateItems.map(ti => ti.id), userId),
+            deleteStaleCloudRecords("folders", (folders || []).map(f => f.id), userId),
+        ]);
+
         console.log("✓ Cloud sync successful");
         setSyncState({
             status: "idle",
@@ -1006,6 +1037,22 @@ async function hydrateLocalFromCloudIfAvailable() {
     } catch (err) {
         console.error("Hydration error:", err);
         return { loaded: false, hasCloudData: false, failed: true };
+    }
+}
+
+/**
+ * Pull latest data from Supabase and replace local IndexedDB.
+ * Safe to call mid-session — skips if cloud sync is not configured or no user is logged in.
+ * Returns true if local data was refreshed from cloud.
+ */
+export async function pullFromCloud() {
+    if (!useCloudSync()) return false;
+    try {
+        const result = await hydrateLocalFromCloudIfAvailable();
+        return result.loaded;
+    } catch (err) {
+        console.error("pullFromCloud failed:", err);
+        return false;
     }
 }
 

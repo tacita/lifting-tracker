@@ -52,7 +52,7 @@ const selectExerciseCancelTopBtn = document.getElementById("select-exercise-canc
 const createExerciseModal = document.getElementById("create-exercise-modal");
 const createExerciseNameInput = document.getElementById("create-exercise-name");
 const createExerciseRepFloorInput = document.getElementById("create-exercise-rep-floor");
-const createExerciseRepCeilingInput = document.getElementById("create-exercise-rep-ceiling");
+
 const createExerciseRestSecondsInput = document.getElementById("create-exercise-rest-seconds");
 const createExerciseNoteInput = document.getElementById("create-exercise-note");
 const createExerciseSubmitBtn = document.getElementById("create-exercise-submit");
@@ -66,7 +66,7 @@ const clearExercisesBtn = document.getElementById("clear-exercises");
 const exercisesListEl = document.getElementById("exercises-list");
 const exerciseNameInput = document.getElementById("exercise-name");
 const repFloorInput = document.getElementById("rep-floor");
-const repCeilingInput = document.getElementById("rep-ceiling");
+
 const restSecondsInput = document.getElementById("rest-seconds");
 const exerciseNoteInput = document.getElementById("exercise-note");
 const templateNameInput = document.getElementById("template-name");
@@ -478,6 +478,8 @@ async function signOut() {
 async function syncNow() {
     try {
         await db.forceSyncToCloud();
+        const pulled = await db.pullFromCloud();
+        if (pulled) await refreshUI();
         showToast("Cloud sync complete", "success");
     } catch (err) {
         console.error(err);
@@ -1253,17 +1255,16 @@ function renderActiveTemplateNote() {
 async function addExercise() {
     const name = exerciseNameInput.value.trim();
     const repFloor = parseInt(repFloorInput.value, 10);
-    const repCeiling = parseInt(repCeilingInput.value, 10);
     const restSeconds = parseInt(restSecondsInput.value, 10);
     const note = (exerciseNoteInput.value || "").trim();
 
-    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
+    if (!name || Number.isNaN(repFloor) || repFloor < 1 || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
         return;
     }
 
     try {
-        await db.addExercise({ id: uuid(), name, repFloor, repCeiling, restSeconds, note });
+        await db.addExercise({ id: uuid(), name, repFloor, repCeiling: repFloor, restSeconds, note });
     } catch (err) {
         const message = err?.message || "Could not add exercise";
         showToast(message, "error");
@@ -1376,7 +1377,7 @@ function renderExercises() {
         card.innerHTML = `
             <div>
                 <p class="label">${escapeHtml(ex.name)}</p>
-                <p class="sub">${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest</p>
+                <p class="sub">${ex.repFloor} reps • ${ex.restSeconds || 90}s rest</p>
                 ${ex.note ? `<p class="sub small">${escapeHtml(ex.note)}</p>` : ""}
             </div>
             <div class="list-actions">
@@ -1399,17 +1400,16 @@ function renderExercises() {
         card.querySelector('[data-action="edit"]').addEventListener("click", async () => {
             const newName = prompt("Exercise name", ex.name);
             if (!newName) return;
-            const newFloor = parseInt(prompt("Rep floor", ex.repFloor) || ex.repFloor, 10);
-            const newCeil = parseInt(prompt("Rep ceiling", ex.repCeiling) || ex.repCeiling, 10);
+            const newFloor = parseInt(prompt("Target reps", ex.repFloor) || ex.repFloor, 10);
             const newRest = parseInt(prompt("Rest seconds", ex.restSeconds || 90) || ex.restSeconds || 90, 10);
             const newNoteInput = prompt("Exercise note (optional)", ex.note || "");
             if (newNoteInput === null) return;
             const newNote = newNoteInput.trim();
-            if (Number.isNaN(newFloor) || Number.isNaN(newCeil) || newFloor >= newCeil || Number.isNaN(newRest) || newRest < 0) {
+            if (Number.isNaN(newFloor) || newFloor < 1 || Number.isNaN(newRest) || newRest < 0) {
                 showToast("Invalid values", "error");
                 return;
             }
-            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newCeil, restSeconds: newRest, note: newNote });
+            await db.updateExercise({ ...ex, name: newName.trim(), repFloor: newFloor, repCeiling: newFloor, restSeconds: newRest, note: newNote });
             await refreshUI();
             showToast("Exercise updated", "success");
         });
@@ -2454,7 +2454,7 @@ function renderSelectExerciseList(searchTerm = "") {
         item.className = "exercise-select-item";
         item.innerHTML = `
             <p class="exercise-select-item-name">${escapeHtml(exercise.name)}</p>
-            <p class="exercise-select-item-meta">${exercise.repFloor}–${exercise.repCeiling} reps • ${exercise.restSeconds || 90}s rest</p>
+            <p class="exercise-select-item-meta">${exercise.repFloor} reps • ${exercise.restSeconds || 90}s rest</p>
         `;
         item.addEventListener("click", () => {
             if (state.pendingSwapExerciseId) {
@@ -2540,7 +2540,6 @@ async function swapExerciseInSession(nextExercise) {
 function openCreateExerciseModal() {
     createExerciseNameInput.value = "";
     createExerciseRepFloorInput.value = "8";
-    createExerciseRepCeilingInput.value = "12";
     createExerciseRestSecondsInput.value = "90";
     if (createExerciseNoteInput) createExerciseNoteInput.value = "";
     createExerciseNameInput.focus();
@@ -2550,16 +2549,15 @@ function openCreateExerciseModal() {
 async function submitCreateExercise() {
     const name = createExerciseNameInput.value.trim();
     const repFloor = parseInt(createExerciseRepFloorInput.value, 10);
-    const repCeiling = parseInt(createExerciseRepCeilingInput.value, 10);
     const restSeconds = parseInt(createExerciseRestSecondsInput.value, 10);
     const note = (createExerciseNoteInput?.value || "").trim();
 
-    if (!name || Number.isNaN(repFloor) || Number.isNaN(repCeiling) || repFloor >= repCeiling || Number.isNaN(restSeconds) || restSeconds < 0) {
+    if (!name || Number.isNaN(repFloor) || repFloor < 1 || Number.isNaN(restSeconds) || restSeconds < 0) {
         showToast("Enter valid exercise details", "error");
         return;
     }
 
-    const newExercise = { id: uuid(), name, repFloor, repCeiling, restSeconds, note };
+    const newExercise = { id: uuid(), name, repFloor, repCeiling: repFloor, restSeconds, note };
     try {
         await db.addExercise(newExercise);
         state.exercises.push(newExercise);
@@ -2623,7 +2621,7 @@ function renderWorkoutExercises() {
         }
         const planText = templateItem
             ? `${templateItem.sets} sets • ${templateItem.reps} reps • ${templateItem.restSeconds}s rest`
-            : `${ex.repFloor}–${ex.repCeiling} reps • ${ex.restSeconds || 90}s rest`;
+            : `${ex.repFloor} reps • ${ex.restSeconds || 90}s rest`;
         const exerciseNote = String(ex.note || "").trim();
         card.innerHTML = `
             <div class="exercise-header">
@@ -3723,7 +3721,6 @@ async function exportExercisesData() {
         exercises: state.exercises.map((exercise) => ({
             name: exercise.name,
             repFloor: exercise.repFloor,
-            repCeiling: exercise.repCeiling,
             restSeconds: exercise.restSeconds ?? 90,
         })),
     };
@@ -3761,7 +3758,6 @@ async function exportWorkoutsData() {
         .map((exercise) => ({
             name: exercise.name,
             repFloor: exercise.repFloor,
-            repCeiling: exercise.repCeiling,
             restSeconds: exercise.restSeconds ?? 90,
         }));
 
@@ -3798,14 +3794,10 @@ async function ensureExerciseByName(name, exerciseDefaults, exerciseIdByName) {
         id: uuid(),
         name: String(name || "").trim(),
         repFloor: Math.max(1, Number.parseInt(defaults.repFloor, 10) || 8),
-        repCeiling: Math.max(2, Number.parseInt(defaults.repCeiling, 10) || 12),
+        repCeiling: Math.max(1, Number.parseInt(defaults.repFloor, 10) || 8),
         restSeconds: Math.max(0, Number.parseInt(defaults.restSeconds, 10) || 90),
         note: String(defaults.note || defaults.notes || "").trim(),
     };
-    if (payload.repFloor >= payload.repCeiling) {
-        payload.repFloor = 8;
-        payload.repCeiling = 12;
-    }
 
     try {
         await db.addExercise(payload);
@@ -3857,7 +3849,7 @@ async function importExercisesData(parsed) {
                 id: uuid(),
                 name,
                 repFloor: Math.max(1, Number.parseInt(item.repFloor, 10) || 8),
-                repCeiling: Math.max(2, Number.parseInt(item.repCeiling, 10) || 12),
+                repCeiling: Math.max(1, Number.parseInt(item.repFloor, 10) || 8),
                 restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
             });
         } catch {
@@ -3892,7 +3884,7 @@ async function importHistoryData(parsed) {
 
         for (const exerciseName of exerciseNameCandidates) {
             if (!exerciseDefaults.has(normalizeEntityName(exerciseName))) {
-                exerciseDefaults.set(normalizeEntityName(exerciseName), { repFloor: 8, repCeiling: 12, restSeconds: 90 });
+                exerciseDefaults.set(normalizeEntityName(exerciseName), { repFloor: 8, restSeconds: 90 });
             }
             await ensureExerciseByName(exerciseName, exerciseDefaults, exerciseIdByName);
         }
@@ -4225,6 +4217,27 @@ async function init() {
     });
     db.onSyncStateChange((nextSyncState) => {
         handleSyncStateChange(nextSyncState);
+    });
+
+    // Pull fresh data from cloud when tab becomes visible (e.g. switching from phone to desktop)
+    let lastCloudPullMs = 0;
+    document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState !== "visible") return;
+        const now = Date.now();
+        // Throttle to at most once per 30 seconds to avoid excessive requests
+        if (now - lastCloudPullMs < 30_000) return;
+        lastCloudPullMs = now;
+        try {
+            const pulled = await db.pullFromCloud();
+            if (pulled) await refreshUI();
+        } catch (err) {
+            console.error("Visibility pull failed:", err);
+        }
+    });
+
+    // Push pending local changes when coming back online
+    window.addEventListener("online", () => {
+        db.forceSyncToCloud().catch((err) => console.error("Online sync failed:", err));
     });
     try {
         await db.initAuth();
