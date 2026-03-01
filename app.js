@@ -792,6 +792,20 @@ function parseTemplateReps(value, fallback = 8) {
     return Math.max(1, Number.parseInt(fallback, 10) || 8);
 }
 
+function parseTemplateRestSeconds(value, fallback = 90) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return Math.max(0, Math.floor(value));
+    }
+    const text = String(value || "").trim().toLowerCase();
+    if (!text) return Math.max(0, Number.parseInt(fallback, 10) || 90);
+    const numeric = Number.parseFloat(text);
+    if (!Number.isFinite(numeric)) return Math.max(0, Number.parseInt(fallback, 10) || 90);
+    if (/\bmin\b|\bmins\b|\bminute\b|\bminutes\b/.test(text)) {
+        return Math.max(0, Math.round(numeric * 60));
+    }
+    return Math.max(0, Math.round(numeric));
+}
+
 function getTemplateItems(template) {
     if (!template) return [];
     if (Array.isArray(template.items)) {
@@ -799,7 +813,7 @@ function getTemplateItems(template) {
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: parseTemplateReps(item.reps, 8),
-            restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            restSeconds: parseTemplateRestSeconds(item.restSeconds, 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }));
@@ -820,7 +834,7 @@ function applyTemplateItems(template, items) {
             exerciseId: item.exerciseId,
             sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
             reps: parseTemplateReps(item.reps, 8),
-            restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+            restSeconds: parseTemplateRestSeconds(item.restSeconds, 90),
             supersetId: item.supersetId ? String(item.supersetId) : null,
             supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
         }))
@@ -2626,9 +2640,7 @@ function renderWorkoutExercises() {
                     </div>
                 </div>
             </div>
-            <div class="field exercise-note-field">
-                <textarea class="exercise-note-input" rows="2" placeholder="Exercise note (optional)">${escapeHtml(exerciseNote)}</textarea>
-            </div>
+            ${exerciseNote ? `<div class="field exercise-note-field"><textarea class="exercise-note-input" rows="2" placeholder="Exercise note (optional)">${escapeHtml(exerciseNote)}</textarea></div>` : ""}
             <div class="sets-container" data-exercise-id="${ex.id}"></div>
             <button class="ghost add-set">+ Add set</button>
         `;
@@ -3977,10 +3989,12 @@ async function importWorkoutsData(parsed) {
             knownFolders.add(folder.toLowerCase());
         }
 
-        const rawItems = Array.isArray(template?.items) ? template.items : [];
+        const rawItems = Array.isArray(template?.items)
+            ? template.items
+            : (Array.isArray(template?.exercises) ? template.exercises : []);
         const items = [];
         for (const item of rawItems) {
-            const exerciseName = String(item?.exerciseName || "").trim();
+            const exerciseName = String(item?.exerciseName || item?.name || item?.exercise || "").trim();
             if (!exerciseName) continue;
             const normalizedExerciseName = normalizeEntityName(exerciseName);
             const itemNote = String(item?.notes || item?.note || "").trim();
@@ -4001,9 +4015,12 @@ async function importWorkoutsData(parsed) {
             }
             items.push({
                 exerciseId,
-                sets: Math.max(1, Number.parseInt(item.sets, 10) || 3),
-                reps: parseTemplateReps(item.reps, 8),
-                restSeconds: Math.max(0, Number.parseInt(item.restSeconds, 10) || 90),
+                sets: Math.max(1, Number.parseInt(item?.sets ?? item?.setCount ?? item?.set_count, 10) || 3),
+                reps: parseTemplateReps(item?.reps ?? item?.repRange ?? item?.rep_range ?? item?.rep, 8),
+                restSeconds: parseTemplateRestSeconds(
+                    item?.restSeconds ?? item?.rest_seconds ?? item?.restSec ?? item?.rest ?? item?.restTime,
+                    90
+                ),
                 supersetId: item.supersetId ? String(item.supersetId) : null,
                 supersetOrder: Number.parseInt(item.supersetOrder, 10) || 0,
             });
