@@ -3527,7 +3527,14 @@ async function finishWorkout() {
         "success"
     );
     celebrateWithConfetti();
-    await refreshUI();
+    
+    // Refresh data but DON'T auto-resume another workout
+    // User just finished - they want to see the launcher, not another workout
+    await refreshData();
+    renderWorkoutLauncher();
+    renderHistory();
+    renderTemplatesList();
+    // Explicitly don't call maybeResumeDraft here
 }
 
 let cancelWorkoutInProgress = false;
