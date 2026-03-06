@@ -1403,8 +1403,25 @@ async function ensureInitialCloudSeedForUser() {
         await migrateToNormalizedSchema();
     }
     
-    // Step 2: Try to hydrate from new normalized tables
-    console.log("Attempting to load from normalized cloud tables...");
+    // CRITICAL: If local has data, DO NOT hydrate from cloud.
+    // Local is source of truth. This prevents data loss when cloud sync fails
+    // and user refreshes - we don't want to overwrite local with empty/stale cloud.
+    if (hasLocalData) {
+        console.log("Local data exists - skipping cloud hydration, trusting local as source of truth");
+        hydrationComplete = true;
+        // Push local to cloud to ensure cloud is up to date
+        try {
+            await pushLocalSnapshotToCloud();
+            console.log("✓ Pushed local data to cloud");
+        } catch (err) {
+            console.error("Failed to push local data to cloud:", err);
+        }
+        markUserSeeded(userId);
+        return;
+    }
+    
+    // Step 2: Only hydrate from cloud if local is EMPTY
+    console.log("Local is empty, attempting to load from normalized cloud tables...");
     const hydrated = await hydrateLocalFromCloudIfAvailable();
     try {
         if (hydrated.loaded) {
