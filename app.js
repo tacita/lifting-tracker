@@ -169,6 +169,7 @@ const state = {
         lastDurationSeconds: 90,
         startTimeMs: null,
         targetEndTimeMs: null,
+        wakeLock: null,
     },
 };
 
@@ -653,6 +654,15 @@ function stopRestTimer() {
     state.restTimer.running = false;
     state.restTimer.startTimeMs = null;
     state.restTimer.targetEndTimeMs = null;
+    
+    // Release wake lock when timer stops
+    if (state.restTimer.wakeLock) {
+        state.restTimer.wakeLock.release().catch((err) => {
+            console.error("Wake lock release failed:", err);
+        });
+        state.restTimer.wakeLock = null;
+    }
+    
     renderRestTimer();
 }
 
@@ -680,6 +690,18 @@ function startRestTimer(seconds) {
     state.restTimer.lastDurationSeconds = totalSeconds;
     state.restTimer.running = true;
     renderRestTimer();
+    
+    // Request wake lock to keep screen on during rest timer
+    if ("wakeLock" in navigator) {
+        navigator.wakeLock.request("screen").then((lock) => {
+            state.restTimer.wakeLock = lock;
+            lock.addEventListener("release", () => {
+                console.log("Wake lock released");
+            });
+        }).catch((err) => {
+            console.error("Wake lock request failed:", err);
+        });
+    }
     
     // Update display every 100ms to catch quick changes and ensure accuracy
     state.restTimer.intervalId = setInterval(() => {
