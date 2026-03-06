@@ -3440,15 +3440,20 @@ async function finishWorkout() {
         return;
     }
     const sessionId = state.activeSession.id;
-    console.log("Session ID:", sessionId, "state.sets count:", state.sets.length);
+    console.log("Session ID:", sessionId, typeof sessionId, "state.sets count:", state.sets.length);
+    
+    // Debug: show all unique sessionIds in sets
+    const uniqueSessionIds = [...new Set(state.sets.map(s => s.sessionId))];
+    console.log("Unique sessionIds in sets:", uniqueSessionIds);
+    showToast(`Session: ${sessionId}, Sets have sessionIds: ${uniqueSessionIds.slice(0,3).join(", ")}...`, "info");
+    
     const sessionSets = state.sets.filter((s) => {
         const match = String(s.sessionId) === String(sessionId);
-        console.log("Set sessionId:", s.sessionId, "matches:", match);
         return match;
     });
     console.log("Found sessionSets:", sessionSets.length);
     if (sessionSets.length === 0) {
-        showToast(`No sets found for session ${sessionId}`, "error");
+        showToast(`No sets for session ${sessionId}. Total sets: ${state.sets.length}`, "error");
         return;
     }
 
