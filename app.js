@@ -479,8 +479,8 @@ async function signOut() {
 async function syncNow() {
     try {
         await db.forceSyncToCloud();
-        const pulled = await db.pullFromCloud();
-        if (pulled) await refreshUI();
+        // DO NOT pull from cloud - local is source of truth
+        // Pulling would overwrite local data if cloud is stale
         showToast("Cloud sync complete", "success");
     } catch (err) {
         console.error(err);
@@ -4337,19 +4337,15 @@ async function init() {
         handleSyncStateChange(nextSyncState);
     });
 
-    // Pull fresh data from cloud when tab becomes visible (e.g. switching from phone to desktop)
-    let lastCloudPullMs = 0;
+    // Push local data to cloud when tab becomes visible
+    // DO NOT pull from cloud - local is source of truth
+    // Pulling would overwrite local data if cloud sync had failed
     document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState !== "visible") return;
-        const now = Date.now();
-        // Throttle to at most once per 30 seconds to avoid excessive requests
-        if (now - lastCloudPullMs < 30_000) return;
-        lastCloudPullMs = now;
         try {
-            const pulled = await db.pullFromCloud();
-            if (pulled) await refreshUI();
+            await db.forceSyncToCloud();
         } catch (err) {
-            console.error("Visibility pull failed:", err);
+            console.error("Visibility sync failed:", err);
         }
     });
 
