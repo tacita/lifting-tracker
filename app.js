@@ -2589,6 +2589,9 @@ async function swapExerciseInSession(nextExercise) {
     renderSessionExercisePicker();
     renderWorkoutExercises();
     showToast(`Swapped to ${nextExercise.name}`, "success");
+    
+    // Sync immediately after swapping exercise
+    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync exercise swap:", err));
 }
 
 function openCreateExerciseModal() {
@@ -3014,6 +3017,8 @@ async function deleteSetRow(row) {
         if (existing) {
             await db.deleteSet(existing.id);
             state.sets = state.sets.filter((item) => String(item.id) !== row.dataset.setId);
+            // Sync immediately when deleting a set
+            db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set deletion:", err));
         }
     }
     row.remove();
@@ -3186,6 +3191,8 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                 };
                 try {
                     await db.updateSet(refreshed);
+                    // Sync immediately after updating set
+                    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set update:", err));
                 } catch (err) {
                     showToast("Failed to save set", "error");
                     return;
@@ -3334,6 +3341,8 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
             row.dataset.setId = payload.id;
             state.sets.push(payload);
         }
+        // Sync immediately to cloud when set data is saved
+        db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set data:", err));
     } catch (err) {
         showToast("Failed to save set", "error");
         return null;
@@ -3940,6 +3949,8 @@ async function importExercisesData(parsed) {
     }
 
     await refreshUI();
+    // Sync immediately after bulk import
+    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported exercises:", err));
     showToast(`Exercises imported: ${added} added, ${skipped} skipped`, "success");
 }
 
@@ -4015,6 +4026,8 @@ async function importHistoryData(parsed) {
     }
 
     await refreshUI();
+    // Sync immediately after bulk import
+    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported history:", err));
     showToast(`History imported: ${importedSessions} sessions, ${importedSets} sets`, "success");
 }
 
@@ -4135,6 +4148,8 @@ async function importWorkoutsData(parsed) {
     }
 
     await refreshUI();
+    // Sync immediately after bulk import
+    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported workouts:", err));
     showToast(
         `Imported ${added} workout template${added === 1 ? "" : "s"}${exerciseNotesUpdated ? ` • ${exerciseNotesUpdated} exercise notes updated` : ""}`,
         "success"
