@@ -2358,16 +2358,8 @@ async function startWorkout(templateId = null) {
 function maybeResumeDraft() {
     if (state.activeSession) return;
     
-    // Only resume draft if it's from THIS session (less than 1 hour old)
-    const now = Date.now();
-    const ONE_HOUR = 60 * 60 * 1000;
-    
-    const draft = state.sessions.find((s) => {
-        if (s.status !== "draft") return false;
-        const createdAt = s.createdAt ? new Date(s.createdAt).getTime() : 0;
-        // Only resume if created very recently (this session)
-        return createdAt && (now - createdAt) < ONE_HOUR;
-    });
+    // Resume any draft session (regardless of age - user's data matters)
+    const draft = state.sessions.find((s) => s.status === "draft");
     
     if (draft) {
         state.activeSession = draft;
