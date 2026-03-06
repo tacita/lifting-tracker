@@ -2358,8 +2358,16 @@ async function startWorkout(templateId = null) {
 function maybeResumeDraft() {
     if (state.activeSession) return;
     
-    // Resume any draft session (regardless of age - user's data matters)
-    const draft = state.sessions.find((s) => s.status === "draft");
+    // Find the most recent draft session (by startedAt or date)
+    const drafts = state.sessions.filter((s) => s.status === "draft");
+    if (drafts.length === 0) return;
+    
+    // Sort by startedAt descending, pick the newest
+    const draft = drafts.sort((a, b) => {
+        const aTime = new Date(a.startedAt || a.date || 0).getTime();
+        const bTime = new Date(b.startedAt || b.date || 0).getTime();
+        return bTime - aTime;
+    })[0];
     
     if (draft) {
         state.activeSession = draft;
