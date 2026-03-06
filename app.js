@@ -2358,39 +2358,58 @@ async function startWorkout(templateId = null) {
 function maybeResumeDraft() {
     if (state.activeSession) return;
     
-    // Find drafts that actually have sets (not empty abandoned drafts)
-    const drafts = state.sessions.filter((s) => s.status === "draft");
-    const draftsWithSets = drafts.filter(d => 
-        state.sets.some(s => String(s.sessionId) === String(d.id))
-    );
+    // FIRST: Find ANY session (draft OR complete) from today that has sets
+    // This handles the case where finish partially succeeded but UI broke
+    const today = new Date().toISOString().split("T")[0];
+    const sessionsWithSets = state.sessions.filter(s => {
+        const sessionDate = (s.startedAt || s.date || "").split("T")[0];
+        const hasSetss = state.sets.some(set => String(set.sessionId) === String(s.id));
+        return hasSetss && sessionDate === today;
+    });
     
-    // Clean up empty drafts (they're just clutter from failed attempts)
-    const emptyDrafts = drafts.filter(d => 
-        !state.sets.some(s => String(s.sessionId) === String(d.id))
-    );
-    if (emptyDrafts.length > 0) {
-        console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
-        emptyDrafts.forEach(async (d) => {
-            try {
-                await db.deleteSession(d.id);
-            } catch (err) {
-                console.error("Failed to delete empty draft:", err);
-            }
-        });
-        state.sessions = state.sessions.filter(s => 
-            s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
-        );
-    }
-    
-    // Only resume a draft that has sets
-    if (draftsWithSets.length === 0) return;
-    
-    // Sort by startedAt descending, pick the newest
-    const draft = draftsWithSets.sort((a, b) => {
+    // Sort by startedAt descending to get most recent
+    sessionsWithSets.sort((a, b) => {
         const aTime = new Date(a.startedAt || a.date || 0).getTime();
         const bTime = new Date(b.startedAt || b.date || 0).getTime();
         return bTime - aTime;
-    })[0];
+    });
+    
+    // If we found a session from today with sets, use it
+    if (sessionsWithSets.length > 0) {
+        const sessionToResume = sessionsWithSets[0];
+        // If it's marked complete but we're resuming it, convert back to draft
+        if (sessionToResume.status === "complete") {
+            console.log("Found completed session from today with sets, converting back to draft for resume");
+            sessionToResume.status = "draft";
+            sessionToResume.finishedAt = null;
+            db.updateSession(sessionToResume).catch(err => console.error("Failed to convert session to draft:", err));
+        }
+        state.activeSession = sessionToResume;
+        state.activeExercises = getExercisesForSession(sessionToResume);
+        // Continue to UI setup below...
+    } else {
+        // No sessions with sets from today - clean up empty drafts
+        const drafts = state.sessions.filter((s) => s.status === "draft");
+        const emptyDrafts = drafts.filter(d => 
+            !state.sets.some(s => String(s.sessionId) === String(d.id))
+        );
+        if (emptyDrafts.length > 0) {
+            console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
+            emptyDrafts.forEach(async (d) => {
+                try {
+                    await db.deleteSession(d.id);
+                } catch (err) {
+                    console.error("Failed to delete empty draft:", err);
+                }
+            });
+            state.sessions = state.sessions.filter(s => 
+                s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
+            );
+        }
+        return; // No session to resume
+    }
+    
+    const draft = state.activeSession;
     
     if (draft) {
         state.activeSession = draft;
@@ -3235,15 +3254,8 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         };
         try {
             await db.updateSet(updated);
-            // Verify the set was actually saved
-            const allSets = await db.getAllSets();
-            const verified = allSets.find(s => s.id === updated.id);
-            if (!verified) {
-                showToast("VERIFY FAIL: Set not in IndexedDB after save!", "error");
-                return;
-            }
         } catch (err) {
-            showToast(`Failed to update set: ${err.message}`, "error");
+            showToast("Failed to save set", "error");
             return;
         }
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
@@ -3252,12 +3264,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         
         // Sync immediately when marking set complete (don't wait for debounce)
         if (nextComplete) {
-            try {
-                await db.ensureCloudSyncComplete();
-                showToast("Set saved ✓", "success");
-            } catch (err) {
-                showToast(`Set saved locally, cloud sync failed: ${err.message}`, "warning");
-            }
+            db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set completion:", err));
         }
         
         // Remove auto-populated styling when marking complete
@@ -3471,21 +3478,10 @@ async function finishWorkout() {
         return;
     }
     const sessionId = state.activeSession.id;
-    
-    // Debug: show all unique sessionIds in sets
-    const uniqueSessionIds = [...new Set(state.sets.map(s => String(s.sessionId)))];
     const sessionSets = state.sets.filter((s) => String(s.sessionId) === String(sessionId));
     
     if (sessionSets.length === 0) {
-        // Show detailed debug info
-        const drafts = state.sessions.filter(s => s.status === "draft");
-        const draftIds = drafts.map(s => s.id).join(", ");
-        const draftDates = drafts.map(s => s.startedAt || s.date || "no date").join(", ");
-        
-        // Check if any draft has sets
-        const draftsWithSets = drafts.filter(d => state.sets.some(s => String(s.sessionId) === String(d.id)));
-        
-        alert(`BUG DEBUG:\n\nActive session: ${sessionId}\nActive startedAt: ${state.activeSession.startedAt}\n\nAll drafts (${drafts.length}): ${draftIds}\nDraft dates: ${draftDates}\nDrafts with sets: ${draftsWithSets.length}\n\nSets exist for: ${uniqueSessionIds.slice(-3).join(", ")}\nTotal sets: ${state.sets.length}`);
+        showToast("Log at least one set first", "error");
         return;
     }
 
@@ -4386,12 +4382,6 @@ async function init() {
                 hydrationLoader.classList.remove("hidden");
             }
             await refreshUI();
-            // DEBUG: Show what data exists after load
-            const debugSessions = state.sessions.length;
-            const debugSets = state.sets.length;
-            const debugExercises = state.exercises.length;
-            console.log(`DEBUG LOAD: ${debugSessions} sessions, ${debugSets} sets, ${debugExercises} exercises`);
-            showToast(`Loaded: ${debugSessions} sessions, ${debugSets} sets`, "info");
             // Hide loader after data is loaded
             if (hydrationLoader) {
                 hydrationLoader.classList.add("hidden");
