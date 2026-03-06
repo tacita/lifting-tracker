@@ -658,6 +658,31 @@ button.small {
     gap: 8px;
 }
 
+.launcher-continue-section {
+    margin-bottom: 16px;
+}
+
+.launcher-continue-btn {
+    width: 100%;
+    text-align: left;
+    border: 2px solid var(--accent);
+    background: var(--surface-soft);
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+}
+
+.launcher-continue-btn .label {
+    margin: 0 0 4px;
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.launcher-continue-btn .sub {
+    margin: 0;
+    color: var(--muted);
+}
+
 .launcher-template-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

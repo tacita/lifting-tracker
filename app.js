@@ -951,13 +951,14 @@ async function refreshData() {
 
 async function refreshUI() {
     await refreshData();
+    cleanupEmptyDrafts();
     renderFolderSuggestions();
     renderWorkoutLauncher();
     renderExercises();
     renderTemplatesList();
     renderTemplateEditor();
     renderHistory();
-    maybeResumeDraft();
+    // Don't auto-resume. Launcher shows "Continue workout" if there's a draft.
 }
 
 function getTemplateFolderName(template) {
@@ -1211,7 +1212,29 @@ function getExercisesForSession(session) {
 
 function renderWorkoutLauncher() {
     workoutTemplatesBrowserEl.innerHTML = "";
-    if (state.templates.length === 0) {
+    
+    // Check if there's a draft workout to continue
+    const resumableDraft = findResumableDraft();
+    if (resumableDraft) {
+        const setsCount = state.sets.filter(s => String(s.sessionId) === String(resumableDraft.id)).length;
+        const templateName = resumableDraft.templateId 
+            ? state.templates.find(t => String(t.id) === String(resumableDraft.templateId))?.name 
+            : null;
+        const continueSection = document.createElement("div");
+        continueSection.className = "launcher-continue-section";
+        continueSection.innerHTML = `
+            <button type="button" class="launcher-continue-btn" id="continue-draft-btn">
+                <p class="label">Continue workout</p>
+                <p class="sub">${templateName ? escapeHtml(templateName) + ' • ' : ''}${setsCount} set${setsCount === 1 ? '' : 's'} logged</p>
+            </button>
+        `;
+        continueSection.querySelector("#continue-draft-btn").addEventListener("click", () => {
+            resumeDraft(resumableDraft);
+        });
+        workoutTemplatesBrowserEl.appendChild(continueSection);
+    }
+    
+    if (state.templates.length === 0 && !resumableDraft) {
         workoutTemplatesBrowserEl.innerHTML = `<div class="empty">No templates yet. Create one in Templates.</div>`;
         return;
     }
@@ -2355,61 +2378,55 @@ async function startWorkout(templateId = null) {
     setView("view-workout");
 }
 
-function maybeResumeDraft() {
-    if (state.activeSession) return;
+// Clean up empty draft sessions (no sets) - runs on every refresh
+function cleanupEmptyDrafts() {
+    const drafts = state.sessions.filter(s => s.status === "draft");
+    const emptyDrafts = drafts.filter(d => 
+        !state.sets.some(s => String(s.sessionId) === String(d.id))
+    );
     
-    // Find draft sessions from today that have sets
-    const today = new Date().toISOString().split("T")[0];
+    if (emptyDrafts.length > 0) {
+        console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
+        emptyDrafts.forEach(d => {
+            db.deleteSession(d.id).catch(err => console.error("Failed to delete empty draft:", err));
+        });
+        state.sessions = state.sessions.filter(s => 
+            s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
+        );
+    }
+}
+
+// Find draft with sets that user can continue (returns most recent, or null)
+function findResumableDraft() {
     const draftsWithSets = state.sessions.filter(s => {
-        if (s.status !== "draft") return false; // Only drafts, not complete sessions
-        const sessionDate = (s.startedAt || s.date || "").split("T")[0];
-        const hasSets = state.sets.some(set => String(set.sessionId) === String(s.id));
-        return hasSets && sessionDate === today;
+        if (s.status !== "draft") return false;
+        return state.sets.some(set => String(set.sessionId) === String(s.id));
     });
     
-    // Sort by startedAt descending to get most recent
-    draftsWithSets.sort((a, b) => {
+    if (draftsWithSets.length === 0) return null;
+    
+    // Return most recent
+    return draftsWithSets.sort((a, b) => {
         const aTime = new Date(a.startedAt || a.date || 0).getTime();
         const bTime = new Date(b.startedAt || b.date || 0).getTime();
         return bTime - aTime;
-    });
-    
-    // If we found a draft from today with sets, resume it
-    if (draftsWithSets.length > 0) {
-        state.activeSession = draftsWithSets[0];
-        state.activeExercises = getExercisesForSession(draftsWithSets[0]);
-        // Continue to UI setup below...
-    } else {
-        // No sessions with sets from today - clean up empty drafts
-        const drafts = state.sessions.filter((s) => s.status === "draft");
-        const emptyDrafts = drafts.filter(d => 
-            !state.sets.some(s => String(s.sessionId) === String(d.id))
-        );
-        if (emptyDrafts.length > 0) {
-            console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
-            emptyDrafts.forEach(async (d) => {
-                try {
-                    await db.deleteSession(d.id);
-                } catch (err) {
-                    console.error("Failed to delete empty draft:", err);
-                }
-            });
-            state.sessions = state.sessions.filter(s => 
-                s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
-            );
-        }
-        return; // No session to resume
-    }
-    
-    // We have a draft to resume (state.activeSession was set above)
-    const draft = state.activeSession;
-    sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
+    })[0];
+}
+
+// Resume a specific draft session (called when user clicks "Continue workout")
+function resumeDraft(draft) {
+    state.activeSession = draft;
+    state.activeExercises = getExercisesForSession(draft);
+    sessionTemplateLabel.textContent = draft.templateId 
+        ? state.templates.find(t => String(t.id) === String(draft.templateId))?.name || "Workout" 
+        : "Workout";
     renderActiveTemplateNote();
     workoutNotesEl.value = draft.notes || "";
     workoutSection.classList.remove("hidden");
     startWorkoutElapsedTimer();
     renderSessionExercisePicker();
     renderWorkoutExercises();
+    updateWorkoutFloatingWidget();
 }
 
 function renderSessionExercisePicker() {
