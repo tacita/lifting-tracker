@@ -3191,8 +3191,6 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
                 };
                 try {
                     await db.updateSet(refreshed);
-                    // Sync immediately after updating set
-                    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set update:", err));
                 } catch (err) {
                     showToast("Failed to save set", "error");
                     return;
@@ -3341,8 +3339,7 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
             row.dataset.setId = payload.id;
             state.sets.push(payload);
         }
-        // Sync immediately to cloud when set data is saved
-        db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set data:", err));
+        // Don't sync here - weight/reps are local only until marked complete
     } catch (err) {
         showToast("Failed to save set", "error");
         return null;
