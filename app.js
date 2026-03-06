@@ -3454,9 +3454,15 @@ async function finishWorkout() {
     const sessionSets = state.sets.filter((s) => String(s.sessionId) === String(sessionId));
     
     if (sessionSets.length === 0) {
-        // Show what sessionIds exist so we can debug
-        const sample = uniqueSessionIds.slice(-3).join(", ");
-        alert(`BUG DEBUG:\n\nActive session: ${sessionId}\n\nSets exist for these sessions: ${sample}\n\nTotal sets: ${state.sets.length}\n\nThe active session doesn't match any sets.`);
+        // Show detailed debug info
+        const drafts = state.sessions.filter(s => s.status === "draft");
+        const draftIds = drafts.map(s => s.id).join(", ");
+        const draftDates = drafts.map(s => s.startedAt || s.date || "no date").join(", ");
+        
+        // Check if any draft has sets
+        const draftsWithSets = drafts.filter(d => state.sets.some(s => String(s.sessionId) === String(d.id)));
+        
+        alert(`BUG DEBUG:\n\nActive session: ${sessionId}\nActive startedAt: ${state.activeSession.startedAt}\n\nAll drafts (${drafts.length}): ${draftIds}\nDraft dates: ${draftDates}\nDrafts with sets: ${draftsWithSets.length}\n\nSets exist for: ${uniqueSessionIds.slice(-3).join(", ")}\nTotal sets: ${state.sets.length}`);
         return;
     }
 
