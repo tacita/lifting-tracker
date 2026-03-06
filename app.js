@@ -2358,12 +2358,35 @@ async function startWorkout(templateId = null) {
 function maybeResumeDraft() {
     if (state.activeSession) return;
     
-    // Find the most recent draft session (by startedAt or date)
+    // Find drafts that actually have sets (not empty abandoned drafts)
     const drafts = state.sessions.filter((s) => s.status === "draft");
-    if (drafts.length === 0) return;
+    const draftsWithSets = drafts.filter(d => 
+        state.sets.some(s => String(s.sessionId) === String(d.id))
+    );
+    
+    // Clean up empty drafts (they're just clutter from failed attempts)
+    const emptyDrafts = drafts.filter(d => 
+        !state.sets.some(s => String(s.sessionId) === String(d.id))
+    );
+    if (emptyDrafts.length > 0) {
+        console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
+        emptyDrafts.forEach(async (d) => {
+            try {
+                await db.deleteSession(d.id);
+            } catch (err) {
+                console.error("Failed to delete empty draft:", err);
+            }
+        });
+        state.sessions = state.sessions.filter(s => 
+            s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
+        );
+    }
+    
+    // Only resume a draft that has sets
+    if (draftsWithSets.length === 0) return;
     
     // Sort by startedAt descending, pick the newest
-    const draft = drafts.sort((a, b) => {
+    const draft = draftsWithSets.sort((a, b) => {
         const aTime = new Date(a.startedAt || a.date || 0).getTime();
         const bTime = new Date(b.startedAt || b.date || 0).getTime();
         return bTime - aTime;
