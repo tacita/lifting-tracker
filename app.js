@@ -627,6 +627,8 @@ async function pauseOrResumeWorkout() {
     await db.updateSession(nextSession);
     state.activeSession = nextSession;
     state.sessions = state.sessions.map((session) => (String(session.id) === String(nextSession.id) ? nextSession : session));
+    // Sync immediately when pausing/resuming
+    await db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync pause/resume:", err));
     startWorkoutElapsedTimer();
     renderWorkoutElapsed();
 }
@@ -2296,6 +2298,8 @@ async function startWorkout(templateId = null) {
         };
         try {
             await db.addSession(session);
+            // Sync session to cloud immediately so sets can reference it later
+            await db.ensureCloudSyncComplete();
         } catch (err) {
             showToast("Failed to start workout", "error");
             return;
