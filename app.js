@@ -2358,34 +2358,26 @@ async function startWorkout(templateId = null) {
 function maybeResumeDraft() {
     if (state.activeSession) return;
     
-    // FIRST: Find ANY session (draft OR complete) from today that has sets
-    // This handles the case where finish partially succeeded but UI broke
+    // Find draft sessions from today that have sets
     const today = new Date().toISOString().split("T")[0];
-    const sessionsWithSets = state.sessions.filter(s => {
+    const draftsWithSets = state.sessions.filter(s => {
+        if (s.status !== "draft") return false; // Only drafts, not complete sessions
         const sessionDate = (s.startedAt || s.date || "").split("T")[0];
-        const hasSetss = state.sets.some(set => String(set.sessionId) === String(s.id));
-        return hasSetss && sessionDate === today;
+        const hasSets = state.sets.some(set => String(set.sessionId) === String(s.id));
+        return hasSets && sessionDate === today;
     });
     
     // Sort by startedAt descending to get most recent
-    sessionsWithSets.sort((a, b) => {
+    draftsWithSets.sort((a, b) => {
         const aTime = new Date(a.startedAt || a.date || 0).getTime();
         const bTime = new Date(b.startedAt || b.date || 0).getTime();
         return bTime - aTime;
     });
     
-    // If we found a session from today with sets, use it
-    if (sessionsWithSets.length > 0) {
-        const sessionToResume = sessionsWithSets[0];
-        // If it's marked complete but we're resuming it, convert back to draft
-        if (sessionToResume.status === "complete") {
-            console.log("Found completed session from today with sets, converting back to draft for resume");
-            sessionToResume.status = "draft";
-            sessionToResume.finishedAt = null;
-            db.updateSession(sessionToResume).catch(err => console.error("Failed to convert session to draft:", err));
-        }
-        state.activeSession = sessionToResume;
-        state.activeExercises = getExercisesForSession(sessionToResume);
+    // If we found a draft from today with sets, resume it
+    if (draftsWithSets.length > 0) {
+        state.activeSession = draftsWithSets[0];
+        state.activeExercises = getExercisesForSession(draftsWithSets[0]);
         // Continue to UI setup below...
     } else {
         // No sessions with sets from today - clean up empty drafts
@@ -2409,21 +2401,15 @@ function maybeResumeDraft() {
         return; // No session to resume
     }
     
+    // We have a draft to resume (state.activeSession was set above)
     const draft = state.activeSession;
-    
-    if (draft) {
-        state.activeSession = draft;
-        state.activeExercises = getExercisesForSession(draft);
-        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
-        renderActiveTemplateNote();
-        workoutNotesEl.value = draft.notes || "";
-        workoutSection.classList.remove("hidden");
-        startWorkoutElapsedTimer();
-        renderSessionExercisePicker();
-        renderWorkoutExercises();
-    } else {
-        stopWorkoutElapsedTimer();
-    }
+    sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
+    renderActiveTemplateNote();
+    workoutNotesEl.value = draft.notes || "";
+    workoutSection.classList.remove("hidden");
+    startWorkoutElapsedTimer();
+    renderSessionExercisePicker();
+    renderWorkoutExercises();
 }
 
 function renderSessionExercisePicker() {
