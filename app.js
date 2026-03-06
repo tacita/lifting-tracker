@@ -3367,6 +3367,11 @@ function buildRepsTextForTemplate(exercise, setsForExercise) {
 }
 
 async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
+    // Skip the "save as template" prompt for now - just finish the workout
+    // User can create templates manually from the Templates tab
+    return null;
+    
+    /* Disabled for now - was potentially blocking finish workout
     if (!state.activeSession || state.activeSession.templateId || state.activeExercises.length === 0) {
         return null;
     }
@@ -3379,6 +3384,7 @@ async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
     if (!shouldSaveTemplate) {
         return null;
     }
+    */
 
     let templateName = "";
     while (!templateName) {
@@ -3428,18 +3434,32 @@ async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
 }
 
 async function finishWorkout() {
+    console.log("finishWorkout called");
     if (!state.activeSession) {
         showToast("No active workout", "error");
         return;
     }
     const sessionId = state.activeSession.id;
-    const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
+    console.log("Session ID:", sessionId, "state.sets count:", state.sets.length);
+    const sessionSets = state.sets.filter((s) => {
+        const match = String(s.sessionId) === String(sessionId);
+        console.log("Set sessionId:", s.sessionId, "matches:", match);
+        return match;
+    });
+    console.log("Found sessionSets:", sessionSets.length);
     if (sessionSets.length === 0) {
-        showToast("Log at least one set", "error");
+        showToast(`No sets found for session ${sessionId}`, "error");
         return;
     }
 
-    const createdTemplateName = await maybeSaveEmptyWorkoutAsTemplate(sessionSets);
+    let createdTemplateName;
+    try {
+        createdTemplateName = await maybeSaveEmptyWorkoutAsTemplate(sessionSets);
+    } catch (err) {
+        console.error("maybeSaveEmptyWorkoutAsTemplate failed:", err);
+        showToast(`Template save failed: ${err.message}`, "error");
+        // Continue anyway - don't block finishing the workout
+    }
 
     const updated = {
         ...state.activeSession,
