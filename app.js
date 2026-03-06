@@ -3212,8 +3212,15 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         };
         try {
             await db.updateSet(updated);
+            // Verify the set was actually saved
+            const allSets = await db.getAllSets();
+            const verified = allSets.find(s => s.id === updated.id);
+            if (!verified) {
+                showToast("VERIFY FAIL: Set not in IndexedDB after save!", "error");
+                return;
+            }
         } catch (err) {
-            showToast("Failed to update set", "error");
+            showToast(`Failed to update set: ${err.message}`, "error");
             return;
         }
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
@@ -3222,7 +3229,12 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         
         // Sync immediately when marking set complete (don't wait for debounce)
         if (nextComplete) {
-            db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set completion:", err));
+            try {
+                await db.ensureCloudSyncComplete();
+                showToast("Set saved ✓", "success");
+            } catch (err) {
+                showToast(`Set saved locally, cloud sync failed: ${err.message}`, "warning");
+            }
         }
         
         // Remove auto-populated styling when marking complete
@@ -4325,6 +4337,12 @@ async function init() {
                 hydrationLoader.classList.remove("hidden");
             }
             await refreshUI();
+            // DEBUG: Show what data exists after load
+            const debugSessions = state.sessions.length;
+            const debugSets = state.sets.length;
+            const debugExercises = state.exercises.length;
+            console.log(`DEBUG LOAD: ${debugSessions} sessions, ${debugSets} sets, ${debugExercises} exercises`);
+            showToast(`Loaded: ${debugSessions} sessions, ${debugSets} sets`, "info");
             // Hide loader after data is loaded
             if (hydrationLoader) {
                 hydrationLoader.classList.add("hidden");
