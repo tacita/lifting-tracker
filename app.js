@@ -3440,20 +3440,15 @@ async function finishWorkout() {
         return;
     }
     const sessionId = state.activeSession.id;
-    console.log("Session ID:", sessionId, typeof sessionId, "state.sets count:", state.sets.length);
     
     // Debug: show all unique sessionIds in sets
-    const uniqueSessionIds = [...new Set(state.sets.map(s => s.sessionId))];
-    console.log("Unique sessionIds in sets:", uniqueSessionIds);
-    showToast(`Session: ${sessionId}, Sets have sessionIds: ${uniqueSessionIds.slice(0,3).join(", ")}...`, "info");
+    const uniqueSessionIds = [...new Set(state.sets.map(s => String(s.sessionId)))];
+    const sessionSets = state.sets.filter((s) => String(s.sessionId) === String(sessionId));
     
-    const sessionSets = state.sets.filter((s) => {
-        const match = String(s.sessionId) === String(sessionId);
-        return match;
-    });
-    console.log("Found sessionSets:", sessionSets.length);
     if (sessionSets.length === 0) {
-        showToast(`No sets for session ${sessionId}. Total sets: ${state.sets.length}`, "error");
+        // Show what sessionIds exist so we can debug
+        const sample = uniqueSessionIds.slice(-3).join(", ");
+        alert(`BUG DEBUG:\n\nActive session: ${sessionId}\n\nSets exist for these sessions: ${sample}\n\nTotal sets: ${state.sets.length}\n\nThe active session doesn't match any sets.`);
         return;
     }
 
