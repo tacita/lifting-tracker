@@ -127,16 +127,20 @@
 		>⠿</button>
 		<div class="ex-info">
 			<h3 class="ex-name">{exercise.exerciseName}</h3>
-			{#if exercise.note}<p class="ex-note">{exercise.note}</p>{/if}
 			<div class="ex-meta">
 				{#if suggestedSets}<span>{suggestedSets} sets</span>{/if}
 				{#if suggestedReps}<span>· {suggestedReps} reps</span>{/if}
 				{#if restSeconds}<span>· {restSeconds}s rest</span>{/if}
-				<button class="btn-hist" on:click={() => onShowHistory(exercise.exerciseId, exercise.exerciseName)} title="View history">History</button>
 			</div>
 		</div>
-		<button class="btn btn-ghost" style="font-size:0.82rem;padding:6px 10px" on:click={() => onSwap(exercise.exerciseId)}>Swap</button>
+		<div class="ex-actions">
+			<button class="btn btn-ghost ex-action-btn" on:click={() => onSwap(exercise.exerciseId)}>Swap</button>
+			<button class="btn-hist" on:click={() => onShowHistory(exercise.exerciseId, exercise.exerciseName)} title="View history">History</button>
+		</div>
 	</div>
+	{#if exercise.note}
+		<p class="ex-note">{exercise.note}</p>
+	{/if}
 
 	<div class="sets-list">
 		{#each exercise.sets as set, i (set.setNumber)}
@@ -164,16 +168,17 @@
 	}
 	.ex-block.superset { border-left: 3px solid var(--accent); }
 	.ss-badge { position: absolute; top: -10px; left: 12px; }
-	.ex-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
+	.ex-header { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 2px; }
 	.ex-info { flex: 1; min-width: 0; }
-	.ex-name { font-size: 1rem; font-weight: 600; }
-	.ex-note { font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
-	.ex-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.76rem; color: var(--text-3); margin-top: 4px; }
+	.ex-name { font-size: 1rem; font-weight: 600; line-height: 1.25; }
+	.ex-note { font-size: 0.78rem; color: var(--text-3); margin: 0; width: 100%; line-height: 1.3; }
+	.ex-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.76rem; color: var(--text-3); margin-top: 2px; line-height: 1.2; }
+	.ex-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+	.ex-action-btn { font-size: 0.82rem; padding: 4px 8px; line-height: 1.2; }
 	.btn-hist {
-		margin-left: 6px;
 		font-size: 0.74rem;
-		padding: 3px 8px;
-		line-height: 1.1;
+		padding: 2px 8px;
+		line-height: 1.2;
 		border: 1px solid var(--border);
 		border-radius: 999px;
 		color: var(--text-2);
@@ -183,8 +188,8 @@
 	.add-set { width: 100%; padding: 8px; font-size: 0.85rem; }
 	.drag-handle {
 		touch-action: none;
-		padding: 10px 12px;
-		font-size: 1.2rem;
+		padding: 6px 10px;
+		font-size: 1.1rem;
 		line-height: 1;
 		margin-right: 6px;
 		border: 1px solid var(--border);
