@@ -148,11 +148,38 @@ function toCloudTemplateItem(r: AnyRow, userId: string) {
 }
 function toCloudSession(r: AnyRow, userId: string) {
 	const s = r as unknown as Session;
-	return { id: s.id, user_id: userId, template_id: s.templateId ?? null, template_name: s.templateName ?? null, status: s.status, started_at: s.startedAt, finished_at: s.finishedAt ?? null, duration_seconds: s.durationSeconds ?? null, paused_at: s.pausedAt ?? null, paused_duration_seconds: s.pausedDurationSeconds ?? null, created_at: s.createdAt, updated_at: s.updatedAt };
+	const sessionDate = String(s.startedAt ?? '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+	// Keep payload compatible with legacy Supabase schema in this project.
+	return {
+		id: s.id,
+		user_id: userId,
+		date: sessionDate,
+		template_id: s.templateId ?? null,
+		status: s.status,
+		started_at: s.startedAt,
+		finished_at: s.finishedAt ?? null,
+		is_paused: Boolean(s.pausedAt),
+		paused_at: s.pausedAt ?? null,
+		paused_accumulated_seconds: s.pausedDurationSeconds ?? null,
+		created_at: s.createdAt,
+		updated_at: s.updatedAt
+	};
 }
 function toCloudSet(r: AnyRow, userId: string) {
 	const s = r as unknown as WorkoutSet;
-	return { id: s.id, user_id: userId, session_id: s.sessionId, exercise_id: s.exerciseId, exercise_name: s.exerciseName, set_number: s.setNumber, weight: s.weight ?? null, reps: s.reps, completed_at: s.completedAt, created_at: s.createdAt, updated_at: s.updatedAt };
+	// Legacy sets schema has no exercise_name/completed_at columns.
+	return {
+		id: s.id,
+		user_id: userId,
+		session_id: s.sessionId,
+		exercise_id: s.exerciseId,
+		set_number: s.setNumber,
+		weight: s.weight ?? null,
+		reps: s.reps ?? null,
+		is_skipped: false,
+		created_at: s.createdAt,
+		updated_at: s.updatedAt
+	};
 }
 
 // ─── cloud → local ────────────────────────────────────────────────────────────
@@ -195,8 +222,51 @@ function fromCloudTemplateItem(r: Record<string, unknown>): TemplateItem {
 	};
 }
 function fromCloudSession(r: Record<string, unknown>): Session {
-	return { id: r.id as string, templateId: r.template_id as string | undefined, templateName: r.template_name as string | undefined, status: r.status as Session['status'], startedAt: r.started_at as string, finishedAt: r.finished_at as string | undefined, durationSeconds: r.duration_seconds as number | undefined, pausedAt: r.paused_at as string | undefined, pausedDurationSeconds: r.paused_duration_seconds as number | undefined, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };
+	const startedAt = String(r.started_at ?? new Date().toISOString());
+	const finishedAtRaw = r.finished_at;
+	const finishedAt = finishedAtRaw != null ? String(finishedAtRaw) : undefined;
+	const durationSeconds = r.duration_seconds != null
+		? Number(r.duration_seconds)
+		: finishedAt
+			? Math.max(0, Math.floor((Date.parse(finishedAt) - Date.parse(startedAt)) / 1000))
+			: undefined;
+	const pausedDurationSeconds =
+		r.paused_duration_seconds != null
+			? Number(r.paused_duration_seconds)
+			: r.paused_accumulated_seconds != null
+				? Number(r.paused_accumulated_seconds)
+				: undefined;
+	return {
+		id: String(r.id),
+		templateId: r.template_id ? String(r.template_id) : undefined,
+		templateName: r.template_name ? String(r.template_name) : undefined,
+		status: r.status as Session['status'],
+		startedAt,
+		finishedAt,
+		durationSeconds,
+		pausedAt: r.paused_at ? String(r.paused_at) : undefined,
+		pausedDurationSeconds,
+		createdAt: String(r.created_at ?? startedAt),
+		updatedAt: String(r.updated_at ?? startedAt),
+		synced: true
+	};
 }
 function fromCloudSet(r: Record<string, unknown>): WorkoutSet {
-	return { id: r.id as string, sessionId: r.session_id as string, exerciseId: r.exercise_id as string, exerciseName: r.exercise_name as string, setNumber: r.set_number as number, weight: r.weight as number | undefined, reps: r.reps as number, completedAt: r.completed_at as string, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };
+	const createdAt = String(r.created_at ?? new Date().toISOString());
+	const updatedAt = String(r.updated_at ?? createdAt);
+	const completedAt = r.completed_at ? String(r.completed_at) : updatedAt;
+	return {
+		id: String(r.id),
+		sessionId: String(r.session_id),
+		exerciseId: String(r.exercise_id),
+		// Legacy schema may not include exercise_name; keep app stable with id fallback.
+		exerciseName: r.exercise_name ? String(r.exercise_name) : String(r.exercise_id),
+		setNumber: Number(r.set_number),
+		weight: r.weight != null ? Number(r.weight) : undefined,
+		reps: r.reps != null ? Number(r.reps) : 0,
+		completedAt,
+		createdAt,
+		updatedAt,
+		synced: true
+	};
 }

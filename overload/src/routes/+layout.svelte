@@ -29,12 +29,26 @@
 			const draft = await getDraftSession();
 			if (draft && $workout.session === null) {
 				const [items, exList, savedSets] = await Promise.all([
-					getTemplateItems(draft.templateId ?? ''),
+					draft.templateId ? getTemplateItems(draft.templateId) : Promise.resolve([]),
 					getExercises(),
 					getSetsForSession(draft.id)
 				]);
 				const exMap = new Map(exList.map((e) => [e.id, e]));
-				const exIds = [...new Set(items.map((ti) => ti.exerciseId))];
+				const exIds: string[] = [];
+				const seen = new Set<string>();
+				for (const ti of items) {
+					if (!seen.has(ti.exerciseId)) {
+						seen.add(ti.exerciseId);
+						exIds.push(ti.exerciseId);
+					}
+				}
+				// Ensure exercises added during the draft (outside template items) are restored too.
+				for (const s of savedSets) {
+					if (!seen.has(s.exerciseId)) {
+						seen.add(s.exerciseId);
+						exIds.push(s.exerciseId);
+					}
+				}
 
 				workout.set({
 					session: draft,
@@ -42,7 +56,8 @@
 						const ex = exMap.get(exId);
 						const item = items.find((ti) => ti.exerciseId === exId);
 						const mySets = savedSets.filter((s) => s.exerciseId === exId);
-						const totalRows = Math.max(mySets.length + 1, item?.sets ?? 1);
+						const maxSetNumber = mySets.reduce((max, s) => Math.max(max, s.setNumber), 0);
+						const totalRows = Math.max(maxSetNumber + 1, item?.sets ?? 1, 1);
 						return {
 							exerciseId: exId,
 							exerciseName: ex?.name ?? exId,

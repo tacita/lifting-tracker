@@ -48,19 +48,22 @@
 	}
 
 	async function handleComplete(setIndex: number, detail: { weight: number | undefined; reps: number }) {
-		const saved = await addSet({
-			sessionId,
-			exerciseId: exercise.exerciseId,
-			exerciseName: exercise.exerciseName,
-			setNumber: exercise.sets[setIndex].setNumber,
-			weight: detail.weight,
-			reps: detail.reps,
-			completedAt: now()
-		});
+		const completedAt = now();
+		const setNumber = exercise.sets[setIndex].setNumber;
+		const normalizedWeight = Number.isFinite(detail.weight) ? detail.weight : undefined;
+		const normalizedReps = Math.max(1, Math.trunc(detail.reps));
+
+		// Optimistic UI update so completed state + rest timer show instantly.
 		workout.update((w) => {
 			const exs = [...w.exercises];
 			const sets = [...exs[exerciseIndex].sets];
-			sets[setIndex] = { ...sets[setIndex], id: saved.id, weight: detail.weight, reps: detail.reps, completed: true, completedAt: saved.completedAt };
+			sets[setIndex] = {
+				...sets[setIndex],
+				weight: normalizedWeight,
+				reps: normalizedReps,
+				completed: true,
+				completedAt
+			};
 			exs[exerciseIndex] = { ...exs[exerciseIndex], sets };
 			return {
 				...w,
@@ -69,7 +72,33 @@
 				restTimer: { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
 			};
 		});
-		showToast('Set saved ✓', 'success');
+		try {
+			const saved = await addSet({
+				sessionId,
+				exerciseId: exercise.exerciseId,
+				exerciseName: exercise.exerciseName,
+				setNumber,
+				weight: normalizedWeight,
+				reps: normalizedReps,
+				completedAt
+			});
+			workout.update((w) => {
+				const exs = [...w.exercises];
+				const targetExercise = exs[exerciseIndex];
+				if (!targetExercise) return w;
+				const sets = [...targetExercise.sets];
+				const currentSet = sets[setIndex];
+				if (!currentSet) return w;
+				sets[setIndex] = { ...currentSet, id: saved.id, completedAt: saved.completedAt };
+				exs[exerciseIndex] = { ...targetExercise, sets };
+				return { ...w, exercises: exs };
+			});
+			showToast('Set saved ✓', 'success');
+		} catch (err) {
+			console.error('Failed to save set', err);
+			const message = err instanceof Error ? err.message : String(err);
+			showToast(`Set save issue: ${message}`, 'warn', 4500);
+		}
 	}
 
 	async function handleDelete(setIndex: number) {

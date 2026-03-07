@@ -26,12 +26,18 @@
 
 	function handleComplete() {
 		error = '';
-		const repsRaw = repsInput.trim();
-		const repsVal = repsRaw !== '' ? parseInt(repsRaw) : undefined;
-		if (!repsVal || repsVal <= 0) { error = 'Enter reps'; return; }
-		const weightVal = showWeight
-			? (weightInput.trim() !== '' ? parseFloat(weightInput) : undefined)
-			: undefined;
+		const repsRaw = String(repsInput ?? '').trim();
+		const repsTyped = repsRaw !== '' ? parseInt(repsRaw, 10) : undefined;
+		const repsFallback = previousReps;
+		const repsVal = repsTyped ?? repsFallback;
+		if (!repsVal || repsVal <= 0) {
+			error = previousReps && previousReps > 0 ? 'Enter reps' : 'Enter reps (no previous value)';
+			return;
+		}
+
+		const weightRaw = String(weightInput ?? '').trim();
+		const weightTyped = showWeight && weightRaw !== '' ? parseFloat(weightRaw) : undefined;
+		const weightVal = showWeight ? (weightTyped ?? previousWeight) : undefined;
 		dispatch('complete', { weight: weightVal, reps: repsVal });
 	}
 </script>
