@@ -16,6 +16,11 @@
 	let weightInput = set.completed ? formatWeight(set.weight) : '';
 	let repsInput = set.completed ? (set.reps ? String(set.reps) : '') : '';
 	let error = '';
+	$: previousDisplay = (() => {
+		const weight = previousWeight !== undefined ? formatWeight(previousWeight) : '-';
+		const reps = previousReps !== undefined ? String(previousReps) : '-';
+		return `${weight}×${reps}`;
+	})();
 
 	function focusSelect(e: FocusEvent) { (e.target as HTMLInputElement).select(); }
 
@@ -33,6 +38,7 @@
 
 <div class="set-row" class:done={set.completed}>
 	<span class="set-num">S{set.setNumber}</span>
+	<span class="prev-val" title="Previous set">{previousDisplay}</span>
 
 	{#if showWeight}
 		<div class="inp-wrap">
@@ -74,7 +80,7 @@
 <style>
 	.set-row {
 		display: grid;
-		grid-template-columns: 30px 1fr 1fr 36px 24px;
+		grid-template-columns: 28px 64px minmax(0, 1fr) minmax(0, 1fr) 34px 22px;
 		align-items: center;
 		gap: 6px;
 		padding: 8px 0;
@@ -82,6 +88,14 @@
 	}
 	.set-row.done { opacity: 0.5; }
 	.set-num { font-size: 0.78rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
+	.prev-val {
+		font-size: 0.72rem;
+		color: var(--text-3);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.inp-wrap { position: relative; }
 	.inp-wrap input { padding: 8px 26px 8px 8px; text-align: center; font-variant-numeric: tabular-nums; }
 	.inp-wrap input:disabled { background: var(--bg-3); color: var(--text-2); }
@@ -90,4 +104,16 @@
 	.check-done { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--success); }
 	.btn-del { color: var(--text-3); font-size: 0.7rem; padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 	.set-err { grid-column: 1 / -1; font-size: 0.78rem; color: var(--danger); padding-top: 2px; }
+
+	@media (max-width: 390px) {
+		.set-row {
+			grid-template-columns: 24px 56px minmax(0, 1fr) minmax(0, 1fr) 30px 20px;
+			gap: 4px;
+		}
+		.inp-wrap input {
+			padding: 7px 22px 7px 6px;
+			font-size: 0.92rem;
+		}
+		.unit { font-size: 0.62rem; }
+	}
 </style>

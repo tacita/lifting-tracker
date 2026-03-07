@@ -6,6 +6,7 @@
 	import { currentUser } from '$lib/stores/auth.js';
 	import { createSession, getDraftSession, deleteSession } from '$lib/db/sessions.js';
 	import { getTemplateItems, getTemplates } from '$lib/db/templates.js';
+import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$lib/db/templates.js';
 	import { getExercises } from '$lib/db/exercises.js';
 	import { getSetsForSession } from '$lib/db/sessions.js';
 	import { now } from '$lib/db/index.js';
@@ -19,6 +20,7 @@
 
 	let openFolders = new Set<string>();
 	let showEditor = false;
+	let showProgramsManager = false;
 	let editingTemplate: Template | null = null;
 	let editingItems: TemplateItem[] = [];
 	let confirmCancel: { show: boolean; cb: (result: boolean) => void } = { show: false, cb: () => {} };
@@ -26,6 +28,8 @@
 	let magicEmail = '';
 	let showMagicForm = false;
 	let importInput: HTMLInputElement;
+	let newProgramName = '';
+	let renameDrafts: Record<string, string> = {};
 
 	$: user = $currentUser;
 
@@ -118,6 +122,48 @@
 		showEditor = true;
 	}
 
+	async function createProgram() {
+		const name = newProgramName.trim();
+		if (!name) return;
+		await addFolder({ name, sortOrder: $folders.length });
+		await refreshAll();
+		newProgramName = '';
+		showToast('Program created', 'success');
+	}
+
+	async function renameProgram(folderId: string) {
+		const nextName = (renameDrafts[folderId] ?? '').trim();
+		if (!nextName) return;
+		await updateFolder(folderId, { name: nextName });
+		await refreshAll();
+		showToast('Program renamed', 'success');
+	}
+
+	async function moveProgram(folderId: string, direction: -1 | 1) {
+		const ordered = [...$folders].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+		const idx = ordered.findIndex((f) => f.id === folderId);
+		const swapIdx = idx + direction;
+		if (idx < 0 || swapIdx < 0 || swapIdx >= ordered.length) return;
+		const current = ordered[idx];
+		const swap = ordered[swapIdx];
+		await Promise.all([
+			updateFolder(current.id, { sortOrder: swap.sortOrder ?? swapIdx }),
+			updateFolder(swap.id, { sortOrder: current.sortOrder ?? idx })
+		]);
+		await refreshAll();
+	}
+
+	async function deleteProgram(folderId: string, folderName: string) {
+		const confirmed = await showConfirm(
+			'Delete program?',
+			`Delete "${folderName}"? Workouts inside it will move to "No Program".`
+		);
+		if (!confirmed) return;
+		await deleteProgramFolder(folderId);
+		await refreshAll();
+		showToast('Program deleted', 'info');
+	}
+
 	function handleEditorSaved() {
 		showEditor = false;
 		editingTemplate = null;
@@ -208,6 +254,54 @@
 	</div>
 {/if}
 
+{#if showProgramsManager}
+	<div class="modal-overlay" role="dialog" aria-modal="true">
+		<div class="modal-sheet">
+			<div class="modal-header">
+				<h2 class="modal-title">Manage Programs</h2>
+				<button class="modal-close btn-ghost" on:click={() => (showProgramsManager = false)}>✕</button>
+			</div>
+
+			<div class="form-row-inline">
+				<input
+					type="text"
+					placeholder="New program name"
+					bind:value={newProgramName}
+					on:keydown={(e) => e.key === 'Enter' && createProgram()}
+				/>
+				<button class="btn btn-primary" style="flex:0 0 auto" on:click={createProgram}>Add</button>
+			</div>
+
+			{#if $folders.length === 0}
+				<p class="empty-state" style="padding:24px">No programs yet</p>
+			{:else}
+				<div class="program-list">
+					{#each $folders as folder, i (folder.id)}
+						<div class="program-row card">
+							<div class="program-top">
+								<input
+									type="text"
+									value={renameDrafts[folder.id] ?? folder.name}
+									on:input={(e) => {
+										const target = e.currentTarget as HTMLInputElement;
+										renameDrafts = { ...renameDrafts, [folder.id]: target.value };
+									}}
+								/>
+								<button class="btn btn-secondary" style="padding:8px 10px;font-size:0.8rem" on:click={() => renameProgram(folder.id)}>Save</button>
+							</div>
+							<div class="program-actions">
+								<button class="btn btn-ghost" on:click={() => moveProgram(folder.id, -1)} disabled={i === 0}>↑</button>
+								<button class="btn btn-ghost" on:click={() => moveProgram(folder.id, 1)} disabled={i === $folders.length - 1}>↓</button>
+								<button class="btn btn-ghost" style="color:var(--danger)" on:click={() => deleteProgram(folder.id, folder.name)}>Delete</button>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
+
 <input type="file" accept=".json" bind:this={importInput} style="display:none" on:change={handleImport} />
 
 <div class="page">
@@ -237,6 +331,7 @@
 		<div class="page-header">
 			<h1 class="page-title">Workouts</h1>
 			<div style="display:flex;gap:8px">
+				<button class="btn btn-secondary" on:click={() => (showProgramsManager = true)} title="Manage programs">Programs</button>
 				<button class="btn btn-secondary" on:click={() => importInput.click()} title="Import workout programs">↑ Import</button>
 				<button class="btn btn-primary" on:click={() => openEditor()}>+ New</button>
 			</div>
@@ -284,4 +379,8 @@
 	.magic-form { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
 
 	.empty-workout-btn { width: 100%; margin-bottom: 16px; }
+	.program-list { display: flex; flex-direction: column; gap: 8px; }
+	.program-row { padding: 10px; }
+	.program-top { display: flex; gap: 8px; }
+	.program-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
 </style>
