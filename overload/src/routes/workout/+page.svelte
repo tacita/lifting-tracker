@@ -124,7 +124,7 @@
 	async function openHistory(exerciseId: string, name: string) {
 		historyExerciseId = exerciseId;
 		historyName = name;
-		historySets = await getExerciseHistory(exerciseId);
+		historySets = await getExerciseHistory(exerciseId, name);
 		showHistory = true;
 	}
 

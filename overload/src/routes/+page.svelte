@@ -64,10 +64,17 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 		// Cancel any existing draft
 		const draft = await getDraftSession();
 		if (draft) {
-			const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it to start a new one?');
-			if (!confirmed) return;
-			await deleteSession(draft.id);
-			resetWorkout();
+			const existingSets = await getSetsForSession(draft.id);
+			if (existingSets.length === 0) {
+				// Empty draft is usually stale navigation state; clear it silently.
+				await deleteSession(draft.id);
+				resetWorkout();
+			} else {
+				const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it to start a new one?');
+				if (!confirmed) return;
+				await deleteSession(draft.id);
+				resetWorkout();
+			}
 		}
 
 		const tmpl = $templates.find((t) => t.id === templateId);
@@ -120,10 +127,16 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	async function startEmptyWorkout() {
 		const draft = await getDraftSession();
 		if (draft) {
-			const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it?');
-			if (!confirmed) return;
-			await deleteSession(draft.id);
-			resetWorkout();
+			const existingSets = await getSetsForSession(draft.id);
+			if (existingSets.length === 0) {
+				await deleteSession(draft.id);
+				resetWorkout();
+			} else {
+				const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it?');
+				if (!confirmed) return;
+				await deleteSession(draft.id);
+				resetWorkout();
+			}
 		}
 		const session = await createSession({ status: 'draft', startedAt: now() });
 		workout.set({

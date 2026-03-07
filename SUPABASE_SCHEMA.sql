@@ -6,9 +6,11 @@ CREATE TABLE IF NOT EXISTS exercises (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  rep_floor INTEGER NOT NULL,
-  rep_ceiling INTEGER NOT NULL,
-  rest_seconds INTEGER,
+  note TEXT,
+  default_reps TEXT,
+  default_weight NUMERIC,
+  default_rest_seconds INTEGER,
+  default_sets INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -19,21 +21,19 @@ CREATE INDEX idx_exercises_user_id ON exercises(user_id);
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  date TEXT NOT NULL,
   status TEXT DEFAULT 'draft',
-  notes TEXT,
   template_id TEXT,
+  template_name TEXT,
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ,
-  is_paused BOOLEAN DEFAULT FALSE,
+  duration_seconds INTEGER,
   paused_at TIMESTAMPTZ,
-  paused_accumulated_seconds INTEGER DEFAULT 0,
+  paused_duration_seconds INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX idx_sessions_date ON sessions(date);
 CREATE INDEX idx_sessions_status ON sessions(status);
 
 -- Create sets table
@@ -42,10 +42,11 @@ CREATE TABLE IF NOT EXISTS sets (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
+  exercise_name TEXT NOT NULL,
   set_number INTEGER NOT NULL,
   weight NUMERIC,
   reps INTEGER,
-  is_skipped BOOLEAN DEFAULT FALSE,
+  completed_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -59,7 +60,7 @@ CREATE TABLE IF NOT EXISTS templates (
   id TEXT PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  folder TEXT,
+  folder_id TEXT,
   note TEXT,
   sort_order INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -74,11 +75,12 @@ CREATE TABLE IF NOT EXISTS template_items (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   template_id TEXT NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
   exercise_id TEXT NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
-  sets INTEGER NOT NULL,
-  reps INTEGER NOT NULL,
-  rest_seconds INTEGER NOT NULL,
+  sets INTEGER,
+  reps TEXT,
+  rest_seconds INTEGER,
   superset_id TEXT,
   superset_order INTEGER,
+  sort_order INTEGER DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -98,6 +100,21 @@ CREATE TABLE IF NOT EXISTS folders (
 );
 
 CREATE INDEX idx_folders_user_id ON folders(user_id);
+
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM pg_constraint
+		WHERE conname = 'templates_folder_id_fkey'
+	) THEN
+		ALTER TABLE templates
+			ADD CONSTRAINT templates_folder_id_fkey
+			FOREIGN KEY (folder_id)
+			REFERENCES folders(id)
+			ON DELETE SET NULL;
+	END IF;
+END $$;
 
 -- Enable RLS (Row Level Security) so users only see their own data
 ALTER TABLE exercises ENABLE ROW LEVEL SECURITY;
@@ -210,10 +227,129 @@ CREATE POLICY "Users can only delete their own folders"
   USING (auth.uid() = user_id);
 
 -- ============================================================
--- MIGRATION: Run these if your tables already exist and are
--- missing the newer columns. Safe to run multiple times.
+-- MIGRATION TO CANONICAL SCHEMA (run once on existing projects)
+-- Safe to re-run.
 -- ============================================================
-ALTER TABLE templates ADD COLUMN IF NOT EXISTS folder TEXT;
+
+-- exercises
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS default_reps TEXT;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS default_weight NUMERIC;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS default_rest_seconds INTEGER;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS default_sets INTEGER;
+
+-- Backfill from old fields when present
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'exercises'
+		  AND column_name = 'rep_floor'
+	) THEN
+		EXECUTE '
+			UPDATE exercises
+			SET default_reps = COALESCE(default_reps, CASE
+				WHEN rep_floor IS NOT NULL AND rep_ceiling IS NOT NULL THEN rep_floor::text || ''-'' || rep_ceiling::text
+				WHEN rep_floor IS NOT NULL THEN rep_floor::text
+				ELSE NULL
+			END)
+			WHERE default_reps IS NULL
+		';
+	END IF;
+
+	IF EXISTS (
+		SELECT 1
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'exercises'
+		  AND column_name = 'rest_seconds'
+	) THEN
+		EXECUTE '
+			UPDATE exercises
+			SET default_rest_seconds = COALESCE(default_rest_seconds, rest_seconds)
+			WHERE default_rest_seconds IS NULL
+		';
+	END IF;
+END $$;
+
+-- sessions
+ALTER TABLE sessions DROP COLUMN IF EXISTS date;
+ALTER TABLE sessions DROP COLUMN IF EXISTS notes;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS template_name TEXT;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS paused_duration_seconds INTEGER DEFAULT 0;
+
+-- Backfill from old fields when present
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1
+		FROM information_schema.columns
+		WHERE table_schema = 'public'
+		  AND table_name = 'sessions'
+		  AND column_name = 'paused_accumulated_seconds'
+	) THEN
+		EXECUTE '
+			UPDATE sessions
+			SET paused_duration_seconds = COALESCE(paused_duration_seconds, paused_accumulated_seconds, 0)
+			WHERE paused_duration_seconds IS NULL
+		';
+	END IF;
+END $$;
+
+ALTER TABLE sessions DROP COLUMN IF EXISTS paused_accumulated_seconds;
+ALTER TABLE sessions DROP COLUMN IF EXISTS is_paused;
+
+-- sets
+ALTER TABLE sets DROP COLUMN IF EXISTS is_skipped;
+ALTER TABLE sets ADD COLUMN IF NOT EXISTS exercise_name TEXT;
+ALTER TABLE sets ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+
+-- Backfill from existing data
+UPDATE sets s
+SET exercise_name = COALESCE(s.exercise_name, e.name)
+FROM exercises e
+WHERE e.id = s.exercise_id
+  AND s.exercise_name IS NULL;
+
+UPDATE sets
+SET completed_at = COALESCE(completed_at, updated_at, created_at)
+WHERE completed_at IS NULL;
+
+ALTER TABLE sets ALTER COLUMN exercise_name SET NOT NULL;
+ALTER TABLE sets ALTER COLUMN completed_at SET NOT NULL;
+
+-- templates
+ALTER TABLE templates DROP COLUMN IF EXISTS folder;
 ALTER TABLE templates ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE templates ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
-ALTER TABLE exercises ADD COLUMN IF NOT EXISTS note TEXT;
+ALTER TABLE templates ADD COLUMN IF NOT EXISTS folder_id TEXT;
+
+-- template_items
+ALTER TABLE template_items ALTER COLUMN sets DROP NOT NULL;
+ALTER TABLE template_items ALTER COLUMN rest_seconds DROP NOT NULL;
+ALTER TABLE template_items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+ALTER TABLE template_items
+	ALTER COLUMN reps TYPE TEXT
+	USING reps::text;
+
+-- folders (ensure sort order exists)
+ALTER TABLE folders ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+
+-- FK after folders exists
+DO $$
+BEGIN
+	IF NOT EXISTS (
+		SELECT 1
+		FROM pg_constraint
+		WHERE conname = 'templates_folder_id_fkey'
+	) THEN
+		ALTER TABLE templates
+			ADD CONSTRAINT templates_folder_id_fkey
+			FOREIGN KEY (folder_id)
+			REFERENCES folders(id)
+			ON DELETE SET NULL;
+	END IF;
+END $$;

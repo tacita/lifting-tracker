@@ -26,7 +26,11 @@
 
 	async function handleSyncNow() {
 		syncing = true;
-		try { await syncNow(); showToast('Synced', 'success'); }
+		try {
+			await syncNow();
+			await refreshAll();
+			showToast('Pulled latest cloud data ✓', 'success');
+		}
 		catch { showToast('Sync failed', 'error'); }
 		finally { syncing = false; }
 	}

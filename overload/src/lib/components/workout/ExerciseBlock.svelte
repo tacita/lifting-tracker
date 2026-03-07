@@ -19,11 +19,12 @@
 	const dispatch = createEventDispatcher<{ reorder: void }>();
 
 	let previousSets: Record<number, WorkoutSet | null> = {};
+	let savingSetIndexes = new Set<number>();
 
 	async function loadPrevious() {
 		const count = Math.max(exercise.sets.length + 1, exercise.templateItem?.sets ?? 0);
 		for (let i = 1; i <= count; i++) {
-			previousSets[i] = await getPreviousSetForExercise(exercise.exerciseId, i);
+			previousSets[i] = await getPreviousSetForExercise(exercise.exerciseId, i, exercise.exerciseName);
 		}
 		previousSets = previousSets;
 	}
@@ -48,30 +49,13 @@
 	}
 
 	async function handleComplete(setIndex: number, detail: { weight: number | undefined; reps: number }) {
+		if (savingSetIndexes.has(setIndex)) return;
 		const completedAt = now();
 		const setNumber = exercise.sets[setIndex].setNumber;
 		const normalizedWeight = Number.isFinite(detail.weight) ? detail.weight : undefined;
 		const normalizedReps = Math.max(1, Math.trunc(detail.reps));
 
-		// Optimistic UI update so completed state + rest timer show instantly.
-		workout.update((w) => {
-			const exs = [...w.exercises];
-			const sets = [...exs[exerciseIndex].sets];
-			sets[setIndex] = {
-				...sets[setIndex],
-				weight: normalizedWeight,
-				reps: normalizedReps,
-				completed: true,
-				completedAt
-			};
-			exs[exerciseIndex] = { ...exs[exerciseIndex], sets };
-			return {
-				...w,
-				exercises: exs,
-				currentExerciseIndex: exerciseIndex,
-				restTimer: { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
-			};
-		});
+		savingSetIndexes = new Set([...savingSetIndexes, setIndex]);
 		try {
 			const saved = await addSet({
 				sessionId,
@@ -89,15 +73,31 @@
 				const sets = [...targetExercise.sets];
 				const currentSet = sets[setIndex];
 				if (!currentSet) return w;
-				sets[setIndex] = { ...currentSet, id: saved.id, completedAt: saved.completedAt };
+				sets[setIndex] = {
+					...currentSet,
+					id: saved.id,
+					weight: normalizedWeight,
+					reps: normalizedReps,
+					completed: true,
+					completedAt: saved.completedAt
+				};
 				exs[exerciseIndex] = { ...targetExercise, sets };
-				return { ...w, exercises: exs };
+				return {
+					...w,
+					exercises: exs,
+					currentExerciseIndex: exerciseIndex,
+					restTimer: { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
+				};
 			});
-			showToast('Set saved ✓', 'success');
+			showToast('Set saved locally ✓', 'success');
 		} catch (err) {
 			console.error('Failed to save set', err);
 			const message = err instanceof Error ? err.message : String(err);
-			showToast(`Set save issue: ${message}`, 'warn', 4500);
+			showToast(`Could not save set: ${message}`, 'error', 4500);
+		} finally {
+			const next = new Set(savingSetIndexes);
+			next.delete(setIndex);
+			savingSetIndexes = next;
 		}
 	}
 

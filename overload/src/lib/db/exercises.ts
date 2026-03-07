@@ -37,17 +37,41 @@ export async function deleteExercise(id: string): Promise<void> {
 	scheduleSync();
 }
 
-export async function getExerciseHistory(exerciseId: string): Promise<WorkoutSet[]> {
-	const db = await getDB();
-	const sets = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
-	return sets.filter((s) => s.reps > 0).sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+function normName(value: string | undefined): string {
+	return String(value ?? '').trim().toLowerCase();
 }
 
-export async function getPreviousSetForExercise(exerciseId: string, setNumber: number): Promise<WorkoutSet | null> {
+export async function getExerciseHistory(exerciseId: string, exerciseName?: string): Promise<WorkoutSet[]> {
 	const db = await getDB();
-	const sets = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
-	const matching = sets
+	const byId = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
+	const byIdFiltered = byId.filter((s) => s.reps > 0);
+	if (byIdFiltered.length > 0) {
+		return byIdFiltered.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+	}
+
+	// Migration/legacy fallback: same exercise can exist under a different id.
+	// If caller provides name, pull history by normalized exercise_name as a fallback.
+	const targetName = normName(exerciseName);
+	if (!targetName) return [];
+	const all = await db.getAll('sets');
+	return all
+		.filter((s) => s.reps > 0 && normName(s.exerciseName) === targetName)
+		.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+}
+
+export async function getPreviousSetForExercise(exerciseId: string, setNumber: number, exerciseName?: string): Promise<WorkoutSet | null> {
+	const db = await getDB();
+	const byId = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
+	let matching = byId
 		.filter((s) => s.setNumber === setNumber && s.reps > 0)
+		.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+	if (matching.length > 0) return matching[0] ?? null;
+
+	const targetName = normName(exerciseName);
+	if (!targetName) return null;
+	const all = await db.getAll('sets');
+	matching = all
+		.filter((s) => s.setNumber === setNumber && s.reps > 0 && normName(s.exerciseName) === targetName)
 		.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 	return matching[0] ?? null;
 }
