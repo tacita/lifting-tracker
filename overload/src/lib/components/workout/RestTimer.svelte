@@ -8,7 +8,12 @@
 
 	$: restTimer = $workout.restTimer;
 
-	$: if (restTimer.active) { startTicking(); } else { stopTicking(); remaining = 0; }
+	$: if (restTimer.active && Number.isFinite(restTimer.targetEndMs)) {
+		startTicking();
+	} else {
+		stopTicking();
+		remaining = 0;
+	}
 
 	function startTicking() {
 		if (intervalId) return;
@@ -22,7 +27,8 @@
 
 	function tick() {
 		if (!restTimer.targetEndMs) return;
-		remaining = Math.ceil((restTimer.targetEndMs - Date.now()) / 1000);
+		const delta = Number(restTimer.targetEndMs) - Date.now();
+		remaining = Math.ceil(delta / 1000);
 		if (remaining <= 0) {
 			remaining = 0;
 			workout.update((w) => ({ ...w, restTimer: { ...w.restTimer, active: false, targetEndMs: null } }));

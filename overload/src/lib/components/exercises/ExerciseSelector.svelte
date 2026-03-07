@@ -88,6 +88,18 @@
 	.search-row { display: flex; gap: 8px; margin-bottom: 12px; }
 	.search-row input { flex: 1; }
 	.ss-toggle { display: flex; align-items: center; gap: 8px; padding: 8px 4px; font-size: 0.9rem; color: var(--text-2); margin-bottom: 8px; cursor: pointer; }
+	.ss-toggle input[type="checkbox"] {
+		width: 16px;
+		height: 16px;
+		padding: 0;
+		margin: 0;
+		border-radius: 4px;
+		appearance: auto;
+		-webkit-appearance: checkbox;
+		background: transparent;
+		border: 1px solid var(--border);
+		flex: 0 0 auto;
+	}
 	.ex-list { overflow-y: auto; max-height: 55dvh; }
 	.ex-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 8px; border-bottom: 1px solid var(--border); text-align: left; }
 	.ex-row:active, .ex-row.sel { background: var(--accent-bg); }

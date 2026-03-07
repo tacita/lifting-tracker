@@ -30,7 +30,11 @@
 
 	$: exercise, loadPrevious();
 
-	$: restSeconds = exercise.templateItem?.restSeconds ?? 90;
+	$: restSeconds = (() => {
+		const raw = Number(exercise.templateItem?.restSeconds);
+		if (!Number.isFinite(raw) || raw <= 0) return 90;
+		return Math.floor(raw);
+	})();
 	$: suggestedSets = exercise.templateItem?.sets;
 	$: suggestedReps = exercise.templateItem?.reps;
 
@@ -94,7 +98,7 @@
 				{#if suggestedSets}<span>{suggestedSets} sets</span>{/if}
 				{#if suggestedReps}<span>· {suggestedReps} reps</span>{/if}
 				{#if restSeconds}<span>· {restSeconds}s rest</span>{/if}
-				<button class="btn-hist" on:click={() => onShowHistory(exercise.exerciseId, exercise.exerciseName)} title="View history">📈</button>
+				<button class="btn-hist" on:click={() => onShowHistory(exercise.exerciseId, exercise.exerciseName)} title="View history">History</button>
 			</div>
 		</div>
 		<button class="btn btn-ghost" style="font-size:0.82rem;padding:6px 10px" on:click={() => onSwap(exercise.exerciseId)}>Swap</button>
@@ -131,7 +135,16 @@
 	.ex-name { font-size: 1rem; font-weight: 600; }
 	.ex-note { font-size: 0.78rem; color: var(--text-3); margin-top: 2px; }
 	.ex-meta { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.76rem; color: var(--text-3); margin-top: 4px; }
-	.btn-hist { margin-left: 4px; font-size: 0.85rem; padding: 0; line-height: 1; }
+	.btn-hist {
+		margin-left: 6px;
+		font-size: 0.74rem;
+		padding: 3px 8px;
+		line-height: 1.1;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		color: var(--text-2);
+		background: var(--bg-3);
+	}
 	.sets-list { margin-bottom: 10px; }
 	.add-set { width: 100%; padding: 8px; font-size: 0.85rem; }
 </style>

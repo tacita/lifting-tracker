@@ -69,7 +69,7 @@
 	{#if !set.completed}
 		<button class="btn-check" on:click={handleComplete} aria-label="Complete set">✓</button>
 	{:else}
-		<span class="check-done">✓</span>
+		<span class="check-done" aria-label="Set completed" title="Set completed">✓</span>
 	{/if}
 
 	<button class="btn-del" on:click={() => dispatch('delete')} aria-label="Delete set">✕</button>
@@ -86,7 +86,13 @@
 		padding: 8px 0;
 		border-bottom: 1px solid var(--border);
 	}
-	.set-row.done { opacity: 0.5; }
+	.set-row.done {
+		opacity: 0.95;
+		background: rgba(74, 222, 128, 0.08);
+		border-radius: var(--radius-sm);
+		padding-left: 6px;
+		padding-right: 6px;
+	}
 	.set-num { font-size: 0.78rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 	.prev-val {
 		font-size: 0.72rem;
@@ -101,7 +107,18 @@
 	.inp-wrap input:disabled { background: var(--bg-3); color: var(--text-2); }
 	.unit { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; color: var(--text-3); pointer-events: none; }
 	.btn-check { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-dim); font-size: 1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-	.check-done { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--success); }
+	.check-done {
+		width: 30px;
+		height: 30px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
+		background: var(--success);
+		border-radius: 50%;
+		font-size: 0.9rem;
+		font-weight: 700;
+	}
 	.btn-del { color: var(--text-3); font-size: 0.7rem; padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 	.set-err { grid-column: 1 / -1; font-size: 0.78rem; color: var(--danger); padding-top: 2px; }
 

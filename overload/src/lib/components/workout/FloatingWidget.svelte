@@ -11,7 +11,7 @@
 	$: isOnWorkout = $page.url.pathname === '/workout';
 	$: show = $workout.session !== null;
 
-	$: if (restTimer.active && restTimer.targetEndMs) {
+	$: if (restTimer.active && Number.isFinite(restTimer.targetEndMs)) {
 		if (!intervalId) intervalId = setInterval(tick, 200);
 	} else {
 		if (intervalId) { clearInterval(intervalId); intervalId = null; }
@@ -20,7 +20,8 @@
 
 	function tick() {
 		if (!restTimer.targetEndMs) return;
-		remaining = Math.ceil((restTimer.targetEndMs - Date.now()) / 1000);
+		const delta = Number(restTimer.targetEndMs) - Date.now();
+		remaining = Math.ceil(delta / 1000);
 	}
 
 	function adjust(delta: number) {
