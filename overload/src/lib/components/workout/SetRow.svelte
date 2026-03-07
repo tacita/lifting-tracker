@@ -21,7 +21,7 @@
 	$: previousDisplay = (() => {
 		const weight = previousWeight !== undefined ? formatWeight(previousWeight) : '-';
 		const reps = previousReps !== undefined ? String(previousReps) : '-';
-		return `${weight}×${reps}`;
+		return `${weight} × ${reps}`;
 	})();
 
 	function focusSelect(e: FocusEvent) { (e.target as HTMLInputElement).select(); }
@@ -105,8 +105,8 @@
 	}
 	.set-num { font-size: 0.78rem; color: var(--text-3); font-variant-numeric: tabular-nums; }
 	.prev-val {
-		font-size: 0.72rem;
-		color: var(--text-3);
+		font-size: 0.82rem;
+		color: var(--text-2);
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 		overflow: hidden;
