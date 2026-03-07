@@ -27,10 +27,10 @@
 	function handleComplete() {
 		error = '';
 		const repsRaw = repsInput.trim();
-		const repsVal = repsRaw !== '' ? parseInt(repsRaw) : previousReps;
+		const repsVal = repsRaw !== '' ? parseInt(repsRaw) : undefined;
 		if (!repsVal || repsVal <= 0) { error = 'Enter reps'; return; }
 		const weightVal = showWeight
-			? (weightInput.trim() !== '' ? parseFloat(weightInput) : previousWeight)
+			? (weightInput.trim() !== '' ? parseFloat(weightInput) : undefined)
 			: undefined;
 		dispatch('complete', { weight: weightVal, reps: repsVal });
 	}
@@ -44,7 +44,7 @@
 		<div class="inp-wrap">
 			<input
 				type="number" inputmode="decimal"
-				placeholder={previousWeight !== undefined ? formatWeight(previousWeight) : '—'}
+				placeholder=""
 				bind:value={weightInput}
 				on:focus={focusSelect}
 				disabled={set.completed}
@@ -57,7 +57,7 @@
 	<div class="inp-wrap">
 		<input
 			type="number" inputmode="numeric"
-			placeholder={previousReps !== undefined ? String(previousReps) : '—'}
+			placeholder=""
 			bind:value={repsInput}
 			on:focus={focusSelect}
 			disabled={set.completed}
