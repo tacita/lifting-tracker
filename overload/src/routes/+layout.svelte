@@ -6,7 +6,7 @@
 	import { page } from '$app/stores';
 	import { currentUser, authLoading } from '$lib/stores/auth.js';
 	import { syncStatus } from '$lib/stores/sync.js';
-	import { getCurrentUser, onAuthChange } from '$lib/sync/auth.js';
+	import { settleCurrentUser, onAuthChange } from '$lib/sync/auth.js';
 	import { pullFromCloud, syncNow } from '$lib/sync/engine.js';
 	import { refreshAll } from '$lib/stores/data.js';
 	import { workout } from '$lib/stores/workout.js';
@@ -64,7 +64,11 @@
 			}
 
 			// Resolve current user first to avoid auth flicker/redirect loops on mobile Safari.
-			const initialUser = await getCurrentUser();
+			// Safari sometimes applies session from redirect URL slightly after first paint.
+			const initialUser = await settleCurrentUser({
+				attempts: 12,
+				delayMs: 250
+			});
 			currentUser.set(initialUser);
 			authLoading.set(false);
 			if (initialUser) {

@@ -3,7 +3,7 @@
 	import { base } from '$app/paths';
 	import { folders, templates, templateItemsCache, refreshAll, refreshTemplateItems } from '$lib/stores/data.js';
 	import { workout, resetWorkout } from '$lib/stores/workout.js';
-	import { currentUser } from '$lib/stores/auth.js';
+	import { currentUser, authLoading } from '$lib/stores/auth.js';
 	import { createSession, getDraftSession, deleteSession } from '$lib/db/sessions.js';
 	import { getTemplateItems, getTemplates } from '$lib/db/templates.js';
 import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$lib/db/templates.js';
@@ -32,6 +32,7 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	let renameDrafts: Record<string, string> = {};
 
 	$: user = $currentUser;
+	$: isAuthLoading = $authLoading;
 
 	// Group templates by folder
 	$: folderGroups = (() => {
@@ -305,7 +306,13 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 <input type="file" accept=".json" bind:this={importInput} style="display:none" on:change={handleImport} />
 
 <div class="page">
-	{#if !user}
+	{#if isAuthLoading}
+		<div class="auth-gate">
+			<div class="auth-logo">Overload</div>
+			<p class="auth-sub">Finishing sign-in…</p>
+			<div class="auth-loading"></div>
+		</div>
+	{:else if !user}
 		<div class="auth-gate">
 			<div class="auth-logo">Overload</div>
 			<p class="auth-sub">Track your progressive overload</p>
@@ -377,6 +384,15 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	.auth-sub { color: var(--text-3); margin-bottom: 8px; }
 	.auth-btn { width: 100%; max-width: 280px; }
 	.magic-form { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
+	.auth-loading {
+		width: 24px;
+		height: 24px;
+		border: 3px solid var(--border);
+		border-top-color: var(--accent);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin { to { transform: rotate(360deg); } }
 
 	.empty-workout-btn { width: 100%; margin-bottom: 16px; }
 	.program-list { display: flex; flex-direction: column; gap: 8px; }

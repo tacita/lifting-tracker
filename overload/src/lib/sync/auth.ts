@@ -66,6 +66,28 @@ export async function getCurrentUser(): Promise<User | null> {
 	return user;
 }
 
+export async function settleCurrentUser(options?: { attempts?: number; delayMs?: number }): Promise<User | null> {
+	const supabase = getSupabase();
+	const attempts = options?.attempts ?? 8;
+	const delayMs = options?.delayMs ?? 250;
+
+	for (let i = 0; i < attempts; i++) {
+		const { data } = await supabase.auth.getSession();
+		const user = data.session?.user ?? null;
+		if (user) {
+			if (user.email && !isAllowedEmail(user.email)) {
+				await supabase.auth.signOut();
+				return null;
+			}
+			return user;
+		}
+		if (i < attempts - 1) {
+			await new Promise((resolve) => setTimeout(resolve, delayMs));
+		}
+	}
+	return null;
+}
+
 export function onAuthChange(callback: (user: User | null, event: AuthChangeEvent) => void) {
 	const supabase = getSupabase();
 	const { data } = supabase.auth.onAuthStateChange((event, session) => {
