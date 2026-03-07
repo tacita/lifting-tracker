@@ -175,6 +175,21 @@
 			return { ...w, exercises: next };
 		});
 		dragIdx = targetIdx;
+		// #region agent log
+		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
+			body: JSON.stringify({
+				sessionId: 'b505b2',
+				runId: 'workout-drag3',
+				hypothesisId: 'HW3',
+				location: 'workout/+page.svelte:reorderExercises',
+				message: 'reordered exercise',
+				data: { from: dragIdx, to: targetIdx, count: exercises.length },
+				timestamp: Date.now()
+			})
+		}).catch(() => {});
+		// #endregion
 	}
 
 	function autoScrollExercises(y: number) {
@@ -208,11 +223,41 @@
 		window.addEventListener('touchmove', onExerciseTouchMove, { passive: false });
 		window.addEventListener('touchend', endExerciseTouch);
 		window.addEventListener('touchcancel', endExerciseTouch);
+		// #region agent log
+		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
+			body: JSON.stringify({
+				sessionId: 'b505b2',
+				runId: 'workout-drag3',
+				hypothesisId: 'HW1',
+				location: 'workout/+page.svelte:startExerciseTouch',
+				message: 'exercise touch start',
+				data: { index: i },
+				timestamp: Date.now()
+			})
+		}).catch(() => {});
+		// #endregion
 	}
 	function onExerciseTouchMove(e: TouchEvent) {
 		if (dragIdx === null) return;
 		e.preventDefault();
 		handleMoveExercises(e.touches[0].clientY);
+		// #region agent log
+		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
+			body: JSON.stringify({
+				sessionId: 'b505b2',
+				runId: 'workout-drag3',
+				hypothesisId: 'HW2',
+				location: 'workout/+page.svelte:onExerciseTouchMove',
+				message: 'exercise touch move',
+				data: { index: dragIdx, y: e.touches[0].clientY },
+				timestamp: Date.now()
+			})
+		}).catch(() => {});
+		// #endregion
 	}
 	function endExerciseTouch() {
 		window.removeEventListener('touchmove', onExerciseTouchMove);
@@ -334,7 +379,7 @@
 		<!-- Exercises -->
 		<div class="exercises" bind:this={exContainer}>
 			{#each exercises as exercise, i (exercise.exerciseId)}
-				<div bind:this={exEls[i]}>
+				<div class:dragging={dragIdx === i} class="exercise-row" bind:this={exEls[i]}>
 					<ExerciseBlock
 						{exercise}
 						exerciseIndex={i}
@@ -375,6 +420,9 @@
 	.workout-controls .btn { flex: 1; padding: 8px 10px; font-size: 0.82rem; }
 	.add-ex { width: 100%; margin-top: 4px; }
 	.finish-btn { width: 100%; margin-top: 24px; padding: 14px; font-size: 1rem; }
+	.exercises { display: flex; flex-direction: column; gap: 8px; }
+	.exercise-row.dragging { border: 1px solid var(--accent); border-radius: var(--radius); background: var(--bg-3); transform: scale(0.995); box-shadow: 0 0 0 2px var(--accent-bg); }
+	.exercise-row { transition: transform 0.08s ease, box-shadow 0.08s ease, border-color 0.08s ease; }
 
 	.celebrate { text-align: center; }
 	.celebrate-emoji { font-size: 3rem; margin-bottom: 8px; }

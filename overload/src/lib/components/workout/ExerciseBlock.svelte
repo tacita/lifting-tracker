@@ -183,5 +183,12 @@
 	.add-set { width: 100%; padding: 8px; font-size: 0.85rem; }
 	.drag-handle {
 		touch-action: none;
+		padding: 10px 12px;
+		font-size: 1.2rem;
+		line-height: 1;
+		margin-right: 6px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--bg-3);
 	}
 </style>
