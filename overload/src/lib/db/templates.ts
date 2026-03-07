@@ -29,6 +29,16 @@ export async function updateFolder(id: string, data: Partial<Omit<Folder, 'id'>>
 
 export async function deleteFolder(id: string): Promise<void> {
 	const db = await getDB();
+
+	// Delete from Supabase first so pullFromCloud won't bring it back
+	try {
+		const supabase = getSupabase();
+		const { error } = await supabase.from('folders').delete().eq('id', id);
+		if (error) console.warn('[deleteFolder] cloud delete:', error.message);
+	} catch (err) {
+		console.warn('[deleteFolder] cloud delete failed:', err);
+	}
+
 	const templates = await db.getAllFromIndex('templates', 'by-folder', id);
 	for (const t of templates) {
 		const { folderId: _f, ...rest } = t;
