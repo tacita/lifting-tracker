@@ -34,7 +34,7 @@
 	}
 
 	function tickTimer() {
-		if (!session) return;
+		if (!session || session.pausedAt) return;
 		elapsed = elapsedSeconds(session.startedAt, session.pausedDurationSeconds);
 	}
 
