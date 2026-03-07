@@ -13,6 +13,7 @@
 	const dispatch = createEventDispatcher<{ saved: Template; cancel: void }>();
 
 	interface DraftItem {
+	id: string;
 		exerciseId: string;
 		exerciseName: string;
 		sets: string;
@@ -28,6 +29,7 @@
 	let newFolderName = '';
 	let showNewFolder = false;
 	let items: DraftItem[] = initialItems.map((ti) => ({
+	id: ti.id ?? createId(),
 		exerciseId: ti.exerciseId,
 		exerciseName: $exStore.find((e) => e.id === ti.exerciseId)?.name ?? ti.exerciseId,
 		sets: ti.sets ? String(ti.sets) : '',
@@ -42,16 +44,80 @@
 	let saving = false;
 	let nameError = '';
 	let dragIdx: number | null = null;
+	let itemEls: HTMLElement[] = [];
+	let itemsContainer: HTMLElement | null = null;
 
-	function dragStart(i: number) { dragIdx = i; }
-	function dragOver(i: number) {
-		if (dragIdx === null || dragIdx === i) return;
+	function reorderAtIndex(targetIdx: number) {
+		if (dragIdx === null || dragIdx === targetIdx) return;
 		const next = [...items];
 		const [moved] = next.splice(dragIdx, 1);
-		next.splice(i, 0, moved);
-		items = next; dragIdx = i;
+		next.splice(targetIdx, 0, moved);
+		items = next;
+		dragIdx = targetIdx;
 	}
-	function dragEnd() { dragIdx = null; }
+
+	function autoScroll(y: number) {
+		if (!itemsContainer) return;
+		const rect = itemsContainer.getBoundingClientRect();
+		const edge = 56;
+		const step = 12;
+		if (y < rect.top + edge) {
+			itemsContainer.scrollTop -= step;
+		} else if (y > rect.bottom - edge) {
+			itemsContainer.scrollTop += step;
+		}
+	}
+
+	function handleMove(clientY: number) {
+		if (dragIdx === null) return;
+		autoScroll(clientY);
+		for (let j = 0; j < itemEls.length; j++) {
+			if (j === dragIdx || !itemEls[j]) continue;
+			const rect = itemEls[j].getBoundingClientRect();
+			const mid = rect.top + rect.height / 2;
+			if ((j < dragIdx && clientY < mid + rect.height * 0.3) || (j > dragIdx && clientY > mid - rect.height * 0.3)) {
+				reorderAtIndex(j);
+				break;
+			}
+		}
+	}
+
+	function startTouch(i: number, _e: TouchEvent) {
+		dragIdx = i;
+		window.addEventListener('touchmove', onTouchMove, { passive: false });
+		window.addEventListener('touchend', endTouchDrag);
+		window.addEventListener('touchcancel', endTouchDrag);
+	}
+	function onTouchMove(e: TouchEvent) {
+		if (dragIdx === null) return;
+		e.preventDefault();
+		handleMove(e.touches[0].clientY);
+	}
+	function endTouchDrag() {
+		window.removeEventListener('touchmove', onTouchMove);
+		window.removeEventListener('touchend', endTouchDrag);
+		window.removeEventListener('touchcancel', endTouchDrag);
+		dragIdx = null;
+	}
+
+	function startPointer(i: number, e: PointerEvent) {
+		if (e.pointerType !== 'mouse') return;
+		dragIdx = i;
+		window.addEventListener('pointermove', onPointerMove, { passive: false });
+		window.addEventListener('pointerup', endPointerDrag);
+		window.addEventListener('pointercancel', endPointerDrag);
+	}
+	function onPointerMove(e: PointerEvent) {
+		if (dragIdx === null) return;
+		e.preventDefault();
+		handleMove(e.clientY);
+	}
+	function endPointerDrag() {
+		window.removeEventListener('pointermove', onPointerMove);
+		window.removeEventListener('pointerup', endPointerDrag);
+		window.removeEventListener('pointercancel', endPointerDrag);
+		dragIdx = null;
+	}
 
 	function handleSelect(detail: { ids: string[]; asSuperset: boolean }) {
 		const { ids, asSuperset } = detail;
@@ -73,6 +139,7 @@
 
 		const ssId = asSuperset && ids.length > 1 ? createId() : undefined;
 		const newItems: DraftItem[] = ids.map((id, i) => ({
+		id: createId(),
 			exerciseId: id,
 			exerciseName: $exStore.find((e) => e.id === id)?.name ?? id,
 			sets: '', reps: '', restSeconds: '90',
@@ -172,22 +239,22 @@
 		{/if}
 	</div>
 
-	<div class="items-section">
+	<div class="items-section" bind:this={itemsContainer}>
 		<div class="items-header">
 			<span class="label" style="margin-bottom:0">Exercises</span>
 			<button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:0.85rem" on:click={() => (showSelector = true)}>+ Add</button>
 		</div>
 
-		{#each groupedItems as item, i (i)}
-			<div class="item" class:ss={item.supersetId}
-				draggable="true"
-				on:dragstart={() => dragStart(i)}
-				on:dragover|preventDefault={() => dragOver(i)}
-				on:dragend={dragEnd}
-			>
+		{#each groupedItems as item, i (item.id)}
+			<div class="item" class:ss={item.supersetId} class:dragging={dragIdx === i} bind:this={itemEls[i]}>
 				{#if item.supersetLabel}<span class="ss-lbl badge badge-accent">{item.supersetLabel}</span>{/if}
 				<div class="item-row">
-					<span class="drag-handle">⠿</span>
+					<span class="drag-handle"
+						on:touchstart|nonpassive={(e) => touchStart(i, e)}
+						on:pointerdown={(e) => startPointer(i, e)}
+						role="button"
+						tabindex="0"
+					>⠿</span>
 					<span class="item-name">{item.exerciseName}</span>
 					<button type="button" class="swap-btn" on:click={() => openSwap(i)} title="Swap exercise">⇄</button>
 					<button type="button" class="del-btn" on:click={() => (items = items.filter((_, j) => j !== i))}>✕</button>
@@ -212,12 +279,22 @@
 </form>
 
 <style>
-	.items-section { margin-top: 4px; }
+	.items-section { margin-top: 4px; touch-action: pan-y; }
 	.items-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 	.item { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 8px; }
 	.item.ss { border-left: 3px solid var(--accent); }
 	.ss-lbl { display: block; margin-bottom: 6px; }
+	.item.dragging { opacity: 0.5; border-color: var(--accent); }
 	.item-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+	.drag-handle {
+		cursor: grab;
+		color: var(--text-3);
+		font-size: 1.1rem;
+		padding: 4px;
+		touch-action: none;
+		user-select: none;
+		-webkit-user-select: none;
+	}
 	.item-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
 	.swap-btn { color: var(--text-3); font-size: 0.9rem; padding: 2px 6px; cursor: pointer; }
 	.swap-btn:hover { color: var(--accent); }

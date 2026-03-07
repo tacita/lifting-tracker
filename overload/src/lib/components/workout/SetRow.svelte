@@ -43,7 +43,7 @@
 </script>
 
 <div class="set-row" class:done={set.completed}>
-	<span class="set-num">S{set.setNumber}</span>
+	<span class="set-num">{set.setNumber}:</span>
 	<span class="prev-val" title="Previous set">{previousDisplay}</span>
 
 	{#if showWeight}
