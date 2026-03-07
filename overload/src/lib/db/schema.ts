@@ -69,7 +69,6 @@ export interface Session {
 	durationSeconds?: number;
 	pausedAt?: string;
 	pausedDurationSeconds?: number;
-	deletedAt?: string;
 	createdAt: string;
 	updatedAt: string;
 	synced: boolean;
@@ -84,7 +83,6 @@ export interface WorkoutSet {
 	weight?: number;
 	reps: number;
 	completedAt: string;
-	deletedAt?: string;
 	createdAt: string;
 	updatedAt: string;
 	synced: boolean;
