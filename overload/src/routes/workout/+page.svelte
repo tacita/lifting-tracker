@@ -175,21 +175,6 @@
 			return { ...w, exercises: next };
 		});
 		dragIdx = targetIdx;
-		// #region agent log
-		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
-			body: JSON.stringify({
-				sessionId: 'b505b2',
-				runId: 'workout-drag3',
-				hypothesisId: 'HW3',
-				location: 'workout/+page.svelte:reorderExercises',
-				message: 'reordered exercise',
-				data: { from: dragIdx, to: targetIdx, count: exercises.length },
-				timestamp: Date.now()
-			})
-		}).catch(() => {});
-		// #endregion
 	}
 
 	function autoScrollExercises(y: number) {
@@ -223,41 +208,11 @@
 		window.addEventListener('touchmove', onExerciseTouchMove, { passive: false });
 		window.addEventListener('touchend', endExerciseTouch);
 		window.addEventListener('touchcancel', endExerciseTouch);
-		// #region agent log
-		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
-			body: JSON.stringify({
-				sessionId: 'b505b2',
-				runId: 'workout-drag3',
-				hypothesisId: 'HW1',
-				location: 'workout/+page.svelte:startExerciseTouch',
-				message: 'exercise touch start',
-				data: { index: i },
-				timestamp: Date.now()
-			})
-		}).catch(() => {});
-		// #endregion
 	}
 	function onExerciseTouchMove(e: TouchEvent) {
 		if (dragIdx === null) return;
 		e.preventDefault();
 		handleMoveExercises(e.touches[0].clientY);
-		// #region agent log
-		fetch('http://127.0.0.1:7589/ingest/936a88aa-a3ae-4a76-abb6-a7706c5d9d63', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'b505b2' },
-			body: JSON.stringify({
-				sessionId: 'b505b2',
-				runId: 'workout-drag3',
-				hypothesisId: 'HW2',
-				location: 'workout/+page.svelte:onExerciseTouchMove',
-				message: 'exercise touch move',
-				data: { index: dragIdx, y: e.touches[0].clientY },
-				timestamp: Date.now()
-			})
-		}).catch(() => {});
-		// #endregion
 	}
 	function endExerciseTouch() {
 		window.removeEventListener('touchmove', onExerciseTouchMove);
