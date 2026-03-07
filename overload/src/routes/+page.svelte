@@ -357,16 +357,7 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	{:else}
 		<div class="page-header">
 			<h1 class="page-title">Workouts</h1>
-			<div style="display:flex;gap:8px">
-				<button class="btn btn-secondary" on:click={() => (showProgramsManager = true)} title="Manage programs">Programs</button>
-				<button class="btn btn-secondary" on:click={() => importInput.click()} title="Import workout programs">↑ Import</button>
-				<button class="btn btn-primary" on:click={() => openEditor()}>+ New</button>
-			</div>
 		</div>
-
-		<button class="empty-workout-btn btn btn-secondary" on:click={startEmptyWorkout}>
-			Start Empty Workout
-		</button>
 
 		{#if folderGroups.length === 0}
 			<div class="empty-state">
@@ -386,6 +377,17 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 				on:delete={(e) => deleteTemplate(e.detail.template)}
 			/>
 		{/each}
+
+		<div class="workout-controls-row">
+			<button class="btn btn-secondary" on:click={startEmptyWorkout}>
+				Start Empty Workout
+			</button>
+			<button class="btn btn-secondary" on:click={() => (showProgramsManager = true)} title="Manage programs">
+				Manage Programs
+			</button>
+			<button class="btn btn-secondary" on:click={() => importInput.click()} title="Import workout programs">↑ Import</button>
+			<button class="btn btn-primary" on:click={() => openEditor()}>+ New</button>
+		</div>
 	{/if}
 </div>
 
@@ -414,7 +416,15 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	}
 	@keyframes spin { to { transform: rotate(360deg); } }
 
-	.empty-workout-btn { width: 100%; margin-bottom: 16px; }
+	.workout-controls-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px;
+		margin-top: 14px;
+	}
+	.workout-controls-row .btn {
+		width: 100%;
+	}
 	.program-list { display: flex; flex-direction: column; gap: 8px; }
 	.program-row { padding: 10px; }
 	.program-top { display: flex; gap: 8px; }
