@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { workout } from '$lib/stores/workout.js';
 	import { page } from '$app/stores';
+	import { base } from '$app/paths';
 	import { formatTimer } from '$lib/utils/format.js';
 
 	let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -57,7 +58,7 @@
 				</div>
 			{/if}
 			{#if !isOnWorkout}
-				<a href="/workout" class="btn btn-primary goto">Workout ›</a>
+				<a href={`${base}/workout`} class="btn btn-primary goto">Workout ›</a>
 			{/if}
 		</div>
 	</div>

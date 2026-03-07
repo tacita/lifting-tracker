@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { folders, templates, templateItemsCache, refreshAll, refreshTemplateItems } from '$lib/stores/data.js';
 	import { workout, resetWorkout } from '$lib/stores/workout.js';
 	import { currentUser } from '$lib/stores/auth.js';
@@ -88,7 +89,7 @@
 			pausedDurationMs: 0
 		});
 
-		goto('/workout');
+		goto(`${base}/workout`);
 	}
 
 	async function startEmptyWorkout() {
@@ -108,7 +109,7 @@
 			timerPausedAt: null,
 			pausedDurationMs: 0
 		});
-		goto('/workout');
+		goto(`${base}/workout`);
 	}
 
 	async function openEditor(template?: Template) {

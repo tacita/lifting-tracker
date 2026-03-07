@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import { currentUser, authLoading } from '$lib/stores/auth.js';
 	import { syncStatus } from '$lib/stores/sync.js';
@@ -75,7 +76,7 @@
 
 		// Register service worker
 		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.register('/service-worker.js', { type: 'module' }).catch(console.warn);
+			navigator.serviceWorker.register(`${base}/service-worker.js`, { type: 'module' }).catch(console.warn);
 		}
 
 		return () => authSub?.unsubscribe();
@@ -87,10 +88,10 @@
 	$: syncColor = sync.status === 'error' ? 'var(--danger)' : sync.status === 'ok' ? 'var(--success)' : 'var(--text-3)';
 
 	const nav = [
-		{ href: '/',         label: 'Workouts', icon: '🏋️' },
-		{ href: '/library',  label: 'Library',  icon: '📚' },
-		{ href: '/history',  label: 'History',  icon: '📈' },
-		{ href: '/settings', label: 'Settings', icon: '⚙️' }
+		{ href: `${base}/`,         label: 'Workouts', icon: '🏋️' },
+		{ href: `${base}/library`,  label: 'Library',  icon: '📚' },
+		{ href: `${base}/history`,  label: 'History',  icon: '📈' },
+		{ href: `${base}/settings`, label: 'Settings', icon: '⚙️' }
 	];
 </script>
 
@@ -111,7 +112,7 @@
 				</button>
 			{/if}
 			{#if $workout.session}
-				<a href="/workout" class="btn btn-primary" style="padding:6px 12px;font-size:0.82rem">Active Workout</a>
+				<a href={`${base}/workout`} class="btn btn-primary" style="padding:6px 12px;font-size:0.82rem">Active Workout</a>
 			{/if}
 		</div>
 	</header>

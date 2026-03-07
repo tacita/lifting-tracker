@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { workout, resetWorkout } from '$lib/stores/workout.js';
 	import type { ActiveExercise } from '$lib/stores/workout.js';
 	import type { WorkoutSet, TemplateItem } from '$lib/db/schema.js';
@@ -144,7 +145,7 @@
 		if (!session) return;
 		await deleteSession(session.id);
 		resetWorkout();
-		goto('/');
+		goto(`${base}/`);
 	}
 
 	// Celebration
@@ -154,7 +155,7 @@
 	function closeCelebration() {
 		showCelebration = false;
 		resetWorkout();
-		goto('/history');
+		goto(`${base}/history`);
 	}
 
 	$: paused = !!session?.pausedAt;
@@ -166,7 +167,7 @@
 		<div class="empty-state">
 			<p style="font-size:1.5rem">🏋️</p>
 			<p>No active workout</p>
-			<a href="/" class="btn btn-primary" style="margin-top:16px">Go to Workouts</a>
+			<a href={`${base}/`} class="btn btn-primary" style="margin-top:16px">Go to Workouts</a>
 		</div>
 	</div>
 {:else}
