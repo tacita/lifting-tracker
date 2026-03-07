@@ -174,6 +174,7 @@ function toCloudSession(r: AnyRow, userId: string) {
 		duration_seconds: s.durationSeconds ?? null,
 		paused_at: s.pausedAt ?? null,
 		paused_duration_seconds: s.pausedDurationSeconds ?? null,
+		deleted_at: s.deletedAt ?? null,
 		created_at: s.createdAt,
 		updated_at: s.updatedAt
 	};
@@ -190,6 +191,7 @@ function toCloudSet(r: AnyRow, userId: string) {
 		weight: s.weight ?? null,
 		reps: s.reps,
 		completed_at: s.completedAt,
+		deleted_at: s.deletedAt ?? null,
 		created_at: s.createdAt,
 		updated_at: s.updatedAt
 	};
@@ -245,6 +247,7 @@ function fromCloudSession(r: Record<string, unknown>): Session {
 		durationSeconds: r.duration_seconds as number | undefined,
 		pausedAt: r.paused_at as string | undefined,
 		pausedDurationSeconds: r.paused_duration_seconds as number | undefined,
+		deletedAt: r.deleted_at as string | undefined,
 		createdAt: r.created_at as string,
 		updatedAt: r.updated_at as string,
 		synced: true
@@ -260,6 +263,7 @@ function fromCloudSet(r: Record<string, unknown>): WorkoutSet {
 		weight: r.weight as number | undefined,
 		reps: r.reps as number,
 		completedAt: r.completed_at as string,
+		deletedAt: r.deleted_at as string | undefined,
 		createdAt: r.created_at as string,
 		updatedAt: r.updated_at as string,
 		synced: true

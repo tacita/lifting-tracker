@@ -7,18 +7,19 @@ const MAX_ACTIVE_DRAFT_MS = 16 * 60 * 60 * 1000; // 16 hours
 export async function getSessions(): Promise<Session[]> {
 	const db = await getDB();
 	const all = await db.getAll('sessions');
-	return all.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+	return all.filter((s) => !s.deletedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 export async function getCompletedSessions(): Promise<Session[]> {
 	const db = await getDB();
 	const all = await db.getAllFromIndex('sessions', 'by-status', 'complete');
-	return all.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+	return all.filter((s) => !s.deletedAt).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 export async function getDraftSession(): Promise<Session | null> {
 	const db = await getDB();
-	const drafts = await db.getAllFromIndex('sessions', 'by-status', 'draft');
+	const allDrafts = await db.getAllFromIndex('sessions', 'by-status', 'draft');
+	const drafts = allDrafts.filter((s) => !s.deletedAt);
 	if (drafts.length === 0) return null;
 
 	const sorted = [...drafts].sort((a, b) => {
@@ -86,18 +87,22 @@ export async function updateSession(id: string, data: Partial<Omit<Session, 'id'
 
 export async function deleteSession(id: string): Promise<void> {
 	const db = await getDB();
+	const timestamp = now();
 	const sets = await db.getAllFromIndex('sets', 'by-session', id);
 	for (const s of sets) {
-		await db.delete('sets', s.id);
+		await db.put('sets', { ...s, deletedAt: timestamp, updatedAt: timestamp, synced: false });
 	}
-	await db.delete('sessions', id);
+	const session = await db.get('sessions', id);
+	if (session) {
+		await db.put('sessions', { ...session, deletedAt: timestamp, updatedAt: timestamp, synced: false });
+	}
 	scheduleSync();
 }
 
 export async function getSetsForSession(sessionId: string): Promise<WorkoutSet[]> {
 	const db = await getDB();
 	const sets = await db.getAllFromIndex('sets', 'by-session', sessionId);
-	return sets.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+	return sets.filter((s) => !s.deletedAt).sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 }
 
 export async function addSet(data: Omit<WorkoutSet, 'id' | 'createdAt' | 'updatedAt' | 'synced'>): Promise<WorkoutSet> {
@@ -120,6 +125,10 @@ export async function updateSet(id: string, data: Partial<Omit<WorkoutSet, 'id'>
 
 export async function deleteSet(id: string): Promise<void> {
 	const db = await getDB();
-	await db.delete('sets', id);
+	const existing = await db.get('sets', id);
+	if (existing) {
+		const timestamp = now();
+		await db.put('sets', { ...existing, deletedAt: timestamp, updatedAt: timestamp, synced: false });
+	}
 	scheduleSync();
 }

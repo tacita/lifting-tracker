@@ -338,6 +338,10 @@ ALTER TABLE template_items
 -- folders (ensure sort order exists)
 ALTER TABLE folders ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 
+-- Soft-delete support
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE sets ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
 -- FK after folders exists
 DO $$
 BEGIN
