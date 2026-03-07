@@ -1,11 +1,12 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { base } from '$app/paths';
 	import { page } from '$app/stores';
 	import { currentUser, authLoading } from '$lib/stores/auth.js';
 	import { syncStatus } from '$lib/stores/sync.js';
-	import { onAuthChange } from '$lib/sync/auth.js';
+	import { getCurrentUser, onAuthChange } from '$lib/sync/auth.js';
 	import { pullFromCloud, syncNow } from '$lib/sync/engine.js';
 	import { refreshAll } from '$lib/stores/data.js';
 	import { workout } from '$lib/stores/workout.js';
@@ -62,13 +63,30 @@
 				});
 			}
 
+			// Resolve current user first to avoid auth flicker/redirect loops on mobile Safari.
+			const initialUser = await getCurrentUser();
+			currentUser.set(initialUser);
+			authLoading.set(false);
+			if (initialUser) {
+				pullFromCloud(initialUser.id).then(() => refreshAll()).catch(console.warn);
+			}
+
 			// Auth subscription
-			authSub = onAuthChange((user) => {
-				currentUser.set(user);
-				authLoading.set(false);
-				if (user) {
-					pullFromCloud(user.id).then(() => refreshAll()).catch(console.warn);
+			authSub = onAuthChange((user, event) => {
+				if (event === 'SIGNED_OUT') {
+					currentUser.set(null);
+					return;
 				}
+
+				if (user) {
+					currentUser.set(user);
+					pullFromCloud(user.id).then(() => refreshAll()).catch(console.warn);
+					return;
+				}
+
+				// Ignore transient null callbacks if we already have a logged-in user.
+				if (get(currentUser)) return;
+				currentUser.set(null);
 			});
 		}
 

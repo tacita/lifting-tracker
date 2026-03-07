@@ -1,6 +1,6 @@
 import { getSupabase } from './supabase.js';
 import { base } from '$app/paths';
-import type { User } from '@supabase/supabase-js';
+import type { AuthChangeEvent, User } from '@supabase/supabase-js';
 
 const ALLOWED_EMAILS = ['tacita.om@gmail.com', 'nico.p.morway@gmail.com'];
 const ALLOWED_EMAILS_NORMALIZED = new Set(ALLOWED_EMAILS.map(normalizeEmail));
@@ -55,16 +55,29 @@ export async function signOut(): Promise<void> {
 	await supabase.auth.signOut();
 }
 
-export function onAuthChange(callback: (user: User | null) => void) {
+export async function getCurrentUser(): Promise<User | null> {
 	const supabase = getSupabase();
-	const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+	const { data } = await supabase.auth.getUser();
+	const user = data.user ?? null;
+	if (user?.email && !isAllowedEmail(user.email)) {
+		await supabase.auth.signOut();
+		return null;
+	}
+	return user;
+}
+
+export function onAuthChange(callback: (user: User | null, event: AuthChangeEvent) => void) {
+	const supabase = getSupabase();
+	const { data } = supabase.auth.onAuthStateChange((event, session) => {
 		const user = session?.user ?? null;
-		if (user && !isAllowedEmail(user.email)) {
+		// Only enforce allowlist when we have a concrete email.
+		// During some mobile auth transitions, user objects can be transient.
+		if (user?.email && !isAllowedEmail(user.email)) {
 			supabase.auth.signOut();
-			callback(null);
+			callback(null, 'SIGNED_OUT');
 			return;
 		}
-		callback(user);
+		callback(user, event);
 	});
 	return data.subscription;
 }
