@@ -68,13 +68,15 @@
 								{#each groupByExercise(sessionSets[session.id]) as group}
 									<div class="ex-group">
 										<p class="ex-group-name">{group.name}</p>
-										<div class="sets-row">
-											{#each group.sets as s}
-												<span class="set-chip">
-													{#if s.weight}{formatWeight(s.weight)} lbs × {/if}{s.reps} reps
-												</span>
-											{/each}
-										</div>
+									<div class="sets-list">
+										{#each group.sets as s, idx}
+											<div class="set-line">
+												<span class="set-num">{idx + 1}</span>
+												{#if s.weight}<span class="set-val">{formatWeight(s.weight)} lbs</span>{/if}
+												<span class="set-val">{s.reps} reps</span>
+											</div>
+										{/each}
+									</div>
 									</div>
 								{/each}
 							{/if}
@@ -100,6 +102,21 @@
 	.ex-group { margin-bottom: 10px; }
 	.ex-group:last-child { margin-bottom: 0; }
 	.ex-group-name { font-size: 0.82rem; font-weight: 600; color: var(--text-2); margin-bottom: 6px; }
-	.sets-row { display: flex; flex-wrap: wrap; gap: 6px; }
-	.set-chip { background: var(--bg-3); border: 1px solid var(--border); border-radius: 99px; padding: 3px 10px; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+	.sets-list { display: flex; flex-direction: column; gap: 2px; }
+	.set-line {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 3px 0;
+		font-size: 0.82rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.set-num {
+		width: 20px;
+		text-align: center;
+		color: var(--text-3);
+		font-size: 0.75rem;
+		flex-shrink: 0;
+	}
+	.set-val { color: var(--text-1); }
 </style>

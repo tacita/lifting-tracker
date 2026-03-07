@@ -5,7 +5,7 @@
 	import { syncNow } from '$lib/sync/engine.js';
 	import { showToast } from '$lib/stores/toasts.js';
 	import ConfirmModal from '$lib/components/shared/ConfirmModal.svelte';
-	import { exportAll, downloadJson, importWorkoutPrograms } from '$lib/utils/importExport.js';
+	import { exportAll, downloadJson, importWorkoutPrograms, importLegacyHistory } from '$lib/utils/importExport.js';
 	import { refreshAll } from '$lib/stores/data.js';
 	import { getDB } from '$lib/db/index.js';
 	import { formatDateTime } from '$lib/utils/format.js';
@@ -53,6 +53,20 @@
 		} catch { showToast('Import failed — check file format', 'error'); }
 	}
 
+	async function handleImportHistory(e: Event) {
+		const file = (e.target as HTMLInputElement).files?.[0];
+		if (!file) return;
+		try {
+			const text = await file.text();
+			const result = await importLegacyHistory(JSON.parse(text));
+			if (result.sessions === 0) {
+				showToast(`No new sessions to import (${result.skipped} already existed)`, 'info');
+			} else {
+				showToast(`Imported ${result.sessions} session${result.sessions > 1 ? 's' : ''} with ${result.sets} sets`, 'success');
+			}
+		} catch (err) { showToast(`Import failed: ${(err as Error).message}`, 'error'); }
+	}
+
 	async function handleClearData() {
 		const db = await getDB();
 		for (const store of ['exercises', 'folders', 'templates', 'templateItems', 'sessions', 'sets'] as const) {
@@ -98,6 +112,7 @@
 {/if}
 
 <input type="file" accept=".json" bind:this={importInput} style="display:none" on:change={handleImportWorkouts} />
+<input type="file" accept=".json" bind:this={historyInput} style="display:none" on:change={handleImportHistory} />
 
 <div class="page">
 	<h1 class="page-title" style="margin-bottom:20px">Settings</h1>
@@ -159,6 +174,7 @@
 		<div style="display:flex;flex-direction:column;gap:10px">
 			<button class="btn btn-secondary" on:click={handleExportAll}>Export All Data (JSON)</button>
 			<button class="btn btn-secondary" on:click={() => importInput.click()}>Import Workout Programs</button>
+			<button class="btn btn-secondary" on:click={() => historyInput.click()}>Import History from Backup</button>
 		</div>
 	</section>
 

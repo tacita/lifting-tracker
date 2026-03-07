@@ -242,13 +242,12 @@
 				<h1 class="workout-name">{session.templateName ?? 'Workout'}</h1>
 				<div class="timer" class:paused={isPaused}>{formatTimer(elapsed)}</div>
 			</div>
-			<div class="workout-controls">
-				<button class="btn btn-secondary" on:click={togglePause}>
-					{isPaused ? '▶ Resume' : '⏸ Pause'}
-				</button>
-				<button class="btn btn-secondary" on:click={() => (showCancelConfirm = true)}>✕ Cancel</button>
-				<button class="btn btn-primary" on:click={() => (showFinishConfirm = true)}>✓ Finish</button>
-			</div>
+		<div class="workout-controls">
+			<button class="btn btn-secondary" on:click={togglePause}>
+				{isPaused ? '▶ Resume' : '⏸ Pause'}
+			</button>
+			<button class="btn btn-secondary" on:click={() => (showCancelConfirm = true)}>✕ Cancel</button>
+		</div>
 		</div>
 
 		<RestTimer />
@@ -268,6 +267,10 @@
 		<button class="btn btn-secondary add-ex" on:click={() => (showAddExercise = true)}>
 			+ Add Exercise
 		</button>
+
+		<button class="btn btn-primary finish-btn" on:click={() => (showFinishConfirm = true)}>
+			✓ Finish Workout
+		</button>
 	</div>
 {/if}
 
@@ -280,6 +283,7 @@
 	.workout-controls { display: flex; gap: 8px; }
 	.workout-controls .btn { flex: 1; padding: 8px 10px; font-size: 0.82rem; }
 	.add-ex { width: 100%; margin-top: 4px; }
+	.finish-btn { width: 100%; margin-top: 24px; padding: 14px; font-size: 1rem; }
 
 	.celebrate { text-align: center; }
 	.celebrate-emoji { font-size: 3rem; margin-bottom: 8px; }

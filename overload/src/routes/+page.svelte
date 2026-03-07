@@ -16,8 +16,6 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	import TemplateEditor from '$lib/components/programs/TemplateEditor.svelte';
 	import ConfirmModal from '$lib/components/shared/ConfirmModal.svelte';
 	import type { Template, TemplateItem } from '$lib/db/schema.js';
-	import { importWorkoutPrograms } from '$lib/utils/importExport.js';
-
 	let openFolders = new Set<string>();
 	let showEditor = false;
 	let showProgramsManager = false;
@@ -27,7 +25,6 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	let signingIn = false;
 	let magicEmail = '';
 	let showMagicForm = false;
-	let importInput: HTMLInputElement;
 	let newProgramName = '';
 	let renameDrafts: Record<string, string> = {};
 
@@ -247,15 +244,6 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 		} finally { signingIn = false; }
 	}
 
-	async function handleImport(e: Event) {
-		const file = (e.target as HTMLInputElement).files?.[0];
-		if (!file) return;
-		try {
-			const text = await file.text();
-			await importWorkoutPrograms(JSON.parse(text));
-			showToast('Workouts imported', 'success');
-		} catch { showToast('Import failed — check file format', 'error'); }
-	}
 </script>
 
 <!-- Confirm modal -->
@@ -336,8 +324,6 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	</div>
 {/if}
 
-<input type="file" accept=".json" bind:this={importInput} style="display:none" on:change={handleImport} />
-
 <div class="page">
 	{#if isAuthLoading}
 		<div class="auth-gate">
@@ -398,7 +384,6 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 			<button class="btn btn-secondary" on:click={() => (showProgramsManager = true)} title="Manage programs">
 				Manage Programs
 			</button>
-			<button class="btn btn-secondary" on:click={() => importInput.click()} title="Import workout programs">↑ Import</button>
 			<button class="btn btn-primary" on:click={() => openEditor()}>+ New</button>
 		</div>
 	{/if}

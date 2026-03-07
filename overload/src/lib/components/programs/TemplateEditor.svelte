@@ -38,6 +38,7 @@
 	}));
 
 	let showSelector = false;
+	let swapIndex: number | null = null;
 	let saving = false;
 	let nameError = '';
 	let dragIdx: number | null = null;
@@ -54,6 +55,22 @@
 
 	function handleSelect(detail: { ids: string[]; asSuperset: boolean }) {
 		const { ids, asSuperset } = detail;
+
+		if (swapIndex !== null) {
+			const [newId] = ids;
+			if (newId) {
+				const ex = $exStore.find((e) => e.id === newId);
+				items = items.map((it, j) =>
+					j === swapIndex
+						? { ...it, exerciseId: newId, exerciseName: ex?.name ?? newId }
+						: it
+				);
+			}
+			swapIndex = null;
+			showSelector = false;
+			return;
+		}
+
 		const ssId = asSuperset && ids.length > 1 ? createId() : undefined;
 		const newItems: DraftItem[] = ids.map((id, i) => ({
 			exerciseId: id,
@@ -63,6 +80,11 @@
 		}));
 		items = [...items, ...newItems];
 		showSelector = false;
+	}
+
+	function openSwap(index: number) {
+		swapIndex = index;
+		showSelector = true;
 	}
 
 	$: groupedItems = (() => {
@@ -113,9 +135,12 @@
 </script>
 
 {#if showSelector}
-	<ExerciseSelector allowMultiple={true} supersetMode={true} title="Add Exercises"
+	<ExerciseSelector
+		allowMultiple={swapIndex === null}
+		supersetMode={swapIndex === null}
+		title={swapIndex !== null ? 'Swap Exercise' : 'Add Exercises'}
 		on:select={(e) => handleSelect(e.detail)}
-		on:close={() => (showSelector = false)}
+		on:close={() => { showSelector = false; swapIndex = null; }}
 	/>
 {/if}
 
@@ -164,6 +189,7 @@
 				<div class="item-row">
 					<span class="drag-handle">⠿</span>
 					<span class="item-name">{item.exerciseName}</span>
+					<button type="button" class="swap-btn" on:click={() => openSwap(i)} title="Swap exercise">⇄</button>
 					<button type="button" class="del-btn" on:click={() => (items = items.filter((_, j) => j !== i))}>✕</button>
 				</div>
 				<div class="item-fields">
@@ -193,6 +219,8 @@
 	.ss-lbl { display: block; margin-bottom: 6px; }
 	.item-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 	.item-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
+	.swap-btn { color: var(--text-3); font-size: 0.9rem; padding: 2px 6px; cursor: pointer; }
+	.swap-btn:hover { color: var(--accent); }
 	.del-btn { color: var(--text-3); font-size: 0.8rem; padding: 2px 4px; cursor: pointer; }
 	.item-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 	.item-fields input { font-size: 0.85rem; padding: 6px 8px; }
