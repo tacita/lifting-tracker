@@ -160,6 +160,85 @@
 
 	$: paused = !!session?.pausedAt;
 	$: isPaused = paused;
+
+	// Reorder exercises (drag/drop)
+	let dragIdx: number | null = null;
+	let exEls: HTMLElement[] = [];
+	let exContainer: HTMLElement | null = null;
+
+	function reorderExercises(targetIdx: number) {
+		if (dragIdx === null || dragIdx === targetIdx) return;
+		workout.update((w) => {
+			const next = [...w.exercises];
+			const [moved] = next.splice(dragIdx!, 1);
+			next.splice(targetIdx, 0, moved);
+			return { ...w, exercises: next };
+		});
+		dragIdx = targetIdx;
+	}
+
+	function autoScrollExercises(y: number) {
+		if (!exContainer) return;
+		const rect = exContainer.getBoundingClientRect();
+		const edge = 64;
+		const step = 14;
+		if (y < rect.top + edge) {
+			exContainer.scrollTop -= step;
+		} else if (y > rect.bottom - edge) {
+			exContainer.scrollTop += step;
+		}
+	}
+
+	function handleMoveExercises(clientY: number) {
+		if (dragIdx === null) return;
+		autoScrollExercises(clientY);
+		for (let j = 0; j < exEls.length; j++) {
+			if (j === dragIdx || !exEls[j]) continue;
+			const rect = exEls[j].getBoundingClientRect();
+			const mid = rect.top + rect.height / 2;
+			if ((j < dragIdx && clientY < mid + rect.height * 0.3) || (j > dragIdx && clientY > mid - rect.height * 0.3)) {
+				reorderExercises(j);
+				break;
+			}
+		}
+	}
+
+	function startExerciseTouch(i: number) {
+		dragIdx = i;
+		window.addEventListener('touchmove', onExerciseTouchMove, { passive: false });
+		window.addEventListener('touchend', endExerciseTouch);
+		window.addEventListener('touchcancel', endExerciseTouch);
+	}
+	function onExerciseTouchMove(e: TouchEvent) {
+		if (dragIdx === null) return;
+		e.preventDefault();
+		handleMoveExercises(e.touches[0].clientY);
+	}
+	function endExerciseTouch() {
+		window.removeEventListener('touchmove', onExerciseTouchMove);
+		window.removeEventListener('touchend', endExerciseTouch);
+		window.removeEventListener('touchcancel', endExerciseTouch);
+		dragIdx = null;
+	}
+
+	function startExercisePointer(i: number, pointerType: string | undefined) {
+		if (pointerType && pointerType !== 'mouse') return;
+		dragIdx = i;
+		window.addEventListener('pointermove', onExercisePointerMove, { passive: false });
+		window.addEventListener('pointerup', endExercisePointer);
+		window.addEventListener('pointercancel', endExercisePointer);
+	}
+	function onExercisePointerMove(e: PointerEvent) {
+		if (dragIdx === null) return;
+		e.preventDefault();
+		handleMoveExercises(e.clientY);
+	}
+	function endExercisePointer() {
+		window.removeEventListener('pointermove', onExercisePointerMove);
+		window.removeEventListener('pointerup', endExercisePointer);
+		window.removeEventListener('pointercancel', endExercisePointer);
+		dragIdx = null;
+	}
 </script>
 
 {#if !session}
@@ -238,10 +317,10 @@
 	<div class="page">
 		<!-- Header -->
 		<div class="workout-header">
-			<div class="workout-title-row">
-				<h1 class="workout-name">{session.templateName ?? 'Workout'}</h1>
-				<div class="timer" class:paused={isPaused}>{formatTimer(elapsed)}</div>
-			</div>
+		<div class="workout-title-row">
+			<h1 class="workout-name">{session.templateName ?? 'Workout'}</h1>
+			<div class="timer" class:paused={isPaused}>{formatTimer(elapsed)}</div>
+		</div>
 		<div class="workout-controls">
 			<button class="btn btn-secondary" on:click={togglePause}>
 				{isPaused ? '▶ Resume' : '⏸ Pause'}
@@ -253,16 +332,28 @@
 		<RestTimer />
 
 		<!-- Exercises -->
-		{#each exercises as exercise, i (exercise.exerciseId)}
-			<ExerciseBlock
-				{exercise}
-				exerciseIndex={i}
-				sessionId={session.id}
-				supersetLabel={supersetLabels[i]}
-				onSwap={openSwap}
-				onShowHistory={openHistory}
-			/>
-		{/each}
+		<div class="exercises" bind:this={exContainer}>
+			{#each exercises as exercise, i (exercise.exerciseId)}
+				<div bind:this={exEls[i]}>
+					<ExerciseBlock
+						{exercise}
+						exerciseIndex={i}
+						sessionId={session.id}
+						supersetLabel={supersetLabels[i]}
+						onSwap={openSwap}
+						onShowHistory={openHistory}
+						on:reorderStart={(e) => {
+							const idx = e.detail.index;
+							if (e.detail.mode === 'touch') {
+								startExerciseTouch(idx);
+							} else {
+								startExercisePointer(idx, e.detail.pointerType ?? 'mouse');
+							}
+						}}
+					/>
+				</div>
+			{/each}
+		</div>
 
 		<button class="btn btn-secondary add-ex" on:click={() => (showAddExercise = true)}>
 			+ Add Exercise

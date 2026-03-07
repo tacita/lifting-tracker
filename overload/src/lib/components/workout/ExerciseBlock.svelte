@@ -16,7 +16,7 @@
 	export let onSwap: (exerciseId: string) => void;
 	export let onShowHistory: (exerciseId: string, name: string) => void;
 
-	const dispatch = createEventDispatcher<{ reorder: void }>();
+	const dispatch = createEventDispatcher<{ reorderStart: { index: number; mode: 'touch' | 'pointer'; pointerType?: string } }>();
 
 	let previousSets: Record<number, WorkoutSet | null> = {};
 	let savingSetIndexes = new Set<number>();
@@ -119,7 +119,12 @@
 	{/if}
 
 	<div class="ex-header">
-		<button class="drag-handle" on:pointerdown={() => dispatch('reorder')} title="Drag to reorder">⠿</button>
+		<button
+			class="drag-handle"
+			on:pointerdown={(e) => dispatch('reorderStart', { index: exerciseIndex, mode: 'pointer', pointerType: e.pointerType })}
+			on:touchstart|nonpassive={(e) => dispatch('reorderStart', { index: exerciseIndex, mode: 'touch' })}
+			title="Drag to reorder"
+		>⠿</button>
 		<div class="ex-info">
 			<h3 class="ex-name">{exercise.exerciseName}</h3>
 			{#if exercise.note}<p class="ex-note">{exercise.note}</p>{/if}

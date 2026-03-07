@@ -250,7 +250,7 @@
 				{#if item.supersetLabel}<span class="ss-lbl badge badge-accent">{item.supersetLabel}</span>{/if}
 				<div class="item-row">
 					<span class="drag-handle"
-						on:touchstart|nonpassive={(e) => touchStart(i, e)}
+						on:touchstart|nonpassive={(e) => startTouch(i, e)}
 						on:pointerdown={(e) => startPointer(i, e)}
 						role="button"
 						tabindex="0"
