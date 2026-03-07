@@ -122,7 +122,7 @@
 		<button
 			class="drag-handle"
 			on:pointerdown={(e) => dispatch('reorderStart', { index: exerciseIndex, mode: 'pointer', pointerType: e.pointerType })}
-			on:touchstart|nonpassive={(e) => dispatch('reorderStart', { index: exerciseIndex, mode: 'touch' })}
+			on:touchstart|preventDefault|nonpassive={(e) => dispatch('reorderStart', { index: exerciseIndex, mode: 'touch' })}
 			title="Drag to reorder"
 		>⠿</button>
 		<div class="ex-info">
@@ -181,4 +181,7 @@
 	}
 	.sets-list { margin-bottom: 10px; }
 	.add-set { width: 100%; padding: 8px; font-size: 0.85rem; }
+	.drag-handle {
+		touch-action: none;
+	}
 </style>
