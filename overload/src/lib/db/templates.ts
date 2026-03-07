@@ -1,6 +1,7 @@
 import { getDB, createId, now } from './index.js';
 import type { Folder, Template, TemplateItem } from './schema.js';
 import { scheduleSync } from '$lib/sync/engine.js';
+import { getSupabase } from '$lib/sync/supabase.js';
 
 export async function getFolders(): Promise<Folder[]> {
 	const db = await getDB();
@@ -68,6 +69,18 @@ export async function updateTemplate(id: string, data: Partial<Omit<Template, 'i
 
 export async function deleteTemplate(id: string): Promise<void> {
 	const db = await getDB();
+
+	// Delete from Supabase first so pullFromCloud won't bring them back
+	try {
+		const supabase = getSupabase();
+		const { error: itemsErr } = await supabase.from('template_items').delete().eq('template_id', id);
+		if (itemsErr) console.warn('[deleteTemplate] cloud template_items delete:', itemsErr.message);
+		const { error: tplErr } = await supabase.from('templates').delete().eq('id', id);
+		if (tplErr) console.warn('[deleteTemplate] cloud templates delete:', tplErr.message);
+	} catch (err) {
+		console.warn('[deleteTemplate] cloud delete failed:', err);
+	}
+
 	const items = await db.getAllFromIndex('templateItems', 'by-template', id);
 	for (const item of items) {
 		await db.delete('templateItems', item.id);
@@ -156,6 +169,16 @@ export async function setTemplateItems(
 	items: Omit<TemplateItem, 'id' | 'templateId' | 'createdAt' | 'updatedAt' | 'synced'>[]
 ): Promise<TemplateItem[]> {
 	const db = await getDB();
+
+	// Delete old items from Supabase first so pullFromCloud won't bring them back
+	try {
+		const supabase = getSupabase();
+		const { error } = await supabase.from('template_items').delete().eq('template_id', templateId);
+		if (error) console.warn('[setTemplateItems] cloud delete:', error.message);
+	} catch (err) {
+		console.warn('[setTemplateItems] cloud delete failed:', err);
+	}
+
 	const existing = await db.getAllFromIndex('templateItems', 'by-template', templateId);
 	for (const item of existing) {
 		await db.delete('templateItems', item.id);

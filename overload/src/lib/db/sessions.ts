@@ -1,7 +1,6 @@
 import { getDB, createId, now } from './index.js';
 import type { Session, WorkoutSet } from './schema.js';
 import { scheduleSync } from '$lib/sync/engine.js';
-import { getSupabase } from '$lib/sync/supabase.js';
 
 const MAX_ACTIVE_DRAFT_MS = 16 * 60 * 60 * 1000; // 16 hours
 
@@ -92,15 +91,7 @@ export async function deleteSession(id: string): Promise<void> {
 		await db.delete('sets', s.id);
 	}
 	await db.delete('sessions', id);
-
-	// Also delete from Supabase so the record doesn't come back on next sync pull
-	try {
-		const supabase = getSupabase();
-		await supabase.from('sets').delete().eq('session_id', id);
-		await supabase.from('sessions').delete().eq('id', id);
-	} catch (err) {
-		console.warn('[deleteSession] cloud delete failed, will retry on next sync', err);
-	}
+	scheduleSync();
 }
 
 export async function getSetsForSession(sessionId: string): Promise<WorkoutSet[]> {
@@ -130,12 +121,5 @@ export async function updateSet(id: string, data: Partial<Omit<WorkoutSet, 'id'>
 export async function deleteSet(id: string): Promise<void> {
 	const db = await getDB();
 	await db.delete('sets', id);
-
-	// Also delete from Supabase so the record doesn't come back on next sync pull
-	try {
-		const supabase = getSupabase();
-		await supabase.from('sets').delete().eq('id', id);
-	} catch (err) {
-		console.warn('[deleteSet] cloud delete failed', err);
-	}
+	scheduleSync();
 }
