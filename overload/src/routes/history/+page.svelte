@@ -1,16 +1,29 @@
 <script lang="ts">
+	import { base } from '$app/paths';
 	import { sessions as sessionsStore, refreshSessions } from '$lib/stores/data.js';
 	import { getSetsForSession } from '$lib/db/sessions.js';
 	import type { Session, WorkoutSet } from '$lib/db/schema.js';
 	import { formatDate, formatDuration, formatWeight } from '$lib/utils/format.js';
 	import { onMount } from 'svelte';
+	import { currentUser, authLoading } from '$lib/stores/auth.js';
+	import { get } from 'svelte/store';
 
-	onMount(refreshSessions);
+	$: user = $currentUser;
+	$: isAuthLoading = $authLoading;
+
+	onMount(() => {
+		if (get(currentUser)) refreshSessions();
+	});
+
+	$: if (user) {
+		refreshSessions();
+	}
 
 	let expanded = new Set<string>();
 	let sessionSets: Record<string, WorkoutSet[]> = {};
 
 	async function toggle(id: string) {
+		if (!user) return;
 		const next = new Set(expanded);
 		if (next.has(id)) {
 			next.delete(id);
@@ -38,7 +51,18 @@
 		<h1 class="page-title">History</h1>
 	</div>
 
-	{#if $sessionsStore.length === 0}
+	{#if isAuthLoading}
+		<div class="empty-state">
+			<p style="font-size:1.5rem">⏳</p>
+			<p>Checking your account…</p>
+		</div>
+	{:else if !user}
+		<div class="empty-state">
+			<p style="font-size:1.5rem">🔒</p>
+			<p>Sign in to view your workout history.</p>
+			<a class="btn btn-primary" href={`${base}/`}>Go to sign in</a>
+		</div>
+	{:else if $sessionsStore.length === 0}
 		<div class="empty-state">
 			<p style="font-size:1.5rem">📈</p>
 			<p>No completed workouts yet</p>
