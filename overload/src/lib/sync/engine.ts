@@ -164,10 +164,35 @@ function fromCloudFolder(r: Record<string, unknown>): Folder {
 	return { id: r.id as string, name: r.name as string, sortOrder: r.sort_order as number | undefined, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };
 }
 function fromCloudTemplate(r: Record<string, unknown>): Template {
-	return { id: r.id as string, name: r.name as string, note: r.note as string | undefined, folderId: r.folder_id as string | undefined, sortOrder: r.sort_order as number | undefined, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };
+	return {
+		id: String(r.id),
+		name: String(r.name ?? ''),
+		note: (r.note as string | undefined) ?? undefined,
+		folderId: r.folder_id ? String(r.folder_id) : undefined,
+		// Legacy schema compatibility
+		folder: r.folder ? String(r.folder) : undefined,
+		items: Array.isArray(r.items) ? (r.items as Template['items']) : undefined,
+		sortOrder: r.sort_order != null ? Number.parseInt(String(r.sort_order), 10) : undefined,
+		createdAt: String(r.created_at ?? new Date().toISOString()),
+		updatedAt: String(r.updated_at ?? new Date().toISOString()),
+		synced: true
+	};
 }
 function fromCloudTemplateItem(r: Record<string, unknown>): TemplateItem {
-	return { id: r.id as string, templateId: r.template_id as string, exerciseId: r.exercise_id as string, sortOrder: r.sort_order as number, sets: r.sets as number | undefined, reps: r.reps as string | undefined, restSeconds: r.rest_seconds as number | undefined, supersetId: r.superset_id as string | undefined, supersetOrder: r.superset_order as number | undefined, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };
+	return {
+		id: String(r.id),
+		templateId: String(r.template_id),
+		exerciseId: String(r.exercise_id),
+		sortOrder: Math.max(0, Number.parseInt(String(r.sort_order ?? 0), 10) || 0),
+		sets: r.sets != null ? Number.parseInt(String(r.sets), 10) : undefined,
+		reps: r.reps != null ? String(r.reps) : undefined,
+		restSeconds: r.rest_seconds != null ? Number.parseInt(String(r.rest_seconds), 10) : undefined,
+		supersetId: r.superset_id ? String(r.superset_id) : undefined,
+		supersetOrder: r.superset_order != null ? Number.parseInt(String(r.superset_order), 10) : undefined,
+		createdAt: String(r.created_at ?? new Date().toISOString()),
+		updatedAt: String(r.updated_at ?? new Date().toISOString()),
+		synced: true
+	};
 }
 function fromCloudSession(r: Record<string, unknown>): Session {
 	return { id: r.id as string, templateId: r.template_id as string | undefined, templateName: r.template_name as string | undefined, status: r.status as Session['status'], startedAt: r.started_at as string, finishedAt: r.finished_at as string | undefined, durationSeconds: r.duration_seconds as number | undefined, pausedAt: r.paused_at as string | undefined, pausedDurationSeconds: r.paused_duration_seconds as number | undefined, createdAt: r.created_at as string, updatedAt: r.updated_at as string, synced: true };

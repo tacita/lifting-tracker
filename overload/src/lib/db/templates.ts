@@ -79,7 +79,76 @@ export async function deleteTemplate(id: string): Promise<void> {
 export async function getTemplateItems(templateId: string): Promise<TemplateItem[]> {
 	const db = await getDB();
 	const items = await db.getAllFromIndex('templateItems', 'by-template', templateId);
-	return items.sort((a, b) => a.sortOrder - b.sortOrder);
+	if (items.length > 0) {
+		return items.sort((a, b) => a.sortOrder - b.sortOrder);
+	}
+
+	// Fallback: legacy rows may have non-string templateId values, which won't match
+	// strict index lookup with a string key.
+	const allItems = await db.getAll('templateItems');
+	const looseMatched = allItems.filter((item) => String(item.templateId) === String(templateId));
+	if (looseMatched.length > 0) {
+		const normalized = looseMatched.map((item, index) => ({
+			...item,
+			templateId: String(item.templateId),
+			exerciseId: String(item.exerciseId),
+			sortOrder: item.sortOrder ?? index,
+			updatedAt: now(),
+			synced: false
+		}));
+		for (const item of normalized) {
+			await db.put('templateItems', item);
+		}
+		scheduleSync();
+		return normalized.sort((a, b) => a.sortOrder - b.sortOrder);
+	}
+
+	// Legacy fallback: some older template records embed `items` directly.
+	const template = await db.get('templates', templateId);
+	if (!template || !Array.isArray(template.items) || template.items.length === 0) {
+		return [];
+	}
+
+	const nowIso = now();
+	const synthesized: TemplateItem[] = template.items
+		.map((item: NonNullable<Template['items']>[number], index: number) => {
+			const anyItem = item as unknown as {
+				id?: string | number;
+				exerciseId?: string | number;
+				exercise?: string;
+				exerciseName?: string;
+				sortOrder?: number;
+				sets?: number;
+				reps?: string | number;
+				restSeconds?: number;
+				supersetId?: string;
+				supersetOrder?: number;
+			};
+			const rawExerciseId = anyItem.exerciseId ?? anyItem.exercise ?? anyItem.exerciseName;
+			if (!rawExerciseId) return null;
+			return {
+				id: anyItem.id != null ? String(anyItem.id) : createId(),
+				templateId: String(templateId),
+				exerciseId: String(rawExerciseId),
+				sortOrder: anyItem.sortOrder ?? index,
+				sets: anyItem.sets ?? 3,
+				reps: anyItem.reps != null ? String(anyItem.reps) : undefined,
+				restSeconds: anyItem.restSeconds ?? 90,
+				supersetId: anyItem.supersetId,
+				supersetOrder: anyItem.supersetOrder,
+				createdAt: nowIso,
+				updatedAt: nowIso,
+				synced: false
+			} satisfies TemplateItem;
+		})
+		.filter((item: TemplateItem | null): item is TemplateItem => item !== null);
+
+	// Persist synthesized items so subsequent reads are normal and sync can push them.
+	for (const ti of synthesized) {
+		await db.put('templateItems', ti);
+	}
+	scheduleSync();
+	return synthesized.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 export async function setTemplateItems(

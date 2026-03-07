@@ -25,6 +25,19 @@ export interface Template {
 	name: string;
 	note?: string;
 	folderId?: string;
+	// Legacy cloud schema stores folder as a name string.
+	folder?: string;
+	// Legacy local template format may embed items on the template record.
+	items?: Array<{
+		id?: string;
+		exerciseId: string;
+		sets?: number;
+		reps?: string | number;
+		restSeconds?: number;
+		supersetId?: string;
+		supersetOrder?: number;
+		sortOrder?: number;
+	}>;
 	sortOrder?: number;
 	createdAt: string;
 	updatedAt: string;

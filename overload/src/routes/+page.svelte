@@ -37,10 +37,19 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 	// Group templates by folder
 	$: folderGroups = (() => {
 		const groups: { folder: typeof $folders[0] | null; templates: typeof $templates }[] = [];
+		const normalized = (value: string | undefined) => String(value || '').trim().toLowerCase();
 		for (const folder of $folders) {
-			groups.push({ folder, templates: $templates.filter((t) => t.folderId === folder.id) });
+			groups.push({
+				folder,
+				templates: $templates.filter((t) => {
+					if (t.folderId === folder.id) return true;
+					// Legacy compatibility: template.folder stores folder name, not folderId
+					return !t.folderId && normalized(t.folder) === normalized(folder.name);
+				})
+			});
 		}
-		const unassigned = $templates.filter((t) => !t.folderId);
+		const folderNameSet = new Set($folders.map((f) => normalized(f.name)));
+		const unassigned = $templates.filter((t) => !t.folderId && !folderNameSet.has(normalized(t.folder)));
 		if (unassigned.length) groups.push({ folder: null, templates: unassigned });
 		return groups;
 	})();
@@ -65,7 +74,18 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 		const items = await getTemplateItems(templateId);
 		const exList = await getExercises();
 		const exMap = new Map(exList.map((e) => [e.id, e]));
-		const exIds = [...new Set(items.map((ti) => ti.exerciseId))];
+		const exByName = new Map(exList.map((e) => [e.name.trim().toLowerCase(), e]));
+		const resolveItemExerciseId = (ti: { exerciseId: string }) => {
+			const rawId = String(ti.exerciseId);
+			if (exMap.has(rawId)) return rawId;
+			// Legacy fallback: some old rows stored exercise name instead of id.
+			const byName = exByName.get(rawId.trim().toLowerCase());
+			return byName?.id;
+		};
+		const resolvedExerciseIds = items
+			.map((ti) => resolveItemExerciseId(ti))
+			.filter((id): id is string => Boolean(id));
+		const exIds = [...new Set(resolvedExerciseIds)];
 
 		const session = await createSession({
 			templateId,
@@ -78,7 +98,7 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 			session,
 			exercises: exIds.map((exId) => {
 				const ex = exMap.get(exId);
-				const item = items.find((ti) => ti.exerciseId === exId);
+				const item = items.find((ti) => resolveItemExerciseId(ti) === exId);
 				const rows = item?.sets ?? 3;
 				return {
 					exerciseId: exId,
