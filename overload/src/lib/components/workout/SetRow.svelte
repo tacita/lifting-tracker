@@ -7,6 +7,8 @@
 	export let previousWeight: number | undefined = undefined;
 	export let previousReps: number | undefined = undefined;
 	export let showWeight = true;
+	/** When true, show → instead of ✓ on the complete button (e.g. next exercise in superset before rest) */
+	export let showCompleteAsArrow = false;
 
 	const dispatch = createEventDispatcher<{
 		complete: { weight: number | undefined; reps: number };
@@ -73,7 +75,9 @@
 	</div>
 
 	{#if !set.completed}
-		<button class="btn-check" on:click={handleComplete} aria-label="Complete set">✓</button>
+		<button class="btn-check" on:click={handleComplete} aria-label={showCompleteAsArrow ? 'Complete set, go to next' : 'Complete set'}>
+			{showCompleteAsArrow ? '→' : '✓'}
+		</button>
 	{:else}
 		<span class="check-done" aria-label="Set completed" title="Set completed">✓</span>
 	{/if}

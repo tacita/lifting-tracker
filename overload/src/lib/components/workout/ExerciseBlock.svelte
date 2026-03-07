@@ -39,6 +39,17 @@
 	$: suggestedSets = exercise.templateItem?.sets;
 	$: suggestedReps = exercise.templateItem?.reps;
 
+	$: isLastInSuperset = (() => {
+		const w = $workout;
+		const supersetId = exercise.templateItem?.supersetId;
+		if (!supersetId) return true;
+		const inSuperset = w.exercises
+			.map((ex, i) => ({ i }))
+			.filter(({ i }) => w.exercises[i].templateItem?.supersetId === supersetId);
+		const maxIdx = inSuperset.length ? Math.max(...inSuperset.map(({ i }) => i)) : -1;
+		return exerciseIndex === maxIdx;
+	})();
+
 	function addSetRow() {
 		const nextNum = exercise.sets.length + 1;
 		workout.update((w) => {
@@ -82,11 +93,28 @@
 					completedAt: saved.completedAt
 				};
 				exs[exerciseIndex] = { ...targetExercise, sets };
+
+				const supersetId = exercise.templateItem?.supersetId;
+				const isLastInSuperset = !supersetId || (() => {
+					const inSuperset = w.exercises
+						.map((ex, i) => ({ i }))
+						.filter(({ i }) => w.exercises[i].templateItem?.supersetId === supersetId);
+					const maxIdx = inSuperset.length ? Math.max(...inSuperset.map(({ i }) => i)) : -1;
+					return exerciseIndex === maxIdx;
+				})();
+				const restTimer = isLastInSuperset
+					? { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
+					: w.restTimer;
+
+				const allSetsComplete = sets.every((s) => s.completed);
+				const nextBannerIndex =
+					allSetsComplete && exerciseIndex < exs.length - 1 ? exerciseIndex + 1 : exerciseIndex;
+
 				return {
 					...w,
 					exercises: exs,
-					currentExerciseIndex: exerciseIndex,
-					restTimer: { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
+					currentExerciseIndex: nextBannerIndex,
+					restTimer
 				};
 			});
 			showToast('Set saved locally ✓', 'success');
@@ -148,6 +176,7 @@
 				{set}
 				previousWeight={previousSets[set.setNumber]?.weight}
 				previousReps={previousSets[set.setNumber]?.reps}
+				showCompleteAsArrow={!isLastInSuperset}
 				on:complete={(e) => handleComplete(i, e.detail)}
 				on:delete={() => handleDelete(i)}
 			/>

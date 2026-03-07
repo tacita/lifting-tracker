@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { currentUser } from '$lib/stores/auth.js';
 	import { syncStatus } from '$lib/stores/sync.js';
+	import { resetWorkout } from '$lib/stores/workout.js';
 	import { signOut, signInWithGoogle, signInWithMagicLink } from '$lib/sync/auth.js';
 	import { syncNow } from '$lib/sync/engine.js';
 	import { showToast } from '$lib/stores/toasts.js';
@@ -8,6 +9,9 @@
 	import { exportAll, downloadJson, importWorkoutPrograms, importLegacyHistory } from '$lib/utils/importExport.js';
 	import { refreshAll } from '$lib/stores/data.js';
 	import { getDB } from '$lib/db/index.js';
+	import { getDraftSession, updateSession } from '$lib/db/sessions.js';
+	import { now } from '$lib/db/index.js';
+	import { elapsedSeconds } from '$lib/utils/format.js';
 	import { formatDateTime } from '$lib/utils/format.js';
 
 	$: user = $currentUser;
@@ -78,6 +82,13 @@
 	}
 
 	async function handleSignOut() {
+		const draft = await getDraftSession();
+		if (draft) {
+			const finishedAt = now();
+			const durationSeconds = elapsedSeconds(draft.startedAt, draft.pausedDurationSeconds);
+			await updateSession(draft.id, { status: 'complete', finishedAt, durationSeconds });
+			resetWorkout();
+		}
 		await signOut();
 		showToast('Signed out', 'info');
 	}
