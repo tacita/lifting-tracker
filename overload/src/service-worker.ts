@@ -49,12 +49,19 @@ self.addEventListener('fetch', (event) => {
 			if (cachedResponse) return cachedResponse;
 		}
 
+		const isNavigationRequest = event.request.mode === 'navigate';
+
 		// For navigation, always try network then fall back to cache
 		try {
 			const response = await fetch(event.request);
 			const isHttp = url.protocol.startsWith('http');
 			if (isHttp && response.status === 200) {
 				cache.put(event.request, response.clone());
+			}
+			// Server returned 404 for a navigation request — serve app shell instead
+			if (isNavigationRequest && response.status === 404) {
+				const appShell = await cache.match('/');
+				if (appShell) return appShell;
 			}
 			return response;
 		} catch {
