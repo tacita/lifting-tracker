@@ -75,7 +75,7 @@
 	</div>
 
 	{#if !set.completed}
-		<button class="btn-check" on:click={handleComplete} aria-label={showCompleteAsArrow ? 'Complete set, go to next' : 'Complete set'}>
+		<button class="btn-check" class:btn-check-arrow={showCompleteAsArrow} on:click={handleComplete} aria-label={showCompleteAsArrow ? 'Complete set, go to next' : 'Complete set'}>
 			{showCompleteAsArrow ? '→' : '✓'}
 		</button>
 	{:else}
@@ -117,6 +117,11 @@
 	.inp-wrap input:disabled { background: var(--bg-3); color: var(--text-2); }
 	.unit { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); font-size: 0.65rem; color: var(--text-3); pointer-events: none; }
 	.btn-check { width: 36px; height: 36px; border-radius: var(--radius-sm); background: var(--accent-bg); color: var(--accent); border: 1px solid var(--accent-dim); font-size: 1rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+	.btn-check.btn-check-arrow {
+		color: #5dd9c8;
+		border-color: rgba(93, 217, 200, 0.6);
+		background: rgba(93, 217, 200, 0.12);
+	}
 	.check-done {
 		width: 30px;
 		height: 30px;

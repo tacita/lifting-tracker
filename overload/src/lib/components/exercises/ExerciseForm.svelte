@@ -57,7 +57,7 @@
 		</div>
 		<div>
 			<label class="label" for="ex-reps">Default Reps</label>
-			<input id="ex-reps" type="text" bind:value={defaultReps} placeholder="8–10" />
+			<input id="ex-reps" type="text" bind:value={defaultReps} placeholder="15" />
 		</div>
 	</div>
 	<div class="form-row-inline">
