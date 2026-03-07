@@ -603,6 +603,17 @@ async function localImportData(data) {
     }
     const folderNames = new Set();
     const folders = Array.isArray(data.folders) ? data.folders : [];
+    const sessionIds = new Set((data.sessions || []).map((item) => String(item?.id)));
+    const exerciseIds = new Set((data.exercises || []).map((item) => String(item?.id)));
+    const validSets = (data.sets || []).filter((item) => {
+        const sessionId = String(item?.sessionId || "");
+        const exerciseId = String(item?.exerciseId || "");
+        if (!sessionId || !exerciseId) return false;
+        return sessionIds.has(sessionId) && exerciseIds.has(exerciseId);
+    });
+    if ((data.sets || []).length !== validSets.length) {
+        console.warn(`Dropped ${(data.sets || []).length - validSets.length} invalid set(s) during local import`);
+    }
     await tx(["exercises", "templates", "folders", "sessions", "sets"], "readwrite", (exStore, tmplStore, folderStore, sessionStore, setStore) => {
         exStore.clear();
         tmplStore.clear();
@@ -627,7 +638,7 @@ async function localImportData(data) {
             folderStore.add(normalized);
         });
         data.sessions.forEach((item) => sessionStore.add(item));
-        data.sets.forEach((item) => setStore.add(item));
+        validSets.forEach((item) => setStore.add(item));
     });
 }
 
@@ -783,6 +794,28 @@ function acquireSyncLock(fn) {
     const next = syncLock.then(fn, fn);
     syncLock = next.catch(() => {});
     return next;
+}
+
+async function assertSetReferencesExist(set) {
+    const sessionId = set?.sessionId;
+    const exerciseId = set?.exerciseId;
+    if (sessionId === undefined || sessionId === null || exerciseId === undefined || exerciseId === null) {
+        throw new Error("Cannot save set: missing session or exercise reference");
+    }
+
+    const [session, exercise] = await tx(["sessions", "exercises"], "readonly", (sessionStore, exerciseStore) => {
+        return Promise.all([
+            requestToPromise(sessionStore.get(sessionId)),
+            requestToPromise(exerciseStore.get(exerciseId)),
+        ]);
+    });
+
+    if (!session) {
+        throw new Error("Cannot save set: referenced session does not exist");
+    }
+    if (!exercise) {
+        throw new Error("Cannot save set: referenced exercise does not exist");
+    }
 }
 
 async function pushLocalSnapshotToCloud() {
@@ -1012,6 +1045,18 @@ async function hydrateLocalFromCloudIfAvailable() {
             items: itemsData.data?.length || 0,
             folders: foldersData.data?.length || 0,
         });
+
+        const validSessionIds = new Set((sessionsData.data || []).map((row) => String(row?.id)));
+        const validExerciseIds = new Set((exercisesData.data || []).map((row) => String(row?.id)));
+        const filteredSetsData = (setsData.data || []).filter((row) => {
+            const sessionId = String(row?.session_id || "");
+            const exerciseId = String(row?.exercise_id || "");
+            if (!sessionId || !exerciseId) return false;
+            return validSessionIds.has(sessionId) && validExerciseIds.has(exerciseId);
+        });
+        if ((setsData.data || []).length !== filteredSetsData.length) {
+            console.warn(`Dropped ${(setsData.data || []).length - filteredSetsData.length} orphan set(s) while hydrating from cloud`);
+        }
         
         // Before clearing local data, snapshot local sort orders so we can
         // preserve them if the cloud schema doesn't have the sort_order column.
@@ -1087,7 +1132,7 @@ async function hydrateLocalFromCloudIfAvailable() {
                     });
                 });
 
-                setsData.data?.forEach(row => {
+                filteredSetsData.forEach(row => {
                     setStore.put({
                         id: row.id,
                         sessionId: row.session_id,
@@ -1688,12 +1733,14 @@ export async function getSessions({ includeDraft = false } = {}) {
 
 // Sets
 export async function addSet(set) {
+    await assertSetReferencesExist(set);
     const result = await tx(["sets"], "readwrite", (store) => store.add(set));
     scheduleCloudSync();
     return result;
 }
 
 export async function updateSet(set) {
+    await assertSetReferencesExist(set);
     const result = await tx(["sets"], "readwrite", (store) => store.put(set));
     scheduleCloudSync();
     return result;
@@ -1763,6 +1810,17 @@ export async function importData(data) {
     }
     const folderNames = new Set();
     const folders = Array.isArray(data.folders) ? data.folders : [];
+    const sessionIds = new Set((data.sessions || []).map((item) => String(item?.id)));
+    const exerciseIds = new Set((data.exercises || []).map((item) => String(item?.id)));
+    const validSets = (data.sets || []).filter((item) => {
+        const sessionId = String(item?.sessionId || "");
+        const exerciseId = String(item?.exerciseId || "");
+        if (!sessionId || !exerciseId) return false;
+        return sessionIds.has(sessionId) && exerciseIds.has(exerciseId);
+    });
+    if ((data.sets || []).length !== validSets.length) {
+        console.warn(`Dropped ${(data.sets || []).length - validSets.length} invalid set(s) during import`);
+    }
     await tx(["exercises", "templates", "folders", "sessions", "sets"], "readwrite", (exStore, tmplStore, folderStore, sessionStore, setStore) => {
         exStore.clear();
         tmplStore.clear();
@@ -1787,7 +1845,7 @@ export async function importData(data) {
             folderStore.add(normalized);
         });
         data.sessions.forEach((item) => sessionStore.add(item));
-        data.sets.forEach((item) => setStore.add(item));
+        validSets.forEach((item) => setStore.add(item));
     });
     scheduleCloudSync();
 }

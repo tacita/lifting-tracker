@@ -169,7 +169,6 @@ const state = {
         lastDurationSeconds: 90,
         startTimeMs: null,
         targetEndTimeMs: null,
-        wakeLock: null,
     },
 };
 
@@ -479,8 +478,8 @@ async function signOut() {
 async function syncNow() {
     try {
         await db.forceSyncToCloud();
-        // DO NOT pull from cloud - local is source of truth
-        // Pulling would overwrite local data if cloud is stale
+        const pulled = await db.pullFromCloud();
+        if (pulled) await refreshUI();
         showToast("Cloud sync complete", "success");
     } catch (err) {
         console.error(err);
@@ -627,8 +626,6 @@ async function pauseOrResumeWorkout() {
     await db.updateSession(nextSession);
     state.activeSession = nextSession;
     state.sessions = state.sessions.map((session) => (String(session.id) === String(nextSession.id) ? nextSession : session));
-    // Sync immediately when pausing/resuming
-    await db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync pause/resume:", err));
     startWorkoutElapsedTimer();
     renderWorkoutElapsed();
 }
@@ -656,15 +653,6 @@ function stopRestTimer() {
     state.restTimer.running = false;
     state.restTimer.startTimeMs = null;
     state.restTimer.targetEndTimeMs = null;
-    
-    // Release wake lock when timer stops
-    if (state.restTimer.wakeLock) {
-        state.restTimer.wakeLock.release().catch((err) => {
-            console.error("Wake lock release failed:", err);
-        });
-        state.restTimer.wakeLock = null;
-    }
-    
     renderRestTimer();
 }
 
@@ -692,18 +680,6 @@ function startRestTimer(seconds) {
     state.restTimer.lastDurationSeconds = totalSeconds;
     state.restTimer.running = true;
     renderRestTimer();
-    
-    // Request wake lock to keep screen on during rest timer
-    if ("wakeLock" in navigator) {
-        navigator.wakeLock.request("screen").then((lock) => {
-            state.restTimer.wakeLock = lock;
-            lock.addEventListener("release", () => {
-                console.log("Wake lock released");
-            });
-        }).catch((err) => {
-            console.error("Wake lock request failed:", err);
-        });
-    }
     
     // Update display every 100ms to catch quick changes and ensure accuracy
     state.restTimer.intervalId = setInterval(() => {
@@ -951,14 +927,13 @@ async function refreshData() {
 
 async function refreshUI() {
     await refreshData();
-    cleanupEmptyDrafts();
     renderFolderSuggestions();
     renderWorkoutLauncher();
     renderExercises();
     renderTemplatesList();
     renderTemplateEditor();
     renderHistory();
-    // Don't auto-resume. Launcher shows "Continue workout" if there's a draft.
+    maybeResumeDraft();
 }
 
 function getTemplateFolderName(template) {
@@ -1212,29 +1187,7 @@ function getExercisesForSession(session) {
 
 function renderWorkoutLauncher() {
     workoutTemplatesBrowserEl.innerHTML = "";
-    
-    // Check if there's a draft workout to continue
-    const resumableDraft = findResumableDraft();
-    if (resumableDraft) {
-        const setsCount = state.sets.filter(s => String(s.sessionId) === String(resumableDraft.id)).length;
-        const templateName = resumableDraft.templateId 
-            ? state.templates.find(t => String(t.id) === String(resumableDraft.templateId))?.name 
-            : null;
-        const continueSection = document.createElement("div");
-        continueSection.className = "launcher-continue-section";
-        continueSection.innerHTML = `
-            <button type="button" class="launcher-continue-btn" id="continue-draft-btn">
-                <p class="label">Continue workout</p>
-                <p class="sub">${templateName ? escapeHtml(templateName) + ' • ' : ''}${setsCount} set${setsCount === 1 ? '' : 's'} logged</p>
-            </button>
-        `;
-        continueSection.querySelector("#continue-draft-btn").addEventListener("click", () => {
-            resumeDraft(resumableDraft);
-        });
-        workoutTemplatesBrowserEl.appendChild(continueSection);
-    }
-    
-    if (state.templates.length === 0 && !resumableDraft) {
+    if (state.templates.length === 0) {
         workoutTemplatesBrowserEl.innerHTML = `<div class="empty">No templates yet. Create one in Templates.</div>`;
         return;
     }
@@ -2309,6 +2262,7 @@ async function startWorkout(templateId = null) {
         const session = {
             id: uuid(),
             date: nowIso,
+            createdAt: nowIso,
             startedAt: nowIso,
             finishedAt: null,
             isPaused: false,
@@ -2321,8 +2275,6 @@ async function startWorkout(templateId = null) {
         };
         try {
             await db.addSession(session);
-            // Sync session to cloud immediately so sets can reference it later
-            await db.ensureCloudSyncComplete();
         } catch (err) {
             showToast("Failed to start workout", "error");
             return;
@@ -2378,55 +2330,30 @@ async function startWorkout(templateId = null) {
     setView("view-workout");
 }
 
-// Clean up empty draft sessions (no sets) - runs on every refresh
-function cleanupEmptyDrafts() {
-    const drafts = state.sessions.filter(s => s.status === "draft");
-    const emptyDrafts = drafts.filter(d => 
-        !state.sets.some(s => String(s.sessionId) === String(d.id))
-    );
+function maybeResumeDraft() {
+    if (state.activeSession) return;
+
+    const draft = state.sessions
+        .filter((s) => s.status === "draft")
+        .sort((a, b) => {
+            const aTs = Date.parse(a.startedAt || a.createdAt || a.date || "") || 0;
+            const bTs = Date.parse(b.startedAt || b.createdAt || b.date || "") || 0;
+            return bTs - aTs;
+        })[0];
     
-    if (emptyDrafts.length > 0) {
-        console.log(`Cleaning up ${emptyDrafts.length} empty draft sessions`);
-        emptyDrafts.forEach(d => {
-            db.deleteSession(d.id).catch(err => console.error("Failed to delete empty draft:", err));
-        });
-        state.sessions = state.sessions.filter(s => 
-            s.status !== "draft" || state.sets.some(set => String(set.sessionId) === String(s.id))
-        );
+    if (draft) {
+        state.activeSession = draft;
+        state.activeExercises = getExercisesForSession(draft);
+        sessionTemplateLabel.textContent = draft.templateId ? state.templates.find((t) => String(t.id) === String(draft.templateId))?.name || "Workout" : "Empty Workout";
+        renderActiveTemplateNote();
+        workoutNotesEl.value = draft.notes || "";
+        workoutSection.classList.remove("hidden");
+        startWorkoutElapsedTimer();
+        renderSessionExercisePicker();
+        renderWorkoutExercises();
+    } else {
+        stopWorkoutElapsedTimer();
     }
-}
-
-// Find draft with sets that user can continue (returns most recent, or null)
-function findResumableDraft() {
-    const draftsWithSets = state.sessions.filter(s => {
-        if (s.status !== "draft") return false;
-        return state.sets.some(set => String(set.sessionId) === String(s.id));
-    });
-    
-    if (draftsWithSets.length === 0) return null;
-    
-    // Return most recent
-    return draftsWithSets.sort((a, b) => {
-        const aTime = new Date(a.startedAt || a.date || 0).getTime();
-        const bTime = new Date(b.startedAt || b.date || 0).getTime();
-        return bTime - aTime;
-    })[0];
-}
-
-// Resume a specific draft session (called when user clicks "Continue workout")
-function resumeDraft(draft) {
-    state.activeSession = draft;
-    state.activeExercises = getExercisesForSession(draft);
-    sessionTemplateLabel.textContent = draft.templateId 
-        ? state.templates.find(t => String(t.id) === String(draft.templateId))?.name || "Workout" 
-        : "Workout";
-    renderActiveTemplateNote();
-    workoutNotesEl.value = draft.notes || "";
-    workoutSection.classList.remove("hidden");
-    startWorkoutElapsedTimer();
-    renderSessionExercisePicker();
-    renderWorkoutExercises();
-    updateWorkoutFloatingWidget();
 }
 
 function renderSessionExercisePicker() {
@@ -2638,9 +2565,6 @@ async function swapExerciseInSession(nextExercise) {
     renderSessionExercisePicker();
     renderWorkoutExercises();
     showToast(`Swapped to ${nextExercise.name}`, "success");
-    
-    // Sync immediately after swapping exercise
-    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync exercise swap:", err));
 }
 
 function openCreateExerciseModal() {
@@ -3066,8 +2990,6 @@ async function deleteSetRow(row) {
         if (existing) {
             await db.deleteSet(existing.id);
             state.sets = state.sets.filter((item) => String(item.id) !== row.dataset.setId);
-            // Sync immediately when deleting a set
-            db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync set deletion:", err));
         }
     }
     row.remove();
@@ -3258,7 +3180,7 @@ function addSetRow(container, exercise, existingSet, setNumber = 1, previousDisp
         try {
             await db.updateSet(updated);
         } catch (err) {
-            showToast("Failed to save set", "error");
+            showToast("Failed to update set", "error");
             return;
         }
         state.sets = state.sets.map((item) => (String(item.id) === String(updated.id) ? updated : item));
@@ -3388,7 +3310,6 @@ async function saveSetRow(container, exercise, row, weightInput, repsInput) {
             row.dataset.setId = payload.id;
             state.sets.push(payload);
         }
-        // Don't sync here - weight/reps are local only until marked complete
     } catch (err) {
         showToast("Failed to save set", "error");
         return null;
@@ -3408,11 +3329,6 @@ function buildRepsTextForTemplate(exercise, setsForExercise) {
 }
 
 async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
-    // Skip the "save as template" prompt for now - just finish the workout
-    // User can create templates manually from the Templates tab
-    return null;
-    
-    /* Disabled for now - was potentially blocking finish workout
     if (!state.activeSession || state.activeSession.templateId || state.activeExercises.length === 0) {
         return null;
     }
@@ -3425,7 +3341,6 @@ async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
     if (!shouldSaveTemplate) {
         return null;
     }
-    */
 
     let templateName = "";
     while (!templateName) {
@@ -3475,27 +3390,18 @@ async function maybeSaveEmptyWorkoutAsTemplate(sessionSets) {
 }
 
 async function finishWorkout() {
-    console.log("finishWorkout called");
     if (!state.activeSession) {
         showToast("No active workout", "error");
         return;
     }
     const sessionId = state.activeSession.id;
-    const sessionSets = state.sets.filter((s) => String(s.sessionId) === String(sessionId));
-    
+    const sessionSets = state.sets.filter((s) => s.sessionId === sessionId);
     if (sessionSets.length === 0) {
-        showToast("Log at least one set first", "error");
+        showToast("Log at least one set", "error");
         return;
     }
 
-    let createdTemplateName;
-    try {
-        createdTemplateName = await maybeSaveEmptyWorkoutAsTemplate(sessionSets);
-    } catch (err) {
-        console.error("maybeSaveEmptyWorkoutAsTemplate failed:", err);
-        showToast(`Template save failed: ${err.message}`, "error");
-        // Continue anyway - don't block finishing the workout
-    }
+    const createdTemplateName = await maybeSaveEmptyWorkoutAsTemplate(sessionSets);
 
     const updated = {
         ...state.activeSession,
@@ -3544,14 +3450,7 @@ async function finishWorkout() {
         "success"
     );
     celebrateWithConfetti();
-    
-    // Refresh data but DON'T auto-resume another workout
-    // User just finished - they want to see the launcher, not another workout
-    await refreshData();
-    renderWorkoutLauncher();
-    renderHistory();
-    renderTemplatesList();
-    // Explicitly don't call maybeResumeDraft here
+    await refreshUI();
 }
 
 let cancelWorkoutInProgress = false;
@@ -4017,8 +3916,6 @@ async function importExercisesData(parsed) {
     }
 
     await refreshUI();
-    // Sync immediately after bulk import
-    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported exercises:", err));
     showToast(`Exercises imported: ${added} added, ${skipped} skipped`, "success");
 }
 
@@ -4094,8 +3991,6 @@ async function importHistoryData(parsed) {
     }
 
     await refreshUI();
-    // Sync immediately after bulk import
-    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported history:", err));
     showToast(`History imported: ${importedSessions} sessions, ${importedSets} sets`, "success");
 }
 
@@ -4216,8 +4111,6 @@ async function importWorkoutsData(parsed) {
     }
 
     await refreshUI();
-    // Sync immediately after bulk import
-    db.ensureCloudSyncComplete().catch((err) => console.error("Failed to sync imported workouts:", err));
     showToast(
         `Imported ${added} workout template${added === 1 ? "" : "s"}${exerciseNotesUpdated ? ` • ${exerciseNotesUpdated} exercise notes updated` : ""}`,
         "success"
@@ -4404,15 +4297,19 @@ async function init() {
         handleSyncStateChange(nextSyncState);
     });
 
-    // Push local data to cloud when tab becomes visible
-    // DO NOT pull from cloud - local is source of truth
-    // Pulling would overwrite local data if cloud sync had failed
+    // Pull fresh data from cloud when tab becomes visible (e.g. switching from phone to desktop)
+    let lastCloudPullMs = 0;
     document.addEventListener("visibilitychange", async () => {
         if (document.visibilityState !== "visible") return;
+        const now = Date.now();
+        // Throttle to at most once per 30 seconds to avoid excessive requests
+        if (now - lastCloudPullMs < 30_000) return;
+        lastCloudPullMs = now;
         try {
-            await db.forceSyncToCloud();
+            const pulled = await db.pullFromCloud();
+            if (pulled) await refreshUI();
         } catch (err) {
-            console.error("Visibility sync failed:", err);
+            console.error("Visibility pull failed:", err);
         }
     });
 

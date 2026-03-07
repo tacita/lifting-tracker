@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b0c10"/>
+  <!-- Flexing arm silhouette - sharp angular style -->
+  <g transform="translate(256,260) scale(1,-1)">
+    <!-- Upper arm -->
+    <path d="M-20,-80 L-50,-30 L-80,40 L-60,50 L-30,0 L0,60 L40,100 L80,110 L100,90 L70,70 L50,30 L30,-10 L20,-60 L10,-80 Z"
+          fill="#45e6a0" stroke="none"/>
+    <!-- Forearm -->
+    <path d="M-80,40 L-120,90 L-130,130 L-110,135 L-95,100 L-60,50 Z"
+          fill="#45e6a0" stroke="none"/>
+    <!-- Bicep peak bump -->
+    <path d="M0,60 Q10,95 40,100 L30,80 Q15,75 10,55 Z"
+          fill="#3dd192" stroke="none"/>
+    <!-- Fist -->
+    <path d="M-130,130 L-145,140 L-140,160 L-120,155 L-110,135 Z"
+          fill="#45e6a0" stroke="none"/>
+  </g>
+</svg>

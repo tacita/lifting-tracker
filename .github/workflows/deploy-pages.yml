@@ -24,23 +24,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate Supabase secrets
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY."
-            echo "Add them as repo secrets, or as environment secrets on 'github-pages'."
-            exit 1
-          fi
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: overload/package-lock.json
 
-      - name: Generate runtime config
-        run: |
-          cat > config.js << 'EOF'
-          window.__OVERLOAD_SUPABASE_URL = "${{ secrets.SUPABASE_URL }}";
-          window.__OVERLOAD_SUPABASE_ANON_KEY = "${{ secrets.SUPABASE_ANON_KEY }}";
-          EOF
+      - name: Install dependencies
+        working-directory: overload
+        run: npm ci
+
+      - name: Build
+        working-directory: overload
+        env:
+          PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BASE_PATH: /lifting-tracker
+        run: npm run build
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -48,7 +49,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: overload/build
 
       - name: Deploy to GitHub Pages
         id: deployment
