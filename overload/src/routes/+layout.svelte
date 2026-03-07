@@ -9,23 +9,51 @@
 	import { settleCurrentUser, onAuthChange } from '$lib/sync/auth.js';
 	import { pullFromCloud, syncNow } from '$lib/sync/engine.js';
 	import { refreshAll } from '$lib/stores/data.js';
-	import { workout } from '$lib/stores/workout.js';
+	import { workout, resetWorkout } from '$lib/stores/workout.js';
+	import { clearAllStores } from '$lib/db/index.js';
 	import { getDraftSession, getSetsForSession } from '$lib/db/sessions.js';
 	import { getTemplateItems } from '$lib/db/templates.js';
 	import { getExercises } from '$lib/db/exercises.js';
 	import FloatingWidget from '$lib/components/workout/FloatingWidget.svelte';
 	import Toast from '$lib/components/shared/Toast.svelte';
 
+	const LAST_USER_ID_KEY = 'overload_last_user_id';
 	let hydrating = true;
 
 	onMount(() => {
 		let authSub: { unsubscribe: () => void } | null = null;
 
-		async function init() {
+		async function loadUserData(userId: string) {
+			await pullFromCloud(userId);
 			await refreshAll();
-			hydrating = false;
+		}
 
-			// Restore any in-progress workout from IndexedDB (survives refresh + logout)
+		async function init() {
+			// Resolve current user first so we never show or push another account's data.
+			const initialUser = await settleCurrentUser({
+				attempts: 12,
+				delayMs: 250
+			});
+			currentUser.set(initialUser);
+			authLoading.set(false);
+
+			if (!initialUser) {
+				sessionStorage.removeItem(LAST_USER_ID_KEY);
+				await clearAllStores();
+				resetWorkout();
+				hydrating = false;
+				return;
+			}
+
+			const lastStoredId = sessionStorage.getItem(LAST_USER_ID_KEY);
+			if (lastStoredId !== initialUser.id) {
+				await clearAllStores();
+				resetWorkout();
+				sessionStorage.setItem(LAST_USER_ID_KEY, initialUser.id);
+			}
+			await loadUserData(initialUser.id);
+
+			// Restore in-progress workout from IndexedDB (only this user's data now)
 			const draft = await getDraftSession();
 			if (draft && $workout.session === null) {
 				const [items, exList, savedSets] = await Promise.all([
@@ -42,14 +70,12 @@
 						exIds.push(ti.exerciseId);
 					}
 				}
-				// Ensure exercises added during the draft (outside template items) are restored too.
 				for (const s of savedSets) {
 					if (!seen.has(s.exerciseId)) {
 						seen.add(s.exerciseId);
 						exIds.push(s.exerciseId);
 					}
 				}
-
 				workout.set({
 					session: draft,
 					exercises: exIds.map((exId) => {
@@ -78,32 +104,33 @@
 				});
 			}
 
-			// Resolve current user first to avoid auth flicker/redirect loops on mobile Safari.
-			// Safari sometimes applies session from redirect URL slightly after first paint.
-			const initialUser = await settleCurrentUser({
-				attempts: 12,
-				delayMs: 250
-			});
-			currentUser.set(initialUser);
-			authLoading.set(false);
-			if (initialUser) {
-				pullFromCloud(initialUser.id).then(() => refreshAll()).catch(console.warn);
-			}
+			hydrating = false;
 
-			// Auth subscription
 			authSub = onAuthChange((user, event) => {
 				if (event === 'SIGNED_OUT') {
-					currentUser.set(null);
+					sessionStorage.removeItem(LAST_USER_ID_KEY);
+					clearAllStores().then(() => {
+						resetWorkout();
+						currentUser.set(null);
+					}).catch(console.warn);
 					return;
 				}
 
 				if (user) {
 					currentUser.set(user);
-					pullFromCloud(user.id).then(() => refreshAll()).catch(console.warn);
+					const lastStored = sessionStorage.getItem(LAST_USER_ID_KEY);
+					if (lastStored !== user.id) {
+						sessionStorage.setItem(LAST_USER_ID_KEY, user.id);
+						clearAllStores()
+							.then(() => resetWorkout())
+							.then(() => loadUserData(user.id))
+							.catch(console.warn);
+					} else {
+						loadUserData(user.id).catch(console.warn);
+					}
 					return;
 				}
 
-				// Ignore transient null callbacks if we already have a logged-in user.
 				if (get(currentUser)) return;
 				currentUser.set(null);
 			});

@@ -13,7 +13,17 @@ type AppDB = {
 const DB_NAME = 'overload';
 const DB_VERSION = 1;
 
+const STORE_NAMES = ['exercises', 'folders', 'templates', 'templateItems', 'sessions', 'sets'] as const;
+
 let _db: IDBPDatabase<AppDB> | null = null;
+
+/** Clear all object stores. Call when switching users so one account never overwrites another. */
+export async function clearAllStores(): Promise<void> {
+	const db = await getDB();
+	for (const name of STORE_NAMES) {
+		await db.clear(name);
+	}
+}
 
 export async function getDB(): Promise<IDBPDatabase<AppDB>> {
 	if (_db) return _db;

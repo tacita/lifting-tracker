@@ -1,5 +1,7 @@
 -- Lifting Tracker - Normalized Supabase Schema
--- Run these commands in your Supabase dashboard SQL editor
+-- Run these commands in your Supabase dashboard SQL editor.
+-- Matches overload/src/lib/sync/engine.ts: tables exercises, folders, templates, template_items, sessions, sets.
+-- Section "MIGRATION TO CANONICAL SCHEMA" is for existing DBs; safe to run after CREATE (uses IF NOT EXISTS / conditional blocks).
 
 -- Create exercises table
 CREATE TABLE IF NOT EXISTS exercises (
@@ -327,10 +329,24 @@ ALTER TABLE templates ADD COLUMN IF NOT EXISTS note TEXT;
 ALTER TABLE templates ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
 ALTER TABLE templates ADD COLUMN IF NOT EXISTS folder_id TEXT;
 
--- template_items
-ALTER TABLE template_items ALTER COLUMN sets DROP NOT NULL;
-ALTER TABLE template_items ALTER COLUMN rest_seconds DROP NOT NULL;
+-- template_items (only drop NOT NULL if present, for legacy DBs)
+DO $$
+BEGIN
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'template_items' AND column_name = 'sets' AND is_nullable = 'NO'
+	) THEN
+		ALTER TABLE template_items ALTER COLUMN sets DROP NOT NULL;
+	END IF;
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = 'public' AND table_name = 'template_items' AND column_name = 'rest_seconds' AND is_nullable = 'NO'
+	) THEN
+		ALTER TABLE template_items ALTER COLUMN rest_seconds DROP NOT NULL;
+	END IF;
+END $$;
 ALTER TABLE template_items ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0;
+-- Ensure reps is TEXT (no-op if already TEXT)
 ALTER TABLE template_items
 	ALTER COLUMN reps TYPE TEXT
 	USING reps::text;

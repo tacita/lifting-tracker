@@ -59,14 +59,13 @@ async function runSync(): Promise<void> {
 	syncInFlight = true;
 	syncStatus.setSyncing();
 	try {
-		await Promise.all([
-			pushTable('exercises', 'exercises', user.id, toCloudExercise),
-			pushTable('folders', 'folders', user.id, toCloudFolder),
-			pushTable('templates', 'templates', user.id, toCloudTemplate),
-			pushTable('templateItems', 'template_items', user.id, toCloudTemplateItem),
-			pushTable('sessions', 'sessions', user.id, toCloudSession),
-			pushTable('sets', 'sets', user.id, toCloudSet)
-		]);
+		// Push in FK order so referenced rows exist before dependents
+		await pushTable('exercises', 'exercises', user.id, toCloudExercise);
+		await pushFoldersEnsuringReferenced(user.id);
+		await pushTable('templates', 'templates', user.id, toCloudTemplate);
+		await pushTable('templateItems', 'template_items', user.id, toCloudTemplateItem);
+		await pushTable('sessions', 'sessions', user.id, toCloudSession);
+		await pushTable('sets', 'sets', user.id, toCloudSet);
 		syncStatus.setOk();
 	} catch (err) {
 		syncStatus.setError(String(err));
@@ -78,6 +77,27 @@ async function runSync(): Promise<void> {
 
 type StoreName = 'exercises' | 'folders' | 'templates' | 'templateItems' | 'sessions' | 'sets';
 type AnyRow = { id: string; synced: boolean; updatedAt: string };
+
+/** Push folders that are unsynced OR referenced by any unsynced template (so FK exists in cloud after clear). */
+async function pushFoldersEnsuringReferenced(userId: string): Promise<void> {
+	const db = await getDB();
+	const dbAny = db as unknown as { getAll: (s: string) => Promise<AnyRow[]>; put: (s: string, v: unknown) => Promise<void> };
+	const allTemplates = await dbAny.getAll('templates') as (Template & AnyRow)[];
+	const unsyncedTemplateFolderIds = new Set<string>();
+	for (const t of allTemplates) {
+		if (!t.synced && t.folderId) unsyncedTemplateFolderIds.add(t.folderId);
+	}
+	const allFolders = await dbAny.getAll('folders') as (Folder & AnyRow)[];
+	const toPush = allFolders.filter((f) => !f.synced || unsyncedTemplateFolderIds.has(f.id));
+	if (toPush.length === 0) return;
+	const supabase = getSupabase();
+	const payload = toPush.map((r) => toCloudFolder(r as AnyRow, userId));
+	const { error } = await supabase.from('folders').upsert(payload, { onConflict: 'id' });
+	if (error) throw new Error(`[sync] folders: ${error.message}`);
+	for (const row of toPush) {
+		await dbAny.put('folders', { ...row, synced: true });
+	}
+}
 
 async function pushTable(
 	store: StoreName,
@@ -145,13 +165,44 @@ async function mergeTable(
 
 // ─── local → cloud ────────────────────────────────────────────────────────────
 
+/** Parse defaultReps into rep_floor/rep_ceiling for legacy Supabase schema (NOT NULL columns). */
+function parseRepFloorCeiling(defaultReps: string | undefined): { rep_floor: number; rep_ceiling: number } {
+	if (!defaultReps || typeof defaultReps !== 'string') return { rep_floor: 1, rep_ceiling: 10 };
+	const s = defaultReps.trim();
+	const dash = s.indexOf('-');
+	if (dash === -1) {
+		const n = Number.parseInt(s, 10);
+		const v = Number.isFinite(n) && n >= 0 ? n : 10;
+		return { rep_floor: v, rep_ceiling: v };
+	}
+	const low = Number.parseInt(s.slice(0, dash).trim(), 10);
+	const high = Number.parseInt(s.slice(dash + 1).trim(), 10);
+	const floor = Number.isFinite(low) && low >= 0 ? low : 1;
+	const ceiling = Number.isFinite(high) && high >= 0 ? high : 10;
+	return { rep_floor: floor, rep_ceiling: ceiling >= floor ? ceiling : floor };
+}
+
 function toCloudExercise(r: AnyRow, userId: string) {
 	const e = r as unknown as Exercise;
-	return { id: e.id, user_id: userId, name: e.name, note: e.note ?? null, default_reps: e.defaultReps ?? null, default_weight: e.defaultWeight ?? null, default_rest_seconds: e.defaultRestSeconds ?? null, default_sets: e.defaultSets ?? null, created_at: e.createdAt, updated_at: e.updatedAt };
+	const { rep_floor, rep_ceiling } = parseRepFloorCeiling(e.defaultReps);
+	return {
+		id: e.id,
+		user_id: userId,
+		name: e.name,
+		note: e.note ?? null,
+		default_reps: e.defaultReps ?? null,
+		default_weight: e.defaultWeight ?? null,
+		default_rest_seconds: e.defaultRestSeconds ?? null,
+		default_sets: e.defaultSets ?? null,
+		rep_floor,
+		rep_ceiling,
+		created_at: e.createdAt,
+		updated_at: e.updatedAt
+	};
 }
 function toCloudFolder(r: AnyRow, userId: string) {
 	const f = r as unknown as Folder;
-	return { id: f.id, user_id: userId, name: f.name, sort_order: f.sortOrder ?? null, created_at: f.createdAt, updated_at: f.updatedAt };
+	return { id: f.id, user_id: userId, name: f.name, sort_order: f.sortOrder ?? 0, created_at: f.createdAt, updated_at: f.updatedAt };
 }
 function toCloudTemplate(r: AnyRow, userId: string) {
 	const t = r as unknown as Template;

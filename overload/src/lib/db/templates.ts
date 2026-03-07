@@ -11,7 +11,14 @@ export async function getFolders(): Promise<Folder[]> {
 
 export async function addFolder(data: Omit<Folder, 'id' | 'createdAt' | 'updatedAt' | 'synced'>): Promise<Folder> {
 	const db = await getDB();
-	const folder: Folder = { ...data, id: createId(), createdAt: now(), updatedAt: now(), synced: false };
+	const folder: Folder = {
+		...data,
+		sortOrder: data.sortOrder ?? 0,
+		id: createId(),
+		createdAt: now(),
+		updatedAt: now(),
+		synced: false
+	};
 	await db.put('folders', folder);
 	scheduleSync();
 	return folder;

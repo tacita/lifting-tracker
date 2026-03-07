@@ -1,0 +1,72 @@
+{
+  "format": "overload-workouts-v1",
+  "templates": [
+    {
+      "name": "Day 1 — Chest + Back",
+      "folder": "5-Day Teen Muscle & Strength Program",
+      "items": [
+        { "exercise": "Incline Dumbbell Press", "sets": 4, "reps": "8", "restSeconds": 120 },
+        { "exercise": "Smith Machine Flat Press", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Cable Fly", "sets": 3, "reps": "12", "restSeconds": 60 },
+        { "exercise": "Pull-Ups / Assisted Pull-Ups", "sets": 4, "reps": "8", "restSeconds": 120 },
+        { "exercise": "Wide-Grip Lat Pulldown", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Chest Supported Row", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Straight Arm Pulldown", "sets": 3, "reps": "12", "restSeconds": 60 }
+      ]
+    },
+    {
+      "name": "Day 2 — Shoulders + Arms",
+      "folder": "5-Day Teen Muscle & Strength Program",
+      "items": [
+        { "exercise": "Seated Dumbbell Shoulder Press", "sets": 4, "reps": "8", "restSeconds": 120 },
+        { "exercise": "Dumbbell Lateral Raise", "sets": 4, "reps": "12", "restSeconds": 60 },
+        { "exercise": "Cable Lateral Raise", "sets": 3, "reps": "12", "restSeconds": 60 },
+        { "exercise": "Rear Delt Fly (Machine or Cable)", "sets": 4, "reps": "12", "restSeconds": 60 },
+        { "exercise": "EZ Bar Curl", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Incline Dumbbell Curl", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Cable Triceps Pushdown", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Overhead Cable Triceps Extension", "sets": 3, "reps": "12", "restSeconds": 60 }
+      ]
+    },
+    {
+      "name": "Day 3 — Legs + Abs",
+      "folder": "5-Day Teen Muscle & Strength Program",
+      "items": [
+        { "exercise": "Hack Squat Machine", "sets": 4, "reps": "6", "restSeconds": 150 },
+        { "exercise": "Romanian Deadlift", "sets": 3, "reps": "8", "restSeconds": 120 },
+        { "exercise": "Leg Press", "sets": 3, "reps": "10", "restSeconds": 120 },
+        { "exercise": "Leg Curl", "sets": 3, "reps": "12", "restSeconds": 90 },
+        { "exercise": "Standing Calf Raise", "sets": 4, "reps": "15", "restSeconds": 60 },
+        { "exercise": "Hammer Curl", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Wrist Curl Superset", "sets": 3, "reps": "15", "restSeconds": 60 },
+        { "exercise": "Hanging Leg Raises", "sets": 3, "reps": "10", "restSeconds": 60 },
+        { "exercise": "Cable Crunch", "sets": 3, "reps": "12", "restSeconds": 60 }
+      ]
+    },
+    {
+      "name": "Day 4 — Upper (Hypertrophy & Symmetry)",
+      "folder": "5-Day Teen Muscle & Strength Program",
+      "items": [
+        { "exercise": "Incline Machine Press", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Pull-Ups or Lat Pulldown", "sets": 3, "reps": "10", "restSeconds": 120 },
+        { "exercise": "Single Arm Dumbbell Row", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Dumbbell Lateral Raise", "sets": 4, "reps": "12", "restSeconds": 60 },
+        { "exercise": "Face Pulls", "sets": 3, "reps": "15", "restSeconds": 60 },
+        { "exercise": "Curl Variation", "sets": 3, "reps": "10", "restSeconds": 90 },
+        { "exercise": "Triceps Variation", "sets": 3, "reps": "10", "restSeconds": 90 }
+      ]
+    },
+    {
+      "name": "Day 5 — Lower + Abs",
+      "folder": "5-Day Teen Muscle & Strength Program",
+      "items": [
+        { "exercise": "Dumbbell Romanian Deadlift", "sets": 3, "reps": "6", "restSeconds": 150 },
+        { "exercise": "Bulgarian Split Squat", "sets": 3, "reps": "8", "restSeconds": 120, "note": "8 each leg" },
+        { "exercise": "Leg Extension", "sets": 3, "reps": "12", "restSeconds": 90 },
+        { "exercise": "Seated Calf Raise", "sets": 4, "reps": "15", "restSeconds": 60 },
+        { "exercise": "Farmer Carries", "sets": 3, "reps": "1", "restSeconds": 90, "note": "40 sec" },
+        { "exercise": "Ab Wheel Rollout or Plank", "sets": 3, "reps": "1", "restSeconds": 60, "note": "30-45 sec" }
+      ]
+    }
+  ]
+}
