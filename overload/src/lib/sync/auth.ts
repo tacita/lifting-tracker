@@ -1,7 +1,13 @@
 import { getSupabase } from './supabase.js';
+import { base } from '$app/paths';
 import type { User } from '@supabase/supabase-js';
 
 const ALLOWED_EMAILS = ['tacita.om@gmail.com', 'nico.p.morway@gmail.com'];
+
+// Full app origin including the base path, e.g. https://tacita.github.io/lifting-tracker
+function appUrl(): string {
+	return window.location.origin + base;
+}
 
 export function isAllowedEmail(email: string | undefined): boolean {
 	if (!email) return false;
@@ -12,7 +18,7 @@ export async function signInWithGoogle(): Promise<void> {
 	const supabase = getSupabase();
 	const { error } = await supabase.auth.signInWithOAuth({
 		provider: 'google',
-		options: { redirectTo: window.location.origin }
+		options: { redirectTo: appUrl() }
 	});
 	if (error) throw error;
 }
@@ -24,7 +30,7 @@ export async function signInWithMagicLink(email: string): Promise<void> {
 	const supabase = getSupabase();
 	const { error } = await supabase.auth.signInWithOtp({
 		email,
-		options: { emailRedirectTo: window.location.origin }
+		options: { emailRedirectTo: appUrl() }
 	});
 	if (error) throw error;
 }
