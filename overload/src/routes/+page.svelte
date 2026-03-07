@@ -4,9 +4,9 @@
 	import { folders, templates, templateItemsCache, refreshAll, refreshTemplateItems } from '$lib/stores/data.js';
 	import { workout, resetWorkout } from '$lib/stores/workout.js';
 	import { currentUser, authLoading } from '$lib/stores/auth.js';
-	import { createSession, getDraftSession, deleteSession } from '$lib/db/sessions.js';
+	import { createSession, getDraftSession, updateSession } from '$lib/db/sessions.js';
 	import { getTemplateItems, getTemplates } from '$lib/db/templates.js';
-import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$lib/db/templates.js';
+	import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$lib/db/templates.js';
 	import { getExercises } from '$lib/db/exercises.js';
 	import { getSetsForSession } from '$lib/db/sessions.js';
 	import { now } from '$lib/db/index.js';
@@ -64,12 +64,12 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 			const existingSets = await getSetsForSession(draft.id);
 			if (existingSets.length === 0) {
 				// Empty draft is usually stale navigation state; clear it silently.
-				await deleteSession(draft.id);
+				await updateSession(draft.id, { status: 'cancelled', finishedAt: now() });
 				resetWorkout();
 			} else {
 				const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it to start a new one?');
 				if (!confirmed) return;
-				await deleteSession(draft.id);
+				await updateSession(draft.id, { status: 'cancelled', finishedAt: now() });
 				resetWorkout();
 			}
 		}
@@ -126,12 +126,12 @@ import { addFolder, updateFolder, deleteFolder as deleteProgramFolder } from '$l
 		if (draft) {
 			const existingSets = await getSetsForSession(draft.id);
 			if (existingSets.length === 0) {
-				await deleteSession(draft.id);
+				await updateSession(draft.id, { status: 'cancelled', finishedAt: now() });
 				resetWorkout();
 			} else {
 				const confirmed = await showConfirm('Cancel current workout?', 'You have a workout in progress. Cancel it?');
 				if (!confirmed) return;
-				await deleteSession(draft.id);
+				await updateSession(draft.id, { status: 'cancelled', finishedAt: now() });
 				resetWorkout();
 			}
 		}

@@ -4,7 +4,7 @@
 	import { workout, resetWorkout } from '$lib/stores/workout.js';
 	import type { ActiveExercise } from '$lib/stores/workout.js';
 	import type { WorkoutSet, TemplateItem } from '$lib/db/schema.js';
-	import { updateSession, deleteSession } from '$lib/db/sessions.js';
+	import { updateSession } from '$lib/db/sessions.js';
 	import { getExercises } from '$lib/db/exercises.js';
 	import { getTemplateItems } from '$lib/db/templates.js';
 	import { getExerciseHistory } from '$lib/db/exercises.js';
@@ -143,9 +143,12 @@
 	let showCancelConfirm = false;
 	async function cancelWorkout() {
 		if (!session) return;
-		await deleteSession(session.id);
-		resetWorkout();
-		goto(`${base}/`);
+	const finishedAt = now();
+	const durationSeconds = elapsedSeconds(session.startedAt, session.pausedDurationSeconds);
+	const updated = await updateSession(session.id, { status: 'cancelled', finishedAt, durationSeconds });
+	workout.update((w) => ({ ...w, session: updated }));
+	resetWorkout();
+	goto(`${base}/`);
 	}
 
 	// Celebration
