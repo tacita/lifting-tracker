@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
-	import { workout, resetWorkout } from '$lib/stores/workout.js';
+	import { workout, resetWorkout, hasTemplateChanged } from '$lib/stores/workout.js';
 	import type { ActiveExercise } from '$lib/stores/workout.js';
 	import type { WorkoutSet, TemplateItem } from '$lib/db/schema.js';
 	import { updateSession, deleteSession } from '$lib/db/sessions.js';
 	import { getExercises } from '$lib/db/exercises.js';
-	import { getTemplateItems } from '$lib/db/templates.js';
+	import { getTemplate, getTemplateItems, setTemplateItems } from '$lib/db/templates.js';
 	import { getExerciseHistory } from '$lib/db/exercises.js';
 	import { now } from '$lib/db/index.js';
 	import { formatTimer, formatDuration, elapsedSeconds } from '$lib/utils/format.js';
@@ -15,6 +15,7 @@
 	import RestTimer from '$lib/components/workout/RestTimer.svelte';
 	import ExerciseSelector from '$lib/components/exercises/ExerciseSelector.svelte';
 	import ConfirmModal from '$lib/components/shared/ConfirmModal.svelte';
+	import FinishWorkoutModal from '$lib/components/shared/FinishWorkoutModal.svelte';
 	import HistoryChart from '$lib/components/shared/HistoryChart.svelte';
 	import { exercises as exStore } from '$lib/stores/data.js';
 	import { onDestroy } from 'svelte';
@@ -130,6 +131,8 @@
 
 	// Finish workout
 	let showFinishConfirm = false;
+	$: templateChanged = session?.templateId ? hasTemplateChanged(exercises) : false;
+
 	async function finishWorkout() {
 		if (!session) return;
 		const finishedAt = now();
@@ -137,6 +140,26 @@
 		await updateSession(session.id, { status: 'complete', finishedAt, durationSeconds });
 		workout.update((w) => ({ ...w, session: { ...w.session!, status: 'complete', finishedAt, durationSeconds } }));
 		showCelebration = true;
+	}
+
+	async function updateTemplateFromWorkout() {
+		if (!session?.templateId) return;
+		const template = await getTemplate(session.templateId);
+		if (!template) {
+			showToast('Template no longer exists', 'error');
+			return;
+		}
+		const items = exercises.map((ex, i) => ({
+			exerciseId: ex.exerciseId,
+			sortOrder: i,
+			sets: ex.sets.length || ex.templateItem?.sets,
+			reps: ex.templateItem?.reps,
+			restSeconds: ex.templateItem?.restSeconds,
+			supersetId: ex.templateItem?.supersetId,
+			supersetOrder: ex.templateItem?.supersetOrder
+		}));
+		await setTemplateItems(session.templateId, items);
+		showToast('Template updated');
 	}
 
 	// Cancel workout
@@ -278,11 +301,10 @@
 	{/if}
 
 	{#if showFinishConfirm}
-		<ConfirmModal
-			title="Finish workout?"
-			message="Great work! This will save your workout and end the session."
-			confirmLabel="Finish"
-			onConfirm={() => { showFinishConfirm = false; finishWorkout(); }}
+		<FinishWorkoutModal
+			{templateChanged}
+			onSave={() => { showFinishConfirm = false; finishWorkout(); }}
+			onSaveAndUpdate={async () => { showFinishConfirm = false; await updateTemplateFromWorkout(); finishWorkout(); }}
 			onCancel={() => (showFinishConfirm = false)}
 		/>
 	{/if}
