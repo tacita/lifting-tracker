@@ -39,3 +39,18 @@ const DEFAULT: WorkoutState = {
 export const workout = writable<WorkoutState>(DEFAULT);
 
 export function resetWorkout() { workout.set(DEFAULT); }
+
+export function hasTemplateChanged(exercises: ActiveExercise[]): boolean {
+	// Any exercise added mid-workout (no templateItem, or fake superset item with id '')
+	if (exercises.some((e) => !e.templateItem || e.templateItem.id === '')) return true;
+
+	// Any exercise swapped to a different exercise
+	if (exercises.some((e) => e.exerciseId !== e.templateItem!.exerciseId)) return true;
+
+	// Exercises reordered (sortOrders should be ascending)
+	for (let i = 1; i < exercises.length; i++) {
+		if (exercises[i].templateItem!.sortOrder < exercises[i - 1].templateItem!.sortOrder) return true;
+	}
+
+	return false;
+}
