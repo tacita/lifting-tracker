@@ -44,7 +44,7 @@
 	}
 </script>
 
-<div class="set-row" class:done={set.completed}>
+<div class="set-row" class:done={set.completed} class:no-weight={!showWeight}>
 	<span class="set-num">{set.setNumber}:</span>
 	<span class="prev-val" title="Previous set">{previousDisplay}</span>
 
@@ -137,13 +137,17 @@
 	.btn-del { color: var(--text-3); font-size: 0.7rem; padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 	.set-err { grid-column: 1 / -1; font-size: 0.78rem; color: var(--danger); padding-top: 2px; }
 
-	@media (max-width: 390px) {
+	@media (max-width: 430px) {
 		.set-row {
-			grid-template-columns: 24px 56px minmax(0, 1fr) minmax(0, 1fr) 30px 20px;
+			grid-template-columns: 24px minmax(0, 1fr) 63px 63px 30px 20px;
 			gap: 4px;
+			padding: 5px 0;
+		}
+		.set-row.no-weight {
+			grid-template-columns: 24px minmax(0, 1fr) 130px 30px 20px;
 		}
 		.inp-wrap input {
-			padding: 7px 22px 7px 6px;
+			padding: 5px 22px 5px 6px;
 			font-size: 0.92rem;
 		}
 		.unit { font-size: 0.62rem; }
