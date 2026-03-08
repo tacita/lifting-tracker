@@ -16,7 +16,7 @@
 	$: filtered = $exStore.filter((e) => e.name.toLowerCase().includes(search.toLowerCase()));
 
 	async function openHistory(ex: Exercise) {
-		const sets = await getExerciseHistory(ex.id);
+		const sets = await getExerciseHistory(ex.id, ex.name);
 		historyEx = { id: ex.id, name: ex.name, sets };
 	}
 

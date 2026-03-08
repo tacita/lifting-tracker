@@ -44,19 +44,25 @@ function normName(value: string | undefined): string {
 export async function getExerciseHistory(exerciseId: string, exerciseName?: string): Promise<WorkoutSet[]> {
 	const db = await getDB();
 	const byId = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
-	const byIdFiltered = byId.filter((s) => s.reps > 0);
-	if (byIdFiltered.length > 0) {
-		return byIdFiltered.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+	const merged = new Map<string, WorkoutSet>();
+
+	for (const s of byId) {
+		if (s.reps > 0) merged.set(s.id, s);
 	}
 
 	// Migration/legacy fallback: same exercise can exist under a different id.
-	// If caller provides name, pull history by normalized exercise_name as a fallback.
+	// If caller provides name, merge by normalized exercise_name as well.
 	const targetName = normName(exerciseName);
-	if (!targetName) return [];
-	const all = await db.getAll('sets');
-	return all
-		.filter((s) => s.reps > 0 && normName(s.exerciseName) === targetName)
-		.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
+	if (targetName) {
+		const all = await db.getAll('sets');
+		for (const s of all) {
+			if (s.reps > 0 && normName(s.exerciseName) === targetName) {
+				merged.set(s.id, s);
+			}
+		}
+	}
+
+	return [...merged.values()].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 }
 
 export async function getPreviousSetForExercise(exerciseId: string, setNumber: number, exerciseName?: string): Promise<WorkoutSet | null> {
