@@ -5,14 +5,33 @@
 
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let remaining = 0;
+	let wakeLock: WakeLockSentinel | null = null;
 
 	$: restTimer = $workout.restTimer;
 
 	$: if (restTimer.active && Number.isFinite(restTimer.targetEndMs)) {
 		startTicking();
+		acquireWakeLock();
 	} else {
 		stopTicking();
 		remaining = 0;
+	}
+
+	async function acquireWakeLock() {
+		if (wakeLock) return;
+		try {
+			if ('wakeLock' in navigator) {
+				wakeLock = await navigator.wakeLock.request('screen');
+				wakeLock.addEventListener('release', () => { wakeLock = null; });
+			}
+		} catch { /* Wake Lock not available or denied */ }
+	}
+
+	async function releaseWakeLock() {
+		if (wakeLock) {
+			try { await wakeLock.release(); } catch { /* already released */ }
+			wakeLock = null;
+		}
 	}
 
 	function startTicking() {
@@ -45,23 +64,41 @@
 
 	function endRest() {
 		workout.update((w) => ({ ...w, restTimer: { ...w.restTimer, active: false, targetEndMs: null } }));
+		releaseWakeLock();
 	}
 
 	function notifyDone() {
 		try {
 			const ctx = new AudioContext();
-			const osc = ctx.createOscillator();
-			const gain = ctx.createGain();
-			osc.connect(gain); gain.connect(ctx.destination);
-			osc.frequency.value = 880;
-			gain.gain.setValueAtTime(0.3, ctx.currentTime);
-			gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-			osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
-		} catch { /* unavailable */ }
-		if ('vibrate' in navigator) navigator.vibrate([100, 50, 100]);
+			const t = ctx.currentTime;
+
+			// Three ascending beeps: louder and longer than before
+			const freqs = [660, 880, 1100];
+			for (let i = 0; i < freqs.length; i++) {
+				const osc = ctx.createOscillator();
+				const gain = ctx.createGain();
+				osc.connect(gain);
+				gain.connect(ctx.destination);
+				osc.frequency.value = freqs[i];
+				const start = t + i * 0.25;
+				gain.gain.setValueAtTime(0.5, start);
+				gain.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+				osc.start(start);
+				osc.stop(start + 0.2);
+			}
+
+			// Release wake lock after final beep finishes
+			setTimeout(() => releaseWakeLock(), freqs.length * 250 + 200);
+		} catch {
+			releaseWakeLock();
+		}
+		if ('vibrate' in navigator) navigator.vibrate([150, 80, 150, 80, 150]);
 	}
 
-	onDestroy(stopTicking);
+	onDestroy(() => {
+		stopTicking();
+		releaseWakeLock();
+	});
 </script>
 
 {#if restTimer.active}
