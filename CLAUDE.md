@@ -115,6 +115,10 @@ npm run check        # Svelte type checking (svelte-check)
 npm run check:watch  # Type checking in watch mode
 ```
 
+## Git Workflow
+- Always branch from `main` for new work
+- Run `npm run check` (from `overload/`) before committing to catch type errors
+
 ## CI/CD
 - `.github/workflows/deploy-pages.yml` — builds & deploys to GitHub Pages
 - `.github/workflows/supabase-backup.yml` — daily Supabase pg_dump backups
