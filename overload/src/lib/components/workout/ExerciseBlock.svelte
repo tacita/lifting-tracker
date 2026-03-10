@@ -4,7 +4,7 @@
 	import type { WorkoutSet } from '$lib/db/schema.js';
 	import { workout } from '$lib/stores/workout.js';
 	import SetRow from './SetRow.svelte';
-	import { addSet, deleteSet } from '$lib/db/sessions.js';
+	import { addSet, updateSet, deleteSet } from '$lib/db/sessions.js';
 	import { getPreviousSetForExercise } from '$lib/db/exercises.js';
 	import { now } from '$lib/db/index.js';
 	import { showToast } from '$lib/stores/toasts.js';
@@ -62,21 +62,29 @@
 	async function handleComplete(setIndex: number, detail: { weight: number | undefined; reps: number }) {
 		if (savingSetIndexes.has(setIndex)) return;
 		const completedAt = now();
-		const setNumber = exercise.sets[setIndex].setNumber;
+		const currentSet = exercise.sets[setIndex];
+		const setNumber = currentSet.setNumber;
 		const normalizedWeight = Number.isFinite(detail.weight) ? detail.weight : undefined;
 		const normalizedReps = Math.max(1, Math.trunc(detail.reps));
 
 		savingSetIndexes = new Set([...savingSetIndexes, setIndex]);
 		try {
-			const saved = await addSet({
-				sessionId,
-				exerciseId: exercise.exerciseId,
-				exerciseName: exercise.exerciseName,
-				setNumber,
-				weight: normalizedWeight,
-				reps: normalizedReps,
-				completedAt
-			});
+			const existingId = currentSet.id;
+			const saved = existingId
+				? await updateSet(existingId, {
+					weight: normalizedWeight,
+					reps: normalizedReps,
+					completedAt
+				})
+				: await addSet({
+					sessionId,
+					exerciseId: exercise.exerciseId,
+					exerciseName: exercise.exerciseName,
+					setNumber,
+					weight: normalizedWeight,
+					reps: normalizedReps,
+					completedAt
+				});
 			workout.update((w) => {
 				const exs = [...w.exercises];
 				const targetExercise = exs[exerciseIndex];
@@ -117,7 +125,7 @@
 					restTimer
 				};
 			});
-			showToast('Set saved locally ✓', 'success');
+			showToast(existingId ? 'Set updated ✓' : 'Set saved locally ✓', 'success');
 		} catch (err) {
 			console.error('Failed to save set', err);
 			const message = err instanceof Error ? err.message : String(err);
