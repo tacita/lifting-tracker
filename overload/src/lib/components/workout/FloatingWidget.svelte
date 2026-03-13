@@ -68,7 +68,7 @@
 <style>
 	.floating-widget {
 		position: fixed;
-		top: calc(var(--safe-top) + 8px);
+		top: calc(var(--safe-top) + 16px);
 		left: 8px; right: 8px;
 		max-width: 580px;
 		margin: 0 auto;
@@ -79,7 +79,7 @@
 		background: rgba(28, 31, 41, 0.92);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
-		padding: 10px 14px;
+		padding: 14px 14px;
 		display: flex;
 		align-items: center;
 		gap: 10px;
