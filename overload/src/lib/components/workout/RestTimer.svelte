@@ -49,6 +49,9 @@
 		const delta = Number(restTimer.targetEndMs) - Date.now();
 		remaining = Math.ceil(delta / 1000);
 		if (remaining <= 0) {
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H1',location:'RestTimer.svelte:tick',message:'rest timer reached completion threshold',data:{delta,active:restTimer.active,targetEndMs:restTimer.targetEndMs,visibility:typeof document!=='undefined'?document.visibilityState:'unknown'},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
 			remaining = 0;
 			workout.update((w) => ({ ...w, restTimer: { ...w.restTimer, active: false, targetEndMs: null } }));
 			notifyDone();
@@ -68,9 +71,15 @@
 	}
 
 	function notifyDone() {
+		// #region agent log
+		fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'notifyDone entered',data:{visibility:typeof document!=='undefined'?document.visibilityState:'unknown',hasAudioContext:typeof AudioContext!=='undefined',hasVibrate:typeof navigator!=='undefined'&&'vibrate'in navigator},timestamp:Date.now()})}).catch(()=>{});
+		// #endregion
 		try {
 			const ctx = new AudioContext();
 			const t = ctx.currentTime;
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'audio context created',data:{audioState:ctx.state,sampleRate:ctx.sampleRate,currentTime:t},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
 
 			// Three ascending beeps: louder and longer than before
 			const freqs = [660, 880, 1100];
@@ -89,13 +98,31 @@
 
 			// Release wake lock after final beep finishes
 			setTimeout(() => releaseWakeLock(), freqs.length * 250 + 200);
-		} catch {
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'beep sequence scheduled',data:{freqs,totalDurationMs:freqs.length*250+200,audioState:ctx.state},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
+		} catch (error) {
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'audio setup failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
 			releaseWakeLock();
 		}
-		if ('vibrate' in navigator) navigator.vibrate([150, 80, 150, 80, 150]);
+		if ('vibrate' in navigator) {
+			const vibrateResult = navigator.vibrate([150, 80, 150, 80, 150]);
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H5',location:'RestTimer.svelte:notifyDone',message:'vibrate attempted',data:{vibrateResult},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
+		} else {
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H5',location:'RestTimer.svelte:notifyDone',message:'vibrate unavailable',data:{},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
+		}
 	}
 
 	onDestroy(() => {
+		// #region agent log
+		fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H4',location:'RestTimer.svelte:onDestroy',message:'rest timer component destroyed',data:{activeAtDestroy:restTimer?.active??false,targetEndAtDestroy:restTimer?.targetEndMs??null,visibility:typeof document!=='undefined'?document.visibilityState:'unknown'},timestamp:Date.now()})}).catch(()=>{});
+		// #endregion
 		stopTicking();
 		releaseWakeLock();
 	});
