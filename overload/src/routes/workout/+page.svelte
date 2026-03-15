@@ -79,15 +79,21 @@
 
 		const newExercises: ActiveExercise[] = ids.map((id, i) => {
 			const ex = exMap.get(id);
-			const fakeItem: TemplateItem | undefined = ssId
-				? { id: '', templateId: '', exerciseId: id, sortOrder: i, supersetId: ssId, supersetOrder: i, createdAt: '', updatedAt: '', synced: false }
-				: undefined;
+			const fakeItem: TemplateItem = {
+				id: '', templateId: '', exerciseId: id, sortOrder: i,
+				supersetId: ssId, supersetOrder: ssId ? i : undefined,
+				sets: ex?.defaultSets,
+				reps: ex?.defaultReps,
+				restSeconds: ex?.defaultRestSeconds,
+				createdAt: '', updatedAt: '', synced: false
+			};
+			const setCount = ex?.defaultSets ?? 1;
 			return {
 				exerciseId: id,
 				exerciseName: ex?.name ?? id,
 				note: ex?.note,
 				templateItem: fakeItem,
-				sets: [{ setNumber: 1, completed: false }]
+				sets: Array.from({ length: setCount }, (_, j) => ({ setNumber: j + 1, completed: false }))
 			};
 		});
 
