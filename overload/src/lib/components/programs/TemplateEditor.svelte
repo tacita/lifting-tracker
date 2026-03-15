@@ -259,11 +259,11 @@
 					<button type="button" class="swap-btn" on:click={() => openSwap(i)} title="Swap exercise">⇄</button>
 					<button type="button" class="del-btn" on:click={() => (items = items.filter((_, j) => j !== i))}>✕</button>
 				</div>
-				<div class="item-fields">
-					<div><label class="label">Sets</label><input type="number" inputmode="numeric" bind:value={item.sets} placeholder="3" /></div>
-					<div><label class="label">Reps</label><input type="text" bind:value={item.reps} placeholder="8–10" /></div>
-					<div><label class="label">Rest (s)</label><input type="number" inputmode="numeric" bind:value={item.restSeconds} placeholder="90" /></div>
-				</div>
+			<div class="item-fields">
+				<div><label class="label">Sets</label><input type="number" inputmode="numeric" bind:value={items[i].sets} placeholder="3" /></div>
+				<div><label class="label">Reps</label><input type="text" bind:value={items[i].reps} placeholder="8–10" /></div>
+				<div><label class="label">Rest (s)</label><input type="number" inputmode="numeric" bind:value={items[i].restSeconds} placeholder="90" /></div>
+			</div>
 			</div>
 		{:else}
 			<p style="padding:24px;text-align:center;color:var(--text-3);font-size:0.9rem">No exercises yet — tap + Add</p>
