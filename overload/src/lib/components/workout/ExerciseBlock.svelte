@@ -4,7 +4,7 @@
 	import type { WorkoutSet } from '$lib/db/schema.js';
 	import { workout } from '$lib/stores/workout.js';
 	import SetRow from './SetRow.svelte';
-	import { addSet, updateSet, deleteSet } from '$lib/db/sessions.js';
+	import { addSet, deleteSet, updateSet } from '$lib/db/sessions.js';
 	import { getPreviousSetForExercise } from '$lib/db/exercises.js';
 	import { now } from '$lib/db/index.js';
 	import { showToast } from '$lib/stores/toasts.js';
@@ -20,6 +20,7 @@
 
 	let previousSets: Record<number, WorkoutSet | null> = {};
 	let savingSetIndexes = new Set<number>();
+	let carryForwardSuggestion: { setIndex: number; weight?: number; reps: number } | null = null;
 
 	async function loadPrevious() {
 		const count = Math.max(exercise.sets.length + 1, exercise.templateItem?.sets ?? 0);
@@ -62,19 +63,19 @@
 	async function handleComplete(setIndex: number, detail: { weight: number | undefined; reps: number }) {
 		if (savingSetIndexes.has(setIndex)) return;
 		const completedAt = now();
-		const currentSet = exercise.sets[setIndex];
-		const setNumber = currentSet.setNumber;
+		const existingSet = exercise.sets[setIndex];
+		const setNumber = existingSet.setNumber;
+		const isEdit = Boolean(existingSet?.id);
 		const normalizedWeight = Number.isFinite(detail.weight) ? detail.weight : undefined;
 		const normalizedReps = Math.max(1, Math.trunc(detail.reps));
 
 		savingSetIndexes = new Set([...savingSetIndexes, setIndex]);
 		try {
-			const existingId = currentSet.id;
-			const saved = existingId
-				? await updateSet(existingId, {
+			const saved = isEdit && existingSet?.id
+				? await updateSet(existingSet.id, {
 					weight: normalizedWeight,
 					reps: normalizedReps,
-					completedAt
+					completedAt: existingSet.completedAt ?? completedAt
 				})
 				: await addSet({
 					sessionId,
@@ -101,6 +102,18 @@
 					completedAt: saved.completedAt
 				};
 				exs[exerciseIndex] = { ...targetExercise, sets };
+				carryForwardSuggestion = {
+					setIndex,
+					weight: normalizedWeight,
+					reps: normalizedReps
+				};
+
+				if (isEdit) {
+					return {
+						...w,
+						exercises: exs
+					};
+				}
 
 				const supersetId = exercise.templateItem?.supersetId;
 				const isLastInSuperset = !supersetId || (() => {
@@ -125,7 +138,7 @@
 					restTimer
 				};
 			});
-			showToast(existingId ? 'Set updated ✓' : 'Set saved locally ✓', 'success');
+			showToast(isEdit ? 'Set updated ✓' : 'Set saved locally ✓', 'success');
 		} catch (err) {
 			console.error('Failed to save set', err);
 			const message = err instanceof Error ? err.message : String(err);
@@ -180,10 +193,14 @@
 
 	<div class="sets-list">
 		{#each exercise.sets as set, i (set.setNumber)}
+			{@const carryForwardWeight = carryForwardSuggestion && i > carryForwardSuggestion.setIndex ? carryForwardSuggestion.weight : undefined}
+			{@const carryForwardReps = carryForwardSuggestion && i > carryForwardSuggestion.setIndex ? carryForwardSuggestion.reps : undefined}
 			<SetRow
 				{set}
 				previousWeight={previousSets[set.setNumber]?.weight}
 				previousReps={previousSets[set.setNumber]?.reps}
+				suggestedWeight={set.completed ? undefined : (carryForwardWeight ?? previousSets[set.setNumber]?.weight)}
+				suggestedReps={set.completed ? undefined : (carryForwardReps ?? previousSets[set.setNumber]?.reps)}
 				showCompleteAsArrow={!isLastInSuperset}
 				on:complete={(e) => handleComplete(i, e.detail)}
 				on:delete={() => handleDelete(i)}

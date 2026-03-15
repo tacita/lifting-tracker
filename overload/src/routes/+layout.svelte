@@ -138,9 +138,17 @@
 
 		init().catch(console.error);
 
-		// Register service worker
+		// Service worker policy:
+		// - dev: unregister stale workers to prevent old cached bundles
+		// - prod: register worker for offline/PWA behavior
 		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.register(`${base}/service-worker.js`, { type: 'module' }).catch(console.warn);
+			if (import.meta.env.DEV) {
+				navigator.serviceWorker.getRegistrations()
+					.then((regs) => Promise.all(regs.map((r) => r.unregister())))
+					.catch(console.warn);
+			} else {
+				navigator.serviceWorker.register(`${base}/service-worker.js`, { type: 'module' }).catch(console.warn);
+			}
 		}
 
 		return () => authSub?.unsubscribe();
