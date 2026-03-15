@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy } from 'svelte';
 	import { workout } from '$lib/stores/workout.js';
 	import { formatTimer } from '$lib/utils/format.js';
 
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let remaining = 0;
 	let wakeLock: WakeLockSentinel | null = null;
-	let sharedAudioCtx: AudioContext | null = null;
-	let audioPrimed = false;
 
 	$: restTimer = $workout.restTimer;
 
@@ -33,27 +31,6 @@
 		if (wakeLock) {
 			try { await wakeLock.release(); } catch { /* already released */ }
 			wakeLock = null;
-		}
-	}
-
-	function getSharedAudioContext() {
-		if (!sharedAudioCtx) sharedAudioCtx = new AudioContext();
-		return sharedAudioCtx;
-	}
-
-	async function primeAudioFromGesture() {
-		if (audioPrimed) return;
-		try {
-			const ctx = getSharedAudioContext();
-			await ctx.resume();
-			audioPrimed = ctx.state === 'running';
-			// #region agent log
-			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H6',location:'RestTimer.svelte:primeAudioFromGesture',message:'audio primed from user gesture',data:{audioState:ctx.state,audioPrimed},timestamp:Date.now()})}).catch(()=>{});
-			// #endregion
-		} catch (error) {
-			// #region agent log
-			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H6',location:'RestTimer.svelte:primeAudioFromGesture',message:'audio prime failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now()})}).catch(()=>{});
-			// #endregion
 		}
 	}
 
@@ -93,15 +70,12 @@
 		releaseWakeLock();
 	}
 
-	async function notifyDone() {
+	function notifyDone() {
 		// #region agent log
 		fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'notifyDone entered',data:{visibility:typeof document!=='undefined'?document.visibilityState:'unknown',hasAudioContext:typeof AudioContext!=='undefined',hasVibrate:typeof navigator!=='undefined'&&'vibrate'in navigator},timestamp:Date.now()})}).catch(()=>{});
 		// #endregion
 		try {
-			const ctx = getSharedAudioContext();
-			if (ctx.state !== 'running') {
-				await ctx.resume();
-			}
+			const ctx = new AudioContext();
 			const t = ctx.currentTime;
 			// #region agent log
 			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'audio context created',data:{audioState:ctx.state,sampleRate:ctx.sampleRate,currentTime:t},timestamp:Date.now()})}).catch(()=>{});
@@ -144,18 +118,6 @@
 			// #endregion
 		}
 	}
-
-	onMount(() => {
-		const prime = () => { primeAudioFromGesture().catch(() => {}); };
-		window.addEventListener('pointerdown', prime, { passive: true });
-		window.addEventListener('touchstart', prime, { passive: true });
-		window.addEventListener('keydown', prime);
-		return () => {
-			window.removeEventListener('pointerdown', prime);
-			window.removeEventListener('touchstart', prime);
-			window.removeEventListener('keydown', prime);
-		};
-	});
 
 	onDestroy(() => {
 		// #region agent log
