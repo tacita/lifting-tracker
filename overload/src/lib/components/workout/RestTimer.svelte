@@ -37,7 +37,18 @@
 	}
 
 	function getSharedAudioContext() {
-		if (!sharedAudioCtx) sharedAudioCtx = new AudioContext();
+		if (!sharedAudioCtx) {
+			const AudioCtor =
+				typeof window !== 'undefined'
+					? ((window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext
+						?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)
+					: undefined;
+			if (!AudioCtor) throw new Error('AudioContext unavailable');
+			sharedAudioCtx = new AudioCtor();
+			// #region agent log
+			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H7',location:'RestTimer.svelte:getSharedAudioContext',message:'audio constructor selected',data:{ctorName:AudioCtor.name||'unknown'},timestamp:Date.now()})}).catch(()=>{});
+			// #endregion
+		}
 		return sharedAudioCtx;
 	}
 
@@ -121,9 +132,19 @@
 				osc.start(start);
 				osc.stop(start + 0.2);
 			}
-
-			// Release wake lock after final beep finishes
-			setTimeout(() => releaseWakeLock(), freqs.length * 250 + 200);
+			Promise.allSettled(
+				freqs.map((_, i) => {
+					const durationMs = i * 250 + 220;
+					return new Promise<void>((resolve) => {
+						const doneAt = Date.now() + durationMs;
+						const checkDone = () => {
+							if (Date.now() >= doneAt) resolve();
+							else requestAnimationFrame(checkDone);
+						};
+						checkDone();
+					});
+				})
+			).finally(() => releaseWakeLock());
 			// #region agent log
 			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H2',location:'RestTimer.svelte:notifyDone',message:'beep sequence scheduled',data:{freqs,totalDurationMs:freqs.length*250+200,audioState:ctx.state},timestamp:Date.now()})}).catch(()=>{});
 			// #endregion
