@@ -1,0 +1,16 @@
+---
+description: Always pull latest from git before making changes
+alwaysApply: true
+---
+
+# Git: Pull Before Working
+
+At the start of every conversation, before reading files or making any changes, run:
+
+```bash
+git pull
+```
+
+If there are uncommitted local changes, run `git stash` first, then `git pull`, then `git stash pop`.
+
+This prevents duplicate work from parallel conversations or PRs that have already been merged.

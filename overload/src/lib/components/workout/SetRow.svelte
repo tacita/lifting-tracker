@@ -162,10 +162,8 @@
 	.btn-check.btn-check-done {
 		color: #fff;
 		background: var(--success);
-		border-color: var(--success);
+		border: 1px solid var(--success);
 		font-weight: 700;
-		cursor: pointer;
-		border: none;
 	}
 	.btn-del { color: var(--text-3); font-size: 0.7rem; padding: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 	.set-err { grid-column: 1 / -1; font-size: 0.78rem; color: var(--danger); padding-top: 2px; }
