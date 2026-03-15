@@ -18,9 +18,45 @@
 
 	const dispatch = createEventDispatcher<{ reorderStart: { index: number; mode: 'touch' | 'pointer'; pointerType?: string } }>();
 
+	function autoFocus(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
+
 	let previousSets: Record<number, WorkoutSet | null> = {};
 	let savingSetIndexes = new Set<number>();
 	let carryForwardSuggestion: { setIndex: number; weight?: number; reps: number } | null = null;
+	let editingRest = false;
+	let restInput = '';
+
+	function startEditRest() {
+		restInput = String(restSeconds);
+		editingRest = true;
+	}
+
+	function commitRestEdit() {
+		const val = Math.max(1, Math.trunc(Number(restInput)));
+		if (Number.isFinite(val)) {
+			workout.update((w) => {
+				const exs = [...w.exercises];
+				const ex = exs[exerciseIndex];
+				if (!ex) return w;
+				exs[exerciseIndex] = {
+					...ex,
+					templateItem: ex.templateItem
+						? { ...ex.templateItem, restSeconds: val }
+						: undefined
+				};
+				return { ...w, exercises: exs };
+			});
+		}
+		editingRest = false;
+	}
+
+	function handleRestKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') commitRestEdit();
+		if (e.key === 'Escape') editingRest = false;
+	}
 
 	async function loadPrevious() {
 		const count = Math.max(exercise.sets.length + 1, exercise.templateItem?.sets ?? 0);
@@ -179,7 +215,25 @@
 			<div class="ex-meta">
 				{#if suggestedSets}<span>{suggestedSets} sets</span>{/if}
 				{#if suggestedReps}<span>· {suggestedReps} reps</span>{/if}
-				{#if restSeconds}<span>· {restSeconds}s rest</span>{/if}
+				{#if restSeconds}
+					<span>·</span>
+					{#if editingRest}
+						<span class="rest-edit" on:click|stopPropagation>
+							<input
+								class="rest-input"
+								type="number"
+								inputmode="numeric"
+								bind:value={restInput}
+								on:blur={commitRestEdit}
+								on:keydown={handleRestKeydown}
+								use:autoFocus
+							/>
+							<span class="rest-unit">s</span>
+						</span>
+					{:else}
+						<button class="rest-btn" on:click={startEditRest}>{restSeconds}s rest</button>
+					{/if}
+				{/if}
 			</div>
 		</div>
 		<div class="ex-actions">
@@ -240,6 +294,35 @@
 	}
 	.sets-list { margin-bottom: 10px; }
 	.add-set { width: 100%; padding: 8px; font-size: 0.85rem; }
+	.rest-btn {
+		background: none;
+		border: none;
+		border-bottom: 1px dashed var(--text-3);
+		color: var(--text-3);
+		font-size: inherit;
+		padding: 0;
+		cursor: pointer;
+		line-height: inherit;
+	}
+	.rest-edit {
+		display: inline-flex;
+		align-items: center;
+		gap: 1px;
+	}
+	.rest-input {
+		width: 3.2em;
+		font-size: inherit;
+		padding: 1px 3px;
+		border: 1px solid var(--accent);
+		border-radius: 4px;
+		background: var(--bg-1);
+		color: var(--text-1);
+		text-align: center;
+		-moz-appearance: textfield;
+	}
+	.rest-input::-webkit-inner-spin-button,
+	.rest-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+	.rest-unit { color: var(--text-3); }
 	.drag-handle {
 		touch-action: none;
 		padding: 6px 10px;
