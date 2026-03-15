@@ -126,9 +126,6 @@
 				const restTimer = isLastInSuperset
 					? { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
 					: w.restTimer;
-				// #region agent log
-				fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H3',location:'ExerciseBlock.svelte:handleComplete',message:'rest timer computed after set completion',data:{exerciseIndex,setIndex,isLastInSuperset,restSeconds,restTimerActive:restTimer.active,targetEndMs:restTimer.targetEndMs},timestamp:Date.now()})}).catch(()=>{});
-				// #endregion
 
 				const allSetsComplete = sets.every((s) => s.completed);
 				const nextBannerIndex =
