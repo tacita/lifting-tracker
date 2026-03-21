@@ -44,10 +44,11 @@ mkdir -p snapshots
 echo "Creating database snapshot ${filename}..."
 # Use postgres:17 client to match Supabase server major version.
 docker run --rm \
+	--entrypoint pg_dump \
 	-v "${repo_dir}/snapshots:/snapshots" \
 	postgres:17 \
-	pg_dump "${SUPABASE_DB_URL}" --format=custom --no-owner --no-privileges --file "/snapshots/${filename}"
-
+	"${SUPABASE_DB_URL}" --format=custom --no-owner --no-privileges --file "/snapshots/${filename}"
+	
 echo "Applying retention (keep latest ${BACKUP_KEEP_COUNT})..."
 mapfile -t backup_files < <(ls -1 snapshots/supabase-backup-*.dump 2>/dev/null | sort)
 if (( ${#backup_files[@]} > BACKUP_KEEP_COUNT )); then
