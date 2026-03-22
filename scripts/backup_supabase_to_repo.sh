@@ -29,8 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Preparing backup repo workspace..."
-if git ls-remote --exit-code "${remote_url}" HEAD >/dev/null 2>&1; then
-	git clone --quiet "${remote_url}" "${repo_dir}"
+if git clone --quiet "${remote_url}" "${repo_dir}" 2>/dev/null; then
 	cd "${repo_dir}"
 else
 	mkdir -p "${repo_dir}"
