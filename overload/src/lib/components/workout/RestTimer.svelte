@@ -4,18 +4,22 @@
 	import { formatTimer } from '$lib/utils/format.js';
 
 	let intervalId: ReturnType<typeof setInterval> | null = null;
+	let completionTimeoutId: ReturnType<typeof setTimeout> | null = null;
 	let remaining = 0;
 	let wakeLock: WakeLockSentinel | null = null;
 	let sharedAudioCtx: AudioContext | null = null;
 	let audioPrimed = false;
+	let notified = false;
 
 	$: restTimer = $workout.restTimer;
 
 	$: if (restTimer.active && Number.isFinite(restTimer.targetEndMs)) {
 		startTicking();
+		scheduleCompletion(restTimer.targetEndMs!);
 		acquireWakeLock();
 	} else {
 		stopTicking();
+		clearCompletionTimeout();
 		remaining = 0;
 	}
 
@@ -47,14 +51,32 @@
 			const ctx = getSharedAudioContext();
 			await ctx.resume();
 			audioPrimed = ctx.state === 'running';
-			// #region agent log
-			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H6',location:'RestTimer.svelte:primeAudioFromGesture',message:'audio primed from user gesture',data:{audioState:ctx.state,audioPrimed},timestamp:Date.now()})}).catch(()=>{});
-			// #endregion
-		} catch (error) {
-			// #region agent log
-			fetch('http://127.0.0.1:7589/ingest/0e413562-a1f0-4ceb-8841-01fe617785fa',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'59ff68'},body:JSON.stringify({sessionId:'59ff68',runId:'pre-fix',hypothesisId:'H6',location:'RestTimer.svelte:primeAudioFromGesture',message:'audio prime failed',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now()})}).catch(()=>{});
-			// #endregion
+		} catch { /* gesture prime failed */ }
+	}
+
+	function scheduleCompletion(targetEndMs: number) {
+		clearCompletionTimeout();
+		notified = false;
+		const delay = Math.max(0, targetEndMs - Date.now());
+		completionTimeoutId = setTimeout(() => {
+			completionTimeoutId = null;
+			completeTimer();
+		}, delay);
+	}
+
+	function clearCompletionTimeout() {
+		if (completionTimeoutId) {
+			clearTimeout(completionTimeoutId);
+			completionTimeoutId = null;
 		}
+	}
+
+	function completeTimer() {
+		if (notified) return;
+		notified = true;
+		remaining = 0;
+		workout.update((w) => ({ ...w, restTimer: { ...w.restTimer, active: false, targetEndMs: null } }));
+		notifyDone();
 	}
 
 	function startTicking() {
@@ -72,9 +94,7 @@
 		const delta = Number(restTimer.targetEndMs) - Date.now();
 		remaining = Math.ceil(delta / 1000);
 		if (remaining <= 0) {
-			remaining = 0;
-			workout.update((w) => ({ ...w, restTimer: { ...w.restTimer, active: false, targetEndMs: null } }));
-			notifyDone();
+			completeTimer();
 		}
 	}
 
@@ -98,7 +118,6 @@
 			}
 			const t = ctx.currentTime;
 
-			// Three ascending beeps: louder and longer than before
 			const freqs = [660, 880, 1100];
 			for (let i = 0; i < freqs.length; i++) {
 				const osc = ctx.createOscillator();
@@ -113,7 +132,6 @@
 				osc.stop(start + 0.2);
 			}
 
-			// Release wake lock after final beep finishes
 			setTimeout(() => releaseWakeLock(), freqs.length * 250 + 200);
 		} catch {
 			releaseWakeLock();
@@ -121,20 +139,38 @@
 		if ('vibrate' in navigator) navigator.vibrate([150, 80, 150, 80, 150]);
 	}
 
+	function handleVisibilityChange() {
+		if (document.visibilityState === 'visible') {
+			primeAudioFromGesture().catch(() => {});
+
+			if (restTimer.active && restTimer.targetEndMs) {
+				const delta = Number(restTimer.targetEndMs) - Date.now();
+				if (delta <= 0) {
+					completeTimer();
+				} else {
+					scheduleCompletion(restTimer.targetEndMs);
+				}
+			}
+		}
+	}
+
 	onMount(() => {
 		const prime = () => { primeAudioFromGesture().catch(() => {}); };
 		window.addEventListener('pointerdown', prime, { passive: true });
 		window.addEventListener('touchstart', prime, { passive: true });
 		window.addEventListener('keydown', prime);
+		document.addEventListener('visibilitychange', handleVisibilityChange);
 		return () => {
 			window.removeEventListener('pointerdown', prime);
 			window.removeEventListener('touchstart', prime);
 			window.removeEventListener('keydown', prime);
+			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		};
 	});
 
 	onDestroy(() => {
 		stopTicking();
+		clearCompletionTimeout();
 		releaseWakeLock();
 	});
 </script>
