@@ -28,6 +28,7 @@
 	let carryForwardSuggestion: { setIndex: number; weight?: number; reps: number } | null = null;
 	let editingRest = false;
 	let restInput = '';
+	let loadPreviousVersion = 0;
 
 	function startEditRest() {
 		restInput = String(restSeconds);
@@ -37,11 +38,13 @@
 	function commitRestEdit() {
 		const val = Math.max(1, Math.trunc(Number(restInput)));
 		if (Number.isFinite(val)) {
+			const targetId = exercise.exerciseId;
 			workout.update((w) => {
 				const exs = [...w.exercises];
-				const ex = exs[exerciseIndex];
-				if (!ex) return w;
-				exs[exerciseIndex] = {
+				const idx = exs.findIndex((e) => e.exerciseId === targetId);
+				if (idx === -1) return w;
+				const ex = exs[idx];
+				exs[idx] = {
 					...ex,
 					templateItem: ex.templateItem
 						? { ...ex.templateItem, restSeconds: val }
@@ -59,11 +62,15 @@
 	}
 
 	async function loadPrevious() {
+		const version = ++loadPreviousVersion;
 		const count = Math.max(exercise.sets.length + 1, exercise.templateItem?.sets ?? 0);
+		const result: Record<number, WorkoutSet | null> = {};
 		for (let i = 1; i <= count; i++) {
-			previousSets[i] = await getPreviousSetForExercise(exercise.exerciseId, i, exercise.exerciseName, sessionId);
+			if (version !== loadPreviousVersion) return; // stale call, abort
+			result[i] = await getPreviousSetForExercise(exercise.exerciseId, i, exercise.exerciseName, sessionId);
 		}
-		previousSets = previousSets;
+		if (version !== loadPreviousVersion) return;
+		previousSets = result;
 	}
 
 	$: exercise, loadPrevious();
@@ -88,10 +95,14 @@
 	})();
 
 	function addSetRow() {
-		const nextNum = exercise.sets.length + 1;
+		const targetId = exercise.exerciseId;
 		workout.update((w) => {
 			const exs = [...w.exercises];
-			exs[exerciseIndex] = { ...exs[exerciseIndex], sets: [...exs[exerciseIndex].sets, { setNumber: nextNum, completed: false }] };
+			const idx = exs.findIndex((e) => e.exerciseId === targetId);
+			if (idx === -1) return w;
+			const current = exs[idx];
+			const nextNum = current.sets.length + 1;
+			exs[idx] = { ...current, sets: [...current.sets, { setNumber: nextNum, completed: false }] };
 			return { ...w, exercises: exs };
 		});
 	}
@@ -100,6 +111,7 @@
 		if (savingSetIndexes.has(setIndex)) return;
 		const completedAt = now();
 		const existingSet = exercise.sets[setIndex];
+		const targetId = exercise.exerciseId;
 		const setNumber = existingSet.setNumber;
 		const isEdit = Boolean(existingSet?.id);
 		const normalizedWeight = Number.isFinite(detail.weight) ? detail.weight : undefined;
@@ -124,8 +136,9 @@
 				});
 			workout.update((w) => {
 				const exs = [...w.exercises];
-				const targetExercise = exs[exerciseIndex];
-				if (!targetExercise) return w;
+				const exIdx = exs.findIndex((e) => e.exerciseId === targetId);
+				if (exIdx === -1) return w;
+				const targetExercise = exs[exIdx];
 				const sets = [...targetExercise.sets];
 				const currentSet = sets[setIndex];
 				if (!currentSet) return w;
@@ -137,7 +150,7 @@
 					completed: true,
 					completedAt: saved.completedAt
 				};
-				exs[exerciseIndex] = { ...targetExercise, sets };
+				exs[exIdx] = { ...targetExercise, sets };
 				carryForwardSuggestion = {
 					setIndex,
 					weight: normalizedWeight,
@@ -157,7 +170,7 @@
 						.map((ex, i) => ({ i }))
 						.filter(({ i }) => w.exercises[i].templateItem?.supersetId === supersetId);
 					const maxIdx = inSuperset.length ? Math.max(...inSuperset.map(({ i }) => i)) : -1;
-					return exerciseIndex === maxIdx;
+					return exIdx === maxIdx;
 				})();
 				const restTimer = isLastInSuperset
 					? { active: true, targetEndMs: Date.now() + restSeconds * 1000, durationSeconds: restSeconds }
@@ -165,7 +178,7 @@
 
 				const allSetsComplete = sets.every((s) => s.completed);
 				const nextBannerIndex =
-					allSetsComplete && exerciseIndex < exs.length - 1 ? exerciseIndex + 1 : exerciseIndex;
+					allSetsComplete && exIdx < exs.length - 1 ? exIdx + 1 : exIdx;
 
 				return {
 					...w,
@@ -188,11 +201,19 @@
 
 	async function handleDelete(setIndex: number) {
 		const s = exercise.sets[setIndex];
-		if (s.id) await deleteSet(s.id);
+		const targetId = exercise.exerciseId;
+		const setId = s?.id;
+		try {
+			if (setId) await deleteSet(setId);
+		} catch (err) {
+			console.error('Failed to delete set from DB', err);
+		}
 		workout.update((w) => {
 			const exs = [...w.exercises];
-			const sets = exs[exerciseIndex].sets.filter((_, i) => i !== setIndex).map((s, i) => ({ ...s, setNumber: i + 1 }));
-			exs[exerciseIndex] = { ...exs[exerciseIndex], sets };
+			const idx = exs.findIndex((e) => e.exerciseId === targetId);
+			if (idx === -1) return w;
+			const sets = exs[idx].sets.filter((_, i) => i !== setIndex).map((s, i) => ({ ...s, setNumber: i + 1 }));
+			exs[idx] = { ...exs[idx], sets };
 			return { ...w, exercises: exs };
 		});
 	}

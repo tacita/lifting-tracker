@@ -110,13 +110,20 @@
 	}
 	function handleSwap(detail: { ids: string[] }) {
 		const [newId] = detail.ids;
-		if (!newId) return;
+		if (!newId) { showSwap = false; return; }
 		const ex = $exStore.find((e) => e.id === newId);
+		const setCount = ex?.defaultSets ?? 1;
 		workout.update((w) => ({
 			...w,
 			exercises: w.exercises.map((e) =>
 				e.exerciseId === swapExerciseId
-					? { ...e, exerciseId: newId, exerciseName: ex?.name ?? newId, note: ex?.note }
+					? {
+						...e,
+						exerciseId: newId,
+						exerciseName: ex?.name ?? newId,
+						note: ex?.note,
+						sets: Array.from({ length: setCount }, (_, j) => ({ setNumber: j + 1, completed: false }))
+					}
 					: e
 			)
 		}));
