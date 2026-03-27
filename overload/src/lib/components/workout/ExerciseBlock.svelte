@@ -61,7 +61,7 @@
 	async function loadPrevious() {
 		const count = Math.max(exercise.sets.length + 1, exercise.templateItem?.sets ?? 0);
 		for (let i = 1; i <= count; i++) {
-			previousSets[i] = await getPreviousSetForExercise(exercise.exerciseId, i, exercise.exerciseName);
+			previousSets[i] = await getPreviousSetForExercise(exercise.exerciseId, i, exercise.exerciseName, sessionId);
 		}
 		previousSets = previousSets;
 	}

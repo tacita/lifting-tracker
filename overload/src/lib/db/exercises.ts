@@ -65,11 +65,11 @@ export async function getExerciseHistory(exerciseId: string, exerciseName?: stri
 	return [...merged.values()].sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 }
 
-export async function getPreviousSetForExercise(exerciseId: string, setNumber: number, exerciseName?: string): Promise<WorkoutSet | null> {
+export async function getPreviousSetForExercise(exerciseId: string, setNumber: number, exerciseName?: string, excludeSessionId?: string): Promise<WorkoutSet | null> {
 	const db = await getDB();
 	const byId = await db.getAllFromIndex('sets', 'by-exercise', exerciseId);
 	let matching = byId
-		.filter((s) => s.setNumber === setNumber && s.reps > 0)
+		.filter((s) => s.setNumber === setNumber && s.reps > 0 && (!excludeSessionId || s.sessionId !== excludeSessionId))
 		.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 	if (matching.length > 0) return matching[0] ?? null;
 
@@ -77,7 +77,7 @@ export async function getPreviousSetForExercise(exerciseId: string, setNumber: n
 	if (!targetName) return null;
 	const all = await db.getAll('sets');
 	matching = all
-		.filter((s) => s.setNumber === setNumber && s.reps > 0 && normName(s.exerciseName) === targetName)
+		.filter((s) => s.setNumber === setNumber && s.reps > 0 && normName(s.exerciseName) === targetName && (!excludeSessionId || s.sessionId !== excludeSessionId))
 		.sort((a, b) => b.completedAt.localeCompare(a.completedAt));
 	return matching[0] ?? null;
 }
