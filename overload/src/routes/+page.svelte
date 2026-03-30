@@ -171,15 +171,15 @@
 	}
 
 	async function moveProgram(folderId: string, direction: -1 | 1) {
-		const ordered = [...$folders].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+		const ordered = [...$folders].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
 		const idx = ordered.findIndex((f) => f.id === folderId);
 		const swapIdx = idx + direction;
 		if (idx < 0 || swapIdx < 0 || swapIdx >= ordered.length) return;
 		const current = ordered[idx];
 		const swap = ordered[swapIdx];
 		await Promise.all([
-			updateFolder(current.id, { sortOrder: swap.sortOrder ?? swapIdx }),
-			updateFolder(swap.id, { sortOrder: current.sortOrder ?? idx })
+			updateFolder(current.id, { sortOrder: swapIdx }),
+			updateFolder(swap.id, { sortOrder: idx })
 		]);
 		await refreshAll();
 	}
@@ -245,18 +245,6 @@
 	}
 
 </script>
-
-<!-- Confirm modal -->
-{#if confirmCancel.show}
-	<ConfirmModal
-		title={confirmTitle}
-		message={confirmMessage}
-		danger={true}
-		confirmLabel="Yes, proceed"
-		onConfirm={() => confirmCancel.cb(true)}
-		onCancel={() => confirmCancel.cb(false)}
-	/>
-{/if}
 
 <!-- Template editor -->
 {#if showEditor}
@@ -388,6 +376,18 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Confirm modal — rendered last so it appears above all other modals -->
+{#if confirmCancel.show}
+	<ConfirmModal
+		title={confirmTitle}
+		message={confirmMessage}
+		danger={true}
+		confirmLabel="Yes, proceed"
+		onConfirm={() => confirmCancel.cb(true)}
+		onCancel={() => confirmCancel.cb(false)}
+	/>
+{/if}
 
 <style>
 	.auth-gate {
